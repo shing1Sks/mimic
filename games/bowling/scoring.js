@@ -117,7 +117,19 @@
     return after.over || after.frame !== before.frame;
   }
 
-  const api = { frames, marks, score, next, frameDone };
+  /**
+   * The recount at the sweep: a pin still standing at the count that falls before the sweep counts
+   * for that ball. downNow = pins down off this ball's rack now. A count is only ever raised.
+   * Returns { rolls (a copy when changed), changed }.
+   */
+  function sweepCount(rolls, downNow) {
+    const n = rolls.length;
+    if (!n || !(downNow > rolls[n - 1])) return { rolls, changed: false };
+    const r = rolls.slice(); r[n - 1] = downNow;
+    return { rolls: r, changed: true };
+  }
+
+  const api = { frames, marks, score, next, frameDone, sweepCount };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (root) { root.BW = root.BW || {}; root.BW.Score = api; }
 })(typeof window !== 'undefined' ? window : null);

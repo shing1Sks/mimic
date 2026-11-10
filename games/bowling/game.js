@@ -451,8 +451,27 @@
   }
 
   /** After the banner: the pinsetter, then the next ball or the next bowler. */
+  /** Every standing pin is at rest and upright (physics decided() can pass a pin that has only
+   * just begun to tip; give it time to go before the sweep). */
+  function deckSettled() {
+    return G.sim.pins.every(q => !P.standing(q) || q.asleep || (P.pinUp(q)[1] > 0.998 && Math.hypot(q.w[0], q.w[1], q.w[2]) < 0.2));
+  }
   function startReset() {
     const p = curPlayer();
+    // pins that fell after the count still count for that ball: a second ball never faces an
+    // empty rack because of a late faller
+    const rc = SC.sweepCount(p.rolls, G.standingBefore - standingPins().length);
+    if (rc.changed) {
+      const prev = p.rolls[p.rolls.length - 1];
+      p.rolls = rc.rolls;
+      const fr = SC.frames(p.rolls), f = fr[fr.length - 1], last = rc.rolls[rc.rolls.length - 1];
+      const strike = last === 10 && (f.rolls.length === 1 || fr.length === 10 && SC.marks(p.rolls)[fr.length - 1].slice(-1)[0] === 'X');
+      const spare = !strike && SC.marks(p.rolls)[fr.length - 1].slice(-1)[0] === '/';
+      banner(strike ? 'STRIKE' : spare ? 'SPARE' : String(last), 'late pin', strike ? 'strike' : spare ? 'spare' : 'small', 1.6);
+      if (strike) { G.stats.strikes++; SFX.strike(0); } else if (spare) { G.stats.spares++; SFX.spare(); }
+      if (window.MimicRec) MimicRec.event('recount', { from: prev, to: last });
+      renderSheet(); renderPins();
+    }
     const nx = SC.next(p.rolls);
     let turnOver = false;
     if (G.kind === 'game') {
@@ -955,7 +974,11 @@
         syncPins();
       }
       if (G.mode === 'rolling') { updateRolling(dt, rdt); if (G.lineup && G.mode === 'rolling' && G.rollT > 1.3) lineupNext(); }
-      else if (G.mode === 'result') { G.resultT += rdt; if (G.resultT > (G.result && G.result.celebrate ? (G.result.strike ? (G.celebRun >= 3 ? 2.5 : 2.15) : 1.9) : 0.35)) startReset(); }
+      else if (G.mode === 'result') {
+        G.resultT += rdt;
+        const hold = G.result && G.result.celebrate ? (G.result.strike ? (G.celebRun >= 3 ? 2.5 : 2.15) : 1.9) : 0.35;
+        if (G.resultT > hold && (deckSettled() || G.resultT > hold + 1.5)) startReset();
+      }
       else if (G.mode === 'reset') updateReset(rdt * (G.reset && G.reset.fast ? 2.5 : 1));
       else if (G.mode === 'dropped') { G.resultT += rdt; if (G.resultT > 1.1) { G.sim.ball = null; toReady(); } }
       // the ball in play

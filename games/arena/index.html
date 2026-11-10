@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Duskwater</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div id="hud" class="hidden">
+  <div id="views"></div>
+  <div id="spare" class="hidden"><div class="spare-in"><h2>Scoreboard</h2><div class="spare-body"></div></div></div>
+  <div id="topbar">
+    <div class="side s0"><span class="tname">WARDENS</span><div class="pips" id="pips0"></div><b id="score0">0</b></div>
+    <div id="clock"><span id="timer">0:00</span><em id="phase">BUY</em></div>
+    <div class="side s1"><b id="score1">0</b><div class="pips" id="pips1"></div><span class="tname">CORSAIRS</span></div>
+  </div>
+  <div id="fps"></div>
+</div>
+
+<!-- one per player: the whole first-person HUD, laid over that player's viewport -->
+<template id="vhudTpl">
+  <div class="vhud"><div class="vin">
+    <canvas class="radar" width="184" height="184"></canvas>
+    <div class="keys" data-h="keys"><div class="kg-goal"></div><div class="kg-rows"></div></div>
+    <div class="feed" data-h="feed"></div>
+    <div class="crosshair" data-h="crosshair"><i class="ch-l"></i><i class="ch-r"></i><i class="ch-t"></i><i class="ch-b"></i><i class="ch-dot"></i></div>
+    <div class="hitmarker" data-h="hitmarker"><i></i><i></i><i></i><i></i></div>
+    <div class="dmgdirs" data-h="dmgdirs"></div>
+    <div class="vitals">
+      <div class="money" data-h="money">$800</div>
+      <div class="vit"><span class="ic">HP</span><b data-h="hp">100</b><div class="bar"><i data-h="hpbar"></i></div></div>
+      <div class="vit armour"><span class="ic">AR</span><b data-h="ar">0</b><div class="bar"><i data-h="arbar"></i></div></div>
+    </div>
+    <div class="weapon" data-h="weapon">
+      <div class="wname" data-h="wname">Tern</div>
+      <div class="ammo"><b data-h="mag">12</b><span>/</span><em data-h="reserve">48</em></div>
+      <div class="reloadbar" data-h="reloadbar"><i></i></div>
+    </div>
+    <div class="banner" data-h="banner"><b></b><span></span></div>
+    <div class="hint" data-h="hint"></div>
+    <div class="spectate" data-h="spectate"></div>
+    <div class="scope" data-h="scope"><div class="reticle"></div></div>
+    <div class="hurt" data-h="hurt"></div>
+    <div class="ptag" data-h="ptag"></div>
+    <div class="buy hidden" data-h="buy">
+      <div class="panel buy-panel">
+        <div class="buy-head"><h2>Requisition</h2><div><span data-h="buyMoney">$0</span><em data-h="buyTime"></em></div></div>
+        <div class="buy-list" data-h="buyList"></div>
+        <div class="small" data-h="buyHelp"></div>
+      </div>
+    </div>
+    <div class="sbv hidden" data-h="sb"><div class="panel sb-panel" data-h="sbBody"></div></div>
+  </div></div>
+</template>
+
+<section id="splash" class="screen">
+  <div class="brand big">
+    <div class="logo">DUSKWATER</div>
+    <div class="tag">Depot Nine &middot; a harbour skirmish for the Mimic Pad</div>
+  </div>
+  <div id="loadbar"><i></i><span></span></div>
+  <div class="press">Click or press any key</div>
+  <div class="small">Sound starts on your first click or key press.</div>
+  <div class="mimic-scan" data-mimic-join="pad" data-compact data-label="No app? Scan to play" style="margin-top:14px"></div>
+</section>
+
+<section id="menu" class="screen hidden">
+  <div class="menu-col">
+    <div class="brand">
+      <div class="logo">DUSKWATER</div>
+      <div class="tag">Depot Nine &middot; 5v5 harbour skirmish</div>
+    </div>
+    <div class="items">
+      <button class="nav-item primary" data-act="play">Deploy</button>
+      <button class="nav-item split-entry" data-act="split">Split screen<span class="val">2&ndash;4 players</span></button>
+      <div class="nav-item sel" data-key="mode"><label>Mode</label><span class="val"></span></div>
+      <div class="nav-item sel" data-key="diff"><label>Bots</label><span class="val"></span></div>
+      <div class="nav-item sel" data-key="toWin"><label>First to</label><span class="val"></span></div>
+      <button class="nav-item" data-act="options">Options &amp; controller check</button>
+      <button class="nav-item" data-act="controls">Controls</button>
+      <button class="nav-item" data-act="rumble" id="rumbleBtn">Phone rumble</button>
+    </div>
+    <div class="status" id="padStatus"></div>
+  </div>
+</section>
+
+<section id="options" class="screen hidden">
+  <div class="opt-wrap">
+    <div class="panel opt-panel">
+      <h2>Options</h2>
+      <div class="items" id="optList"></div>
+      <button class="nav-item" data-act="back">Back</button>
+    </div>
+    <div class="panel readout-panel">
+      <h2>Input readout</h2>
+      <div id="readout"></div>
+    </div>
+  </div>
+</section>
+
+<section id="controls" class="screen hidden">
+  <div class="panel controls-panel">
+    <h2>Controls</h2>
+    <table id="controlsTable"></table>
+    <p class="small">Phone gyro adds to the right stick. Small turns lost? Lower the stick dead zone in Options.</p>
+    <button class="nav-item" data-act="back">Back</button>
+  </div>
+</section>
+
+<section id="lobby" class="screen hidden">
+  <div class="lobby-wrap">
+    <div class="lobby-head">
+      <div class="brand"><div class="logo">SPLIT SCREEN</div><div class="tag">One controller per player &middot; up to four on this PC</div></div>
+      <div class="lobby-opts">
+        <button class="lopt" data-act="lmode"><label>Mode</label><span id="lMode"></span><kbd class="lk" id="lModeKey"></kbd></button>
+        <button class="lopt" data-act="lfill"><label>Bots</label><span id="lFill"></span><kbd class="lk" id="lFillKey"></kbd></button>
+        <div class="lopt static"><label>Bot skill</label><span id="lDiff"></span></div>
+        <div class="lopt static"><label>First to</label><span id="lWin"></span></div>
+      </div>
+    </div>
+    <div class="lobby-slots" id="lSlots"></div>
+    <div class="lobby-foot"><span id="lStatus"></span><span class="small" id="lHelp"></span></div>
+  </div>
+</section>
+
+<section id="pause" class="screen hidden">
+  <div class="panel list-panel">
+    <h2>Paused</h2>
+    <button class="nav-item primary" data-act="resume">Resume</button>
+    <button class="nav-item" data-act="options">Options</button>
+    <button class="nav-item" data-act="restart">Restart match</button>
+    <button class="nav-item" data-act="controls">Controls</button>
+    <button class="nav-item" data-act="quit">Leave match</button>
+  </div>
+</section>
+
+<section id="results" class="screen hidden">
+  <div class="panel results-panel">
+    <div class="res-title" id="resTitle"></div>
+    <div class="res-sub" id="resSub"></div>
+    <div id="resTable"></div>
+    <div class="res-actions">
+      <button class="nav-item primary" data-act="again">Play again</button>
+      <button class="nav-item" data-act="quit">Main menu</button>
+    </div>
+  </div>
+</section>
+
+<script src="../lib/three.min.js"></script>
+<script type="module" src="../lib/vendor/loaders.js"></script>
+<script src="assets.js"></script>
+<script src="../lib/mimic.js"></script>
+<script src="../lib/mimic-link.js"></script>
+<script src="../lib/recorder.js"></script>
+<script src="input.js"></script>
+<script src="split.js"></script>
+<script src="rules.js"></script>
+<script src="map.js"></script>
+<script src="audio.js"></script>
+<script src="world.js"></script>
+<script src="actors.js"></script>
+<script src="fx.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

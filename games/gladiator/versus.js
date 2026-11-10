@@ -341,8 +341,7 @@
       rumble(X, 0.4 + 0.5 * Math.min(1, res.power), 50, 0);
       rumble(Y, 1, h.zone === 'head' ? 255 : 180, h.zone === 'legs' ? 2 : h.zone === 'swordArm' ? 3 : 1);
       V.excite = Math.min(1.4, V.excite + 0.12 + 0.2 * res.power);
-      pop(X.k, String(dmg), 'dmg', at);
-      popOnce(X, 'zone', 0.5, (cls.kind === 'thrust' ? 'THRUST' : cls.kind === 'flat' ? 'FLAT' : 'EDGE') + ' · ' + ZONE_WORD[h.zone] + ' · ' + speed + ' m/s', 'sub', 'low');
+      popOnce(X, 'zone', 0.4, (cls.kind === 'thrust' ? 'THRUST' : cls.kind === 'flat' ? 'FLAT' : 'EDGE') + ' · ' + ZONE_WORD[h.zone] + ' · ' + dmg + ' dmg', 'mid', 'high');
       pop(Y.k, '-' + dmg + '  ' + ZONE_WORD[h.zone], 'bad', 'center');
       if (dmg >= 28 || (h.zone === 'head' && dmg >= 20)) { Sfx.play('shout', { vol: 0.5, delay: 0.1 }); V.slowT = 0.35; V.timeScale = 0.35; }
       if (wfx.limp) popOnce(Y, 'limp', 2, 'LEG CUT: SHORTER LUNGE', 'sub', 'low');

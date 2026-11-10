@@ -54,7 +54,8 @@
         if (this.life[k] <= 0) this.pos[j + 1] = -100;
         else if (this.mat.blending === T.AdditiveBlending) {
           const f = this.life[k] / this.max[k];
-          this.col[j] *= 0.98 + 0.02 * f; this.col[j + 1] *= 0.95 + 0.05 * f; this.col[j + 2] *= 0.9 + 0.1 * f;
+          // white hot to orange, then out: additive, so cooling fades to nothing, never to a dark speck
+          this.col[j] *= 0.985 + 0.015 * f; this.col[j + 1] *= 0.955 + 0.045 * f; this.col[j + 2] *= 0.9 + 0.1 * f;
         }
       }
       this.points.geometry.attributes.position.needsUpdate = true;
@@ -82,7 +83,7 @@
       const s = size || (0.05 + Math.random() * 0.12); m.scale.set(s, s * (0.7 + Math.random() * 0.6), 1);
       m.rotation.z = Math.random() * 6;
     }
-    fx.sparks = new Particles(scene, 400, { gravity: 6, size: 0.022, additive: true, drag: 1.5 });
+    fx.sparks = new Particles(scene, 400, { gravity: 6, size: 0.012, additive: true, drag: 1.5 });
     fx.blood = new Particles(scene, 600, { gravity: 9.8, size: 0.06, additive: false, drag: 0.6, soft: true, floorHit: (x, z) => decal(x, z) });
     fx.dust = new Particles(scene, 200, { gravity: -0.15, size: 0.5, additive: false, drag: 2.5, soft: true });
     fx.dust.mat.opacity = 0.35;
@@ -95,8 +96,8 @@
       for (let k = 0; k < n; k++) {
         tmp.set(Math.random() - 0.5, Math.random() - 0.2, Math.random() - 0.5).normalize().multiplyScalar(1.5 + Math.random() * 4 * strength);
         if (dir) tmp.addScaledVector(dir, 1.5);
-        c1.setRGB(1, 0.5 + Math.random() * 0.3, 0.12 + Math.random() * 0.15);
-        fx.sparks.emit(p, tmp, c1, 0.25 + Math.random() * 0.35);
+        c1.setRGB(1, 0.72 + Math.random() * 0.28, 0.32 + Math.random() * 0.35);
+        fx.sparks.emit(p, tmp, c1, 0.15 + Math.random() * 0.3);
       }
     };
     // versus: blood thrown off a player's own body stays out of that player's eyes (layer = what only the other sees)
@@ -113,7 +114,7 @@
       for (let k = 0; k < n; k++) {
         tmp.set(Math.random() - 0.5, Math.random() * 0.8, Math.random() - 0.5).multiplyScalar(1.2 + 2.2 * strength);
         if (dir) tmp.addScaledVector(dir, 1 + Math.random() * 2.5 * strength);
-        const d = 0.25 + Math.random() * 0.3; c1.setRGB(d, 0.01, 0.01);
+        const d = 0.5 + Math.random() * 0.25; c1.setRGB(d, 0.03 + d * 0.02, 0.025);
         sys.emit(p, tmp, c1, 1.6);
       }
       for (let k = 0; k < 3; k++) { lastDecal = 0; decal(p.x + (Math.random() - 0.5) * 0.5, p.z + (Math.random() - 0.5) * 0.5, 0.05 + 0.1 * strength * Math.random()); }

@@ -201,9 +201,17 @@
     $('opt-hand').textContent = S.hand.toUpperCase();
     document.querySelectorAll('.opt-vol').forEach(el => { el.textContent = volText(prefs.volume); });
     document.querySelectorAll('.opt-assist').forEach(el => { el.textContent = prefs.assist ? 'ON' : 'OFF'; });
+    document.querySelectorAll('.opt-gfx').forEach(el => { el.textContent = (prefs.gfx || 'auto').toUpperCase() + (prefs.gfx !== 'low' && prefs.gfx !== 'high' && S.lowGfx ? ' · LOW' : ''); });
+    applyGfx();
     // until the tutorial is done it is the first thing offered
     const tb = document.querySelector('#title-menu [data-act=tutorial]'), lb = document.querySelector('#title-menu [data-act=ladder]');
     if (tb && lb) { tb.classList.toggle('primary', !prefs.tutDone); lb.classList.toggle('primary', !!prefs.tutDone); }
+  }
+  function applyGfx() {
+    const low = prefs.gfx === 'low' || (prefs.gfx !== 'high' && S.lowGfx);
+    if (world) { world.sun.castShadow = !low; if (world.motes) world.motes.visible = !low; }
+    S.prMax = low ? Math.min(PR_MAX, 1) : PR_MAX;
+    if (renderer.getPixelRatio() > S.prMax) renderer.setPixelRatio(S.prMax);
   }
   const freshStats = () => ({ hits: 0, parries: 0, blocks: 0, beats: 0, taken: 0, bestHit: 0, bestSpeed: 0, counters: 0, time: 0, fame: 0, whiffs: 0, swings: 0, disarms: 0 });
 
@@ -212,6 +220,7 @@
   const R0 = makeRig(ME.head);
   const rig = R0.rig;
   let HAND = makeSwordHand(mc, R0, ME, 'right');
+  const TRAIL = LudusArm.makeTrail(scene);
   window.__ludus = S; // for tests
   window.__ludusDebug = { gfx: () => ({ renderer, scene, camera, world }), hand: () => HAND,
     bladeFor: q => { ME.body.updateMatrixWorld(true); const b = bladeWorld(R0, q, MM.armPose(q, S.hand), 0); return { h: b.h, t: b.t }; },
@@ -656,6 +665,13 @@
     if (S.hp <= 0 && S.mode !== 'practice') defeat();
   }
 
+  /** A point just under the surface of the capsule the blade met (models sit inside their capsules). */
+  function onBody(at, cap) {
+    if (!cap || !cap.a || !cap.b) return at;
+    const ab = cap.b.clone().sub(cap.a), t = Math.max(0, Math.min(1, at.clone().sub(cap.a).dot(ab) / Math.max(1e-6, ab.lengthSq())));
+    const c = cap.a.clone().addScaledVector(ab, t), d = at.clone().sub(c);
+    return d.lengthSq() < 1e-8 ? at : c.addScaledVector(d.normalize(), cap.r * 0.82);
+  }
   /** Your blade landed on his body. */
   function landBlow(hit, cls, vel, A1) {
     const at = new T.Vector3(hit.point.x, hit.point.y, hit.point.z);
@@ -678,7 +694,7 @@
     if (res.result === 'armor') {
       Sfx.play('clash', { vol: 0.6, rate: 1.3 }); Sfx.ring(0.35, false);
       fx.clash(at, 0.35, motion.clone().negate()); rumble(0.55, 40, 0);
-      f.addWound(at, motion, cap && cap.bone, true, 0.6);
+      if (p.model !== 'skeleton') f.addWound(onBody(at, cap), motion, cap && cap.bone, true, 0.6);
       b.balance -= 6 + 10 * res.power; if (res.stagger) { C.stagger(b, p.staggerMs * 0.5); f.setAction('stagger'); }
       say('ARMOUR', 'turned it: cut harder, or thrust', 'bad');
       S.freezeT = 0.03;
@@ -691,7 +707,7 @@
     if (res.counter) { S.stats.counters++; addFame(C.FAME.counter); }
     if (b.state === 'stagger') f.setAction('stagger');
     f.hitReact(motion.x > 0 ? 'right' : 'left', res.stagger);
-    f.addWound(at, motion, cap && cap.bone, p.model === 'dummy' || p.model === 'skeleton', res.power);
+    if (p.model !== 'skeleton') f.addWound(onBody(at, cap), motion, cap && cap.bone, false, res.power);
     // straw from the post, bone from the dead, blood from the rest
     if (p.model === 'dummy') fx.chips(at, Math.min(1, res.power), motion, { r: 0.85, g: 0.7, b: 0.38 });
     else if (p.model === 'skeleton') fx.chips(at, Math.min(1, res.power), motion, { r: 0.85, g: 0.82, b: 0.74 });
@@ -706,14 +722,13 @@
     S.excite = Math.min(1.4, S.excite + 0.1 + 0.2 * res.power);
     const big = res.damage >= 30 || (zone === 'head' && res.damage >= 20);
     if (big) { Sfx.play('shout', { vol: 0.6, delay: 0.12 }); slowMo(0.35, 0.35); }
-    pop(String(res.damage), 'dmg', at);
-    const what = KIND_WORD[cls.kind] + ' · ' + zoneWord(zone) + ' · ' + speed + ' m/s';
+    const what = KIND_WORD[cls.kind] + ' · ' + zoneWord(zone) + ' · ' + res.damage + ' dmg';
     if (wfx.disarm) { say('DISARMED!', what, 'good'); f.dropWeapon(); S.stats.disarms++; addFame(C.FAME.disarm); slowMo(0.6, 0.3); Sfx.ring(1, true); }
     else if (wfx.shieldDrop) { say('SHIELD DROPPED!', what, 'good'); f.dropShield(); addFame(250); slowMo(0.5, 0.3); }
     else if (wfx.kneel) { say('DOWN ON ONE KNEE!', what, 'good'); f.setAction('kneel'); addFame(C.FAME.kneel); slowMo(0.5, 0.3); }
     else if (res.counter) say('COUNTER!', what, 'good');
     else if (cls.kind === 'flat') say('FLAT', 'the flat hit it: turn your wrist so the edge leads', 'ok');
-    else say(big ? (zone === 'head' ? 'HEAD!' : 'DEEP CUT!') : KIND_WORD[cls.kind], zoneWord(zone) + ' · ' + speed + ' m/s' + (wfx.limp ? ' · he limps' : zone === 'swordArm' && b.wounds.armLevel > 0 ? ' · his arm weakens' : ''), 'good');
+    else say(big ? (zone === 'head' ? 'HEAD!' : 'DEEP CUT!') : KIND_WORD[cls.kind], zoneWord(zone) + ' · ' + speed + ' m/s · ' + res.damage + ' dmg' + (wfx.limp ? ' · he limps' : zone === 'swordArm' && b.wounds.armLevel > 0 ? ' · his arm weakens' : ''), 'good');
     if (wfx.limp) f.limp = b.wounds.legLevel;
     if (S.foe.hp <= 0) foeDown();
   }
@@ -979,6 +994,7 @@
       case 'swap-practice': S.practiceFoe = S.practiceFoe === 'dummy' ? 'spar' : 'dummy'; startBout(0); break;
       case 'hand': prefs.hand = S.hand === 'right' ? 'left' : 'right'; applyPrefs(); savePrefs(); break;
       case 'assist': prefs.assist = !prefs.assist; applyPrefs(); savePrefs(); break;
+      case 'gfx': { const o = ['auto', 'high', 'low']; prefs.gfx = o[(o.indexOf(prefs.gfx || 'auto') + 1) % 3]; S.lowGfx = false; S.slowFor = 0; applyPrefs(); savePrefs(); break; }
       case 'sound': {
         const i = VOLUMES.findIndex(v => Math.abs(v - prefs.volume) < 0.01);
         prefs.volume = VOLUMES[(i + 1) % VOLUMES.length]; applyPrefs(); savePrefs(); break;
@@ -1063,7 +1079,10 @@
         S.prTry = null;
         let np = pr;
         if (S.fps < 50 && pr > PR_MIN && !S.prHold) { np = Math.max(PR_MIN, pr - 0.1); S.prTry = { pr, fps: S.fps }; }
-        else if (S.fps > 58 && pr < PR_MAX) np = Math.min(PR_MAX, pr + 0.05);
+        else if (S.fps > 58 && pr < (S.prMax || PR_MAX)) np = Math.min(S.prMax || PR_MAX, pr + 0.05);
+        // AUTO: at the lowest resolution and still slow for a while, shadows and dust go
+        S.slowFor = pr <= PR_MIN + 1e-3 && S.fps < 40 ? (S.slowFor || 0) + 1.2 : 0;
+        if ((prefs.gfx || 'auto') === 'auto' && !S.lowGfx && S.slowFor > 6) { S.lowGfx = true; applyPrefs(); rec('quality', { low: true, fps: Math.round(S.fps) }); }
         if (np !== pr) renderer.setPixelRatio(np);
       }
     }
@@ -1113,6 +1132,8 @@
     updateSwordHand(HAND, realDt, { fight: fighting, freeze: frozen, keyLunge: fighting && takeKeyLunge(), onLunge: () => tut({ type: 'lunge' }) });
     if (mc.pressed('center') && S.tut) tut({ type: 'aligned' });
     poseRig(R0, camera, HAND.q, HAND.arm, { ext: HAND.ext, dt: realDt });
+    LudusArm.updateTrail(TRAIL, fighting ? HAND.blade : null, HAND.tipVel.length());
+    if (!fighting) TRAIL.mesh.visible = false;
 
     const inMenu = ['title', 'between', 'results', 'paused'].includes(S.state) || (S.state === 'intro' && !$('card').classList.contains('hidden'));
     inMenuNow = inMenu;
@@ -1255,6 +1276,8 @@
     applyPrefs();
     loadAll().then(() => {
       world = LudusWorld.build(scene, renderer, assets);
+      renderer.shadowMap.type = T.PCFSoftShadowMap;
+      applyGfx();
       fx = LudusFx.create(scene);
       clashLight = new T.PointLight(0xffe2a8, 0, 4, 2); scene.add(clashLight);
       $('loading').classList.add('hidden');

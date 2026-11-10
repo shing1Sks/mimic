@@ -195,16 +195,26 @@
 
     // sun
     const sunDir = new T.Vector3(-0.45, 0.8, 0.35).normalize();
-    const sun = new T.DirectionalLight(0xfff0d6, 1.9);
+    const sun = new T.DirectionalLight(0xffe6c2, 2.05);
     sun.position.copy(sunDir).multiplyScalar(30);
     sun.target.position.set(0, 0, 3);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
     const sc = sun.shadow.camera; sc.left = -9; sc.right = 9; sc.top = 9; sc.bottom = -9; sc.near = 5; sc.far = 70;
-    sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.02;
+    sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.02; sun.shadow.radius = 3;
     scene.add(sun, sun.target);
     scene.add(new T.HemisphereLight(0xcfe3ff, 0x9a7b55, 0.45));
     world.sun = sun;
+    // dust hanging in the sunlight over the fighting ground, drifting slowly
+    {
+      const N = 220, pos = new Float32Array(N * 3), c = document.createElement('canvas'); c.width = c.height = 32;
+      const g = c.getContext('2d'), gr = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+      gr.addColorStop(0, 'rgba(255,240,210,1)'); gr.addColorStop(1, 'rgba(255,240,210,0)'); g.fillStyle = gr; g.fillRect(0, 0, 32, 32);
+      for (let i = 0; i < N; i++) { pos[i * 3] = (Math.random() - 0.5) * 7; pos[i * 3 + 1] = 0.2 + Math.random() * 3; pos[i * 3 + 2] = 1 + Math.random() * 6; }
+      const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.BufferAttribute(pos, 3));
+      const motes = new T.Points(geo, new T.PointsMaterial({ size: 0.022, map: new T.CanvasTexture(c), transparent: true, opacity: 0.42, depthWrite: false, color: 0xfff0d0 }));
+      motes.frustumCulled = false; scene.add(motes); world.motes = motes;
+    }
 
     // sand
     const sandMat = new T.MeshStandardMaterial({
@@ -357,6 +367,14 @@
       f.scale.set(0.45 * k, 0.8 * (0.9 + 0.2 * k), 1);
     }
     for (const b of world.banners) b.rotation.z = Math.sin(t * 1.3 + b.userData.phase) * 0.03;
+    if (world.motes && world.motes.visible) {
+      const p = world.motes.geometry.attributes.position, a = p.array;
+      for (let i = 0; i < a.length; i += 3) {
+        a[i] += Math.sin(t * 0.3 + i) * 0.0009 + 0.0006; a[i + 1] += Math.sin(t * 0.5 + i * 1.7) * 0.0006;
+        if (a[i] > 3.5) a[i] = -3.5;
+      }
+      p.needsUpdate = true;
+    }
   }
 
   window.LudusWorld = { build, update, R };

@@ -186,10 +186,18 @@
       this.mats = [];
       model.traverse(o => {
         if (o.isMesh) {
-          o.castShadow = true; o.receiveShadow = false; o.frustumCulled = false;
+          o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false;
           if (this.rig.hide && this.rig.hide.includes(o.name)) o.visible = false;
           o.material = Array.isArray(o.material) ? o.material.map(m => m.clone()) : o.material.clone();
-          (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { if (m.emissive) this.mats.push(m); });
+          (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => {
+            if (m.emissive) this.mats.push(m);
+            // the arena's sky in the metal and a softer sheen on cloth and skin
+            if (m.isMeshStandardMaterial) { m.envMapIntensity = m.metalness > 0.4 ? 1.1 : 0.55; if (m.metalness < 0.4) m.roughness = Math.max(m.roughness, 0.6); }
+            // a hide and old bone with some grain to them, not flat card
+            if (m.isMeshStandardMaterial && (profile.model === 'troll' || profile.model === 'skeleton') && o.geometry.attributes.uv && window.LudusMat) {
+              m.normalMap = LudusMat.stone().normalMap; m.normalScale.set(0.6, 0.6); m.needsUpdate = true;
+            }
+          });
         }
       });
       const box = new T.Box3().setFromObject(model);
@@ -211,6 +219,7 @@
         e.position.set(0, wl / Math.max(1e-6, ws.y), 0);
         return e;
       };
+      this.chest = bone('Chest') || bone('Torso');
       this.parts = (this.rig.parts || []).map(s => ({ s, a: bone(s.a), b: s.b ? bone(s.b) : null })).filter(x => x.a);
       // the sword arm, its grip, and the other arm
       if (profile.weapon === 'sword' || profile.weapon === 'axe') {
@@ -385,6 +394,8 @@
       if (this.walk) this.walk.setEffectiveWeight(this.walkW * (1 - this.atkW));
       if (this.idle && !this.dead) this.idle.setEffectiveWeight((1 - this.walkW) * (1 - this.atkW));
       this.mixer.update(dt);
+      // breathing: the chest rises and falls, faster after effort
+      if (!this.dead && this.chest) { this.breath = (this.breath || 0) + dt * (this.mode === 'idle' ? 1.6 : 2.6); const k = 1 + Math.sin(this.breath) * 0.018; this.chest.scale.set(k, 1 + (k - 1) * 0.5, k); }
 
       // the body tells the blow: shoulders turn away and back, weight goes back then forward
       let lx = 0, ly = 0, lz = 0, lunge = 0, py = 0;
@@ -549,7 +560,7 @@
       if (this.wounds.length > 22) { const o = this.wounds.shift(); o.parent && o.parent.remove(o); o.geometry.dispose(); o.material.dispose(); }
     }
     /** Knock a training post (or any fighter) by a blow: world velocity of the blade. */
-    knock(vel, s) { const sp = this.spring; sp.vx += -vel.z * 0.05 * s; sp.vz += -vel.x * 0.05 * s; }
+    knock(vel, s) { const sp = this.spring, m = Math.min(1, 20 / Math.max(1e-6, Math.hypot(vel.x, vel.z))); sp.vx += -vel.z * m * 0.05 * s; sp.vz += -vel.x * m * 0.05 * s; }
     dropWeapon() { if (this.weapon && this.weapon.parent === this.root) this.drop(this.weapon); }
     dropShield() { if (this.shield && this.shield.parent === this.root) this.drop(this.shield); }
     rearm() {
@@ -582,41 +593,77 @@
   }
 
   /*
-   * The palus: a training post the shape of a man. A straw torso lashed with rope on an oak post,
-   * a leather head, a fixed off arm and a spring arm with a wooden rudis that swings back at you.
+   * The palus: a training post the shape of a man. An oak post on a stone plinth, a sackcloth body
+   * stuffed with straw and bound with rope, a padded head under a dented iron bucket, a fixed off
+   * arm and a sword arm on an iron pivot that swings a wooden rudis back at you. Cuts tear the
+   * sacking and leave straw sticking out.
    */
+  const SACK = [[0, -0.02], [0.13, 0], [0.172, 0.07], [0.19, 0.2], [0.188, 0.32], [0.175, 0.42], [0.15, 0.5], [0.08, 0.555], [0, 0.56]];
+  const sackR = y => { for (let i = 1; i < SACK.length; i++) if (y <= SACK[i][1]) { const a = SACK[i - 1], b = SACK[i]; return a[0] + (b[0] - a[0]) * (y - a[1]) / Math.max(1e-6, b[1] - a[1]); } return 0.08; };
+  let tearTex = null;
+  function getTearTex() {
+    if (tearTex) return tearTex;
+    const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+    g.fillStyle = 'rgba(40,26,12,0.95)'; g.beginPath();
+    for (let k = 0; k <= 18; k++) { const a = k / 18 * Math.PI * 2, r = 14 + Math.random() * 9; g[k ? 'lineTo' : 'moveTo'](32 + Math.cos(a) * r * 1.5, 32 + Math.sin(a) * r * 0.7); }
+    g.fill();
+    g.strokeStyle = 'rgba(222,190,110,0.95)'; g.lineWidth = 1.4;
+    for (let k = 0; k < 26; k++) { const a = Math.random() * Math.PI * 2, r = 12 + Math.random() * 8; g.beginPath(); g.moveTo(32 + Math.cos(a) * r * 1.4, 32 + Math.sin(a) * r * 0.6); g.lineTo(32 + Math.cos(a) * (r + 7) * 1.5, 32 + Math.sin(a) * (r + 6) * 0.7); g.stroke(); }
+    tearTex = new T.CanvasTexture(c); tearTex.encoding = T.sRGBEncoding;
+    return tearTex;
+  }
   class Dummy extends Fighter {
     constructor(profile) {
-      const g = new T.Group();
-      const oak = mat(0x6b4a2b, 0.78), dark = mat(0x3e2a18, 0.85), straw = mat(0xc9a55a, 0.95), rope = mat(0x8d7146, 0.9), leather = mat(0x5a3520, 0.7), iron = mat(0x55524e, 0.5, 0.8);
-      const add = (geo, m, x, y, z, rx, ry, rz) => { const o = new T.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx || 0, ry || 0, rz || 0); o.castShadow = true; g.add(o); return o; };
-      add(new T.BoxGeometry(1.0, 0.09, 0.14), dark, 0, 0.045, 0); add(new T.BoxGeometry(0.14, 0.09, 1.0), dark, 0, 0.045, 0);
-      add(new T.CylinderGeometry(0.06, 0.07, 1.0, 10), oak, 0, 0.5, 0);
+      const M = LudusMat, g = new T.Group();
+      const oak = M.mat(M.wood(), { rough: 0.82 }), oakDark = M.mat(M.wood('dark'), { rough: 0.85 }), sack = M.mat(M.burlap(7, 4), { rough: 0.95, normal: 0.9 }), sackHead = M.mat(M.burlap(4, 3), { rough: 0.95, normal: 0.9 });
+      const rope = M.mat(M.rope(14, 1), { rough: 0.9 }), iron = M.mat(M.iron(), { rough: 0.42, metal: 0.85, env: 1.1 }), stone = M.mat(M.stone(), { rough: 0.92 });
+      const leather = M.mat(M.leather(), { rough: 0.62 });
+      const mesh = (geo, m, parent, x, y, z) => { const o = new T.Mesh(geo, m); o.position.set(x || 0, y || 0, z || 0); o.castShadow = true; o.receiveShadow = true; (parent || g).add(o); return o; };
+      // plinth and post
+      mesh(new T.CylinderGeometry(0.34, 0.4, 0.16, 8), stone, g, 0, 0.08, 0).rotation.y = Math.PI / 8;
+      const band = mesh(new T.TorusGeometry(0.087, 0.012, 6, 18), iron, g, 0, 0.19, 0); band.rotation.x = Math.PI / 2;
+      mesh(new T.CylinderGeometry(0.066, 0.078, 0.84, 12), oak, g, 0, 0.58, 0);
+      for (const y of [0.42, 0.66]) { const r = mesh(new T.TorusGeometry(0.07, 0.005, 5, 18), oakDark, g, 0, y, 0); r.rotation.x = Math.PI / 2; }
+      // body: the stuffed sack, bound with rope
       const body = new T.Group(); body.name = 'Body'; body.position.set(0, 0.95, 0); g.add(body);
-      const bAdd = (geo, m, x, y, z, rx, ry, rz) => { const o = new T.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx || 0, ry || 0, rz || 0); o.castShadow = true; body.add(o); return o; };
-      bAdd(new T.CylinderGeometry(0.16, 0.18, 0.5, 14), straw, 0, 0.25, 0);
-      for (let i = 0; i < 5; i++) bAdd(new T.TorusGeometry(0.175 - i * 0.003, 0.012, 6, 18), rope, 0, 0.05 + i * 0.1, 0, Math.PI / 2, 0, 0);
-      bAdd(new T.CylinderGeometry(0.035, 0.035, 0.66, 8), oak, 0, 0.47, 0, 0, 0, Math.PI / 2);
-      const head = bAdd(new T.SphereGeometry(0.11, 16, 12), leather, 0, 0.69, 0); head.name = 'Head'; head.scale.set(1, 1.12, 1);
-      bAdd(new T.TorusGeometry(0.112, 0.01, 6, 20), iron, 0, 0.69, 0, Math.PI / 2, 0, 0);
-      bAdd(new T.CylinderGeometry(0.04, 0.05, 0.1, 8), oak, 0, 0.56, 0);
-      // fixed off arm angled forward
-      const off = bAdd(new T.CylinderGeometry(0.035, 0.035, 0.45, 8), oak, 0.3, 0.3, 0.12, 0.5, 0, 0.15);
-      off.name = 'Off';
-      const named = (n, x, y, z, parent) => { const o = new T.Object3D(); o.name = n; o.position.set(x, y, z); (parent || body).add(o); return o; };
-      named('ShoulderR', -0.33, 0.47, 0); named('ShoulderL', 0.33, 0.47, 0); named('OffEnd', 0.34, 0.08, 0.24); named('Hips', 0, 0, 0); named('Neck', 0, 0.55, 0);
-      named('HeadTop', 0, 0.8, 0); named('Post0', 0, -0.95, 0); named('Post1', 0, -0.05, 0);
-      // the spring arm (from his right shoulder: your left) and its rudis are posed by poseWeapon
+      mesh(new T.LatheGeometry(SACK.map(p => new T.Vector2(p[0], p[1])), 22), sack, body);
+      for (const y of [0.1, 0.3, 0.46]) { const r = mesh(new T.TorusGeometry(sackR(y) + 0.004, 0.011, 6, 26), rope, body, 0, y, 0); r.rotation.x = Math.PI / 2; }
+      const helix = new T.CatmullRomCurve3(Array.from({ length: 17 }, (_, k) => { const f = k / 16, a = f * Math.PI * 2, y = 0.06 + f * 0.36; const r = sackR(y) + 0.006; return new T.Vector3(Math.cos(a) * r, y, Math.sin(a) * r); }));
+      mesh(new T.TubeGeometry(helix, 64, 0.009, 6, false), rope, body);
+      // shoulder timber, fixed off arm, pivot for the sword arm
+      mesh(new T.BoxGeometry(0.72, 0.075, 0.075), oakDark, body, 0, 0.47, 0);
+      const offA = new T.Vector3(0.33, 0.47, 0), offB = new T.Vector3(0.34, 0.08, 0.24);
+      const off = mesh(new T.BoxGeometry(0.06, offA.distanceTo(offB), 0.06), oak, body); off.position.copy(offA).lerp(offB, 0.5);
+      off.quaternion.setFromUnitVectors(UPV, offB.clone().sub(offA).normalize());
+      mesh(new T.CylinderGeometry(0.045, 0.045, 0.12, 12), leather, body, offB.x, offB.y + 0.04, offB.z - 0.03).quaternion.copy(off.quaternion);
+      const hub = mesh(new T.CylinderGeometry(0.05, 0.05, 0.09, 14), iron, body, -0.33, 0.47, 0.04); hub.rotation.x = Math.PI / 2;
+      mesh(new T.SphereGeometry(0.018, 10, 8), iron, body, -0.33, 0.47, 0.09);
+      // neck, padded head, iron bucket helmet
+      mesh(new T.CylinderGeometry(0.035, 0.045, 0.1, 10), oak, body, 0, 0.6, 0);
+      const head = mesh(new T.SphereGeometry(0.11, 18, 14), sackHead, body, 0, 0.71, 0); head.name = 'Head'; head.scale.set(1, 1.1, 0.95);
+      const seam = mesh(new T.TorusGeometry(0.111, 0.004, 4, 28), rope, body, 0, 0.71, 0); seam.scale.set(1, 1.1, 1); seam.rotation.y = Math.PI / 2;
+      const helm = new T.Group(); helm.position.set(0, 0.78, 0); helm.rotation.set(-0.08, 0.3, 0.13); body.add(helm);
+      mesh(new T.CylinderGeometry(0.098, 0.118, 0.12, 20, 1, true), iron, helm).material.side = T.DoubleSide;
+      mesh(new T.CircleGeometry(0.098, 20), iron, helm, 0, 0.06, 0).rotation.x = -Math.PI / 2;
+      const rim = mesh(new T.TorusGeometry(0.119, 0.008, 6, 24), iron, helm, 0, -0.06, 0); rim.rotation.x = Math.PI / 2;
+      for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; mesh(new T.SphereGeometry(0.006, 6, 4), iron, helm, Math.cos(a) * 0.112, -0.035, Math.sin(a) * 0.112); }
+      const named = (n, x, y, z) => { const o = new T.Object3D(); o.name = n; o.position.set(x, y, z); body.add(o); return o; };
+      named('ShoulderR', -0.33, 0.47, 0.04); named('ShoulderL', 0.33, 0.47, 0); named('OffEnd', offB.x, offB.y, offB.z); named('Hips', 0, 0.02, 0); named('Neck', 0, 0.52, 0);
+      named('HeadTop', 0, 0.86, 0); named('Post0', 0, -0.8, 0); named('Post1', 0, -0.05, 0);
       super(Object.assign({}, profile), { scene: g, animations: [] }, {});
       this.rig = { parts: [] };
       const o = n => this.model.getObjectByName(n);
       this.parts = [
-        { s: { zone: 'head', r: 0.12 }, a: o('Head'), b: o('HeadTop') }, { s: { zone: 'torso', r: 0.18 }, a: o('Hips'), b: o('Neck') },
-        { s: { zone: 'offArm', r: 0.04 }, a: o('ShoulderL'), b: o('OffEnd') }, { s: { zone: 'legs', r: 0.07 }, a: o('Post0'), b: o('Post1') },
+        { s: { zone: 'head', r: 0.12 }, a: o('Head'), b: o('HeadTop') }, { s: { zone: 'torso', r: 0.19 }, a: o('Hips'), b: o('Neck') },
+        { s: { zone: 'offArm', r: 0.04 }, a: o('ShoulderL'), b: o('OffEnd') }, { s: { zone: 'legs', r: 0.075 }, a: o('Post0'), b: o('Post1') },
       ];
-      this.armMesh = new T.Mesh(new T.CylinderGeometry(0.035, 0.035, 1, 8), oak); this.armMesh.castShadow = true; this.root.add(this.armMesh);
+      this.body = o('Body');
+      this.armMesh = new T.Mesh(new T.BoxGeometry(0.058, 1, 0.058), oak); this.armMesh.castShadow = true; this.root.add(this.armMesh);
+      // the rudis: grained wood, not paint
+      this.weapon.traverse(m => { if (m.isMesh) m.material = M.mat(M.wood('pale'), { rough: 0.7 }); });
       this.shoulderL = o('ShoulderR');
       this.ikChain = []; this.blade = [0.1, 0.78];
+      this.tufts = [];
     }
     attackCfg() {
       if (!this._cfg) {
@@ -628,7 +675,7 @@
     }
     poseWeapon(b) {
       super.poseWeapon(b);
-      // the spring arm: from the shoulder to the grip
+      // the sword arm: a timber from the pivot to the grip
       const s = this.shoulderL.getWorldPosition(_a); this.root.worldToLocal(s);
       const h = this.weapon.position, d = _b.copy(h).sub(s), l = d.length();
       this.armMesh.position.copy(s).addScaledVector(d, 0.5);
@@ -639,6 +686,31 @@
       const s = this.shoulderL.getWorldPosition(new T.Vector3()), h = this.weapon.position.clone(); this.root.localToWorld(h);
       out.push({ zone: 'swordArm', a: s, b: h, r: 0.04, bone: this.shoulderL });
       return out;
+    }
+    /** A cut in the sacking: a ragged tear on its surface with straw sticking out of it. */
+    addWound(point, motion, bone, armored, size) {
+      if (!this.body || !bone || !['Hips', 'Neck', 'Head', 'HeadTop'].includes(bone.name)) return;
+      const p = this.body.worldToLocal(point.clone());
+      const head = bone.name === 'Head' || bone.name === 'HeadTop' || p.y > 0.6;
+      const cy = head ? 0.71 : Math.max(0.02, Math.min(0.54, p.y));
+      const n = new T.Vector3(p.x, head ? p.y - 0.71 : 0, p.z); if (n.lengthSq() < 1e-6) n.set(0, 0, 1); n.normalize();
+      const r = head ? 0.112 : sackR(cy) + 0.002;
+      const at = head ? new T.Vector3(0, 0.71, 0).addScaledVector(n, r) : new T.Vector3(n.x * r, cy, n.z * r);
+      const g = new T.Group(); g.position.copy(at); g.quaternion.setFromUnitVectors(new T.Vector3(0, 0, 1), n);
+      const s = 0.07 + 0.05 * Math.min(1, size || 0.5);
+      const tear = new T.Mesh(new T.PlaneGeometry(s * 1.4, s * 0.8), new T.MeshStandardMaterial({ map: getTearTex(), transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4 }));
+      tear.rotation.z = Math.atan2(motion ? motion.y : 0, motion ? Math.abs(motion.x) + 1e-3 : 1);
+      g.add(tear);
+      if (!getTearTex.straw) getTearTex.straw = new T.MeshStandardMaterial({ color: new T.Color(0xd9b866).convertSRGBToLinear(), roughness: 0.9 });
+      for (let k = 0; k < 9; k++) {
+        const st = new T.Mesh(new T.CylinderGeometry(0.0015, 0.003, 0.04 + Math.random() * 0.05, 4), getTearTex.straw);
+        st.position.set((Math.random() - 0.5) * s * 0.8, (Math.random() - 0.5) * s * 0.4, 0.01);
+        st.rotation.set(Math.PI / 2 + (Math.random() - 0.5) * 1.2, 0, (Math.random() - 0.5) * 1.2);
+        st.translateY(0.02);
+        g.add(st);
+      }
+      this.body.add(g); this.tufts.push(g);
+      if (this.tufts.length > 14) { const old = this.tufts.shift(); this.body.remove(old); }
     }
     hitReact() { this.flash = 0; }
     die() {}

@@ -1,7 +1,7 @@
 """Emberlane playtest: real-GPU Chromium (muted) with a fake Wand playing human-like swings.
 
 python games/bowling/tools/playtest.py <outdir> [scenario ...]
-Scenarios: look, speeds, angles, early, hook, strike, feel (the synthetic-swing table through the
+Scenarios: look, speeds, angles, early, hook, strike, lineup, feel (the synthetic-swing table through the
 real input path, incl. accelerometer, step and lunge), cycle (shot-to-ready timings).
 Writes screenshots and results.json.
 """
@@ -9,7 +9,7 @@ import json, os, sys, time
 from playwright.sync_api import sync_playwright
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-URL = 'http://127.0.0.1:8765/bowling/'
+URL = 'http://127.0.0.1:8765/bowling/?nolineup=1'  # the line-up scenario starts it itself
 OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, 'out')
 SCEN = sys.argv[2:] or ['look', 'speeds', 'angles', 'early', 'hook']
 os.makedirs(OUT, exist_ok=True)
@@ -150,6 +150,24 @@ def run():
                 res['feel'].append({'name': name, 'opts': o, **(lt or {}), **r})
                 print('feel', name, json.dumps({k: res['feel'][-1].get(k) for k in ('kmh', 'loft', 'board', 'hook_m', 'mode', 'label')}), page.evaluate("__emb.G.mode"), flush=True)
                 wait_until(page, "__emb.G.mode === 'ready'", 30)
+        if 'lineup' in SCEN:
+            # three practice swings through the real input path; the learned hold is saved
+            page.evaluate("document.querySelector('[data-act=\"lineup\"]').click()")
+            time.sleep(0.4)
+            page.screenshot(path=os.path.join(OUT, 'lineup_1.png'))
+            res['lineup'] = []
+            for i in range(5):
+                if not page.evaluate("!!__emb.G.lineup"): break
+                lt = bowl(page, {'peakW': 9, 'seed': 90 + i, 'noise': 0.25})
+                time.sleep(0.2)
+                res['lineup'].append({'kmh': lt and lt.get('kmh'), 'card': page.inner_text('#lineup')})
+                if i == 0: page.screenshot(path=os.path.join(OUT, 'lineup_2.png'))
+                wait_until(page, "__emb.G.mode === 'ready'", 15)
+            time.sleep(0.3)
+            page.screenshot(path=os.path.join(OUT, 'lineup_done.png'))
+            res['lineup_hold'] = page.evaluate("__emb.settings.hold")
+            res['lineup_pins'] = page.evaluate("__emb.G.sim.pins.length")
+            print('lineup', json.dumps(res['lineup']), res['lineup_hold'], flush=True)
         if 'cycle' in SCEN:
             res['cycle'] = []
             for name, o in [('5 km/h roll', {'peakW': 2.0, 'seed': 71}), ('gutter (4 deg right)', {'peakW': 8, 'yaw': -4 * 3.14159 / 180, 'seed': 72}),

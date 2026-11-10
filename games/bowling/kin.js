@@ -217,6 +217,34 @@
   }
 
   /**
+   * Line-up: the player's own HOLD (gripRef's offset between the forearm at the grip and the
+   * line the arm then swings in), learned from a few practice swings aimed straight at the pins.
+   * Real sessions: 13.4 and 16.9 deg for one player; another grip can sit anywhere from straight
+   * to ~35 deg. Each practice swing's heading is measured with hold 0 and aim 1:1. Three swings
+   * that agree within LINEUP.SPREAD set it (median); a wild one asks for another, up to MAX.
+   * Only practice swings are used: real throws never move it (no aim assist).
+   */
+  const LINEUP = { N: 3, MAX: 5, SPREAD: 25 * Math.PI / 180, MIN_V: 4 / 3.6, MAX_OFF: 45 * Math.PI / 180,
+    LO: -10 * Math.PI / 180, HI: 35 * Math.PI / 180 };
+  const lineup = {
+    C: LINEUP,
+    /** Does this practice release count (rb from throwFrom with hold 0, aim 1)? */
+    valid: rb => !!rb && rb.speed >= LINEUP.MIN_V && Math.abs(rb.heading) <= LINEUP.MAX_OFF,
+    /** raws: valid swing headings (rad, + = left); side 1 right / -1 left. -> { done, more, hold (rad) } */
+    result(raws, side) {
+      const h = raws.map(x => x * (side || 1)).sort((a, b) => a - b), n = h.length;
+      const med = n ? (n % 2 ? h[(n - 1) / 2] : (h[n / 2 - 1] + h[n / 2]) / 2) : REF.HOLD;
+      const hold = Math.max(LINEUP.LO, Math.min(LINEUP.HI, med));
+      if (n < LINEUP.N) return { done: false, more: false, hold, n };
+      // the N swings closest to the median agree?
+      const near = [...h].sort((a, b) => Math.abs(a - med) - Math.abs(b - med)).slice(0, LINEUP.N);
+      const spread = Math.max(...near) - Math.min(...near);
+      const done = spread <= LINEUP.SPREAD || n >= LINEUP.MAX;
+      return { done, more: !done, hold, n, spread };
+    },
+  };
+
+  /**
    * Shoulder -> ball centre for a hand rotation. The forearm and hand follow the phone exactly
    * (direction d = Rd * down); the upper arm trails it by a small angle in the swing plane, the
    * elbow's natural bend. At the bottom of the swing the bend is zero and grows smoothly, so the
@@ -500,10 +528,21 @@
    * every aim error), linearly, so the ball still goes exactly where the swing points, only
    * less far off; speed and loft are kept. Only for a forward throw (|heading| < 90 deg).
    * Why: from the release spot the ball reaches the pins within about -1..+1.5 deg, and real
-   * phone swings scatter ~+-7 deg (v6). The game's AIM option: NORMAL 0.4 (default), PRO 1:1;
+   * phone swings scatter ~+-7 deg (v6). The game's AIM option: NORMAL 0.25 (default; 0.4 still left a
+   * player in the gutter half the time, 2026-11-10), PRO 1:1;
    * ?aim=G overrides. GAIN here (the maths library's own default) stays 1:1.
    */
-  const AIM = { GAIN: 1, NORMAL: 0.4, PRO: 1 };
+  const AIM = { GAIN: 1, NORMAL: 0.25, PRO: 1 };
+  /**
+   * The approach: in a bowling alley the player walks 3-4 steps and the body carries ~1.5-2.5 m/s
+   * into the release (pro release speeds 27-30 km/h come from arm swing + walk). In a living room
+   * nobody walks, and the real hands measured 11-13 km/h on swings the player called hard: the
+   * ball felt dead. V (m/s) is added along the lane to every forward throw: a lazy swing still
+   * rolls lazily (5 + 7 km/h), a hard one arrives at alley speed (13 + 7 = 20 km/h). A forward
+   * walk adds no sideways error, so it also makes the line a little less twitchy, as walking does.
+   * 0 for the old standing-throw behaviour (tests, replay --noapproach).
+   */
+  const APPROACH = { V: 2.0 };
   function aimed(v, g) {
     if (g === 1 || !v) return v;
     const h = Math.atan2(-v.x, -v.z);
@@ -544,7 +583,12 @@
     }
     let bodyV = null, bodyP = null;
     if (o.body && (o.useBody != null ? o.useBody : BODY.USE)) { const bd = bodyAt(o.body, tOut); bodyV = bd.v; bodyP = o.clampP ? o.clampP(bd.p) : bd.p; }
-    const v = aimed(hv ? hv.v : f.v, o.aimGain != null ? o.aimGain : AIM.GAIN);
+    // the approach (APPROACH): a real bowler walks into the throw; standing in a room the player
+    // does not, so a forward walk is added to the hand's velocity (only to a forward throw)
+    let vh = hv ? hv.v : f.v;
+    const appr = o.approach != null ? o.approach : APPROACH.V;
+    if (appr > 0 && vh.z < 0) vh = { x: vh.x, y: vh.y, z: vh.z - appr };
+    const v = aimed(vh, o.aimGain != null ? o.aimGain : AIM.GAIN);
     const rb = releaseBall({ w: f.w, Rd: f.Rd, v, shoulder, bodyV, bodyP, plane: o.plane });
     rb.vSrc = hv ? 'hand' : 'arm';
     rb.armModelV = f.v;
@@ -689,7 +733,7 @@
   }
 
   const api = { ARM, BODY, HAND, AIM, aimed, BOTTOM, swingBottom, handVelocity, C, mul, conj, norm, rotate, axisAngle, log, slerp, cross, dot, len, add, sub, scale,
-    decodePad, encodePad, DEFAULT_Q0, handRot, laneRef, toLane, armHeading, gripRef, REF, planeArm, throwFrom, wrapPi, armVec, setArm, swingRot, fitOmega, fitRelease, releaseBall, releaseBodyV,
+    decodePad, encodePad, DEFAULT_Q0, handRot, laneRef, toLane, armHeading, gripRef, REF, lineup, APPROACH, planeArm, throwFrom, wrapPi, armVec, setArm, swingRot, fitOmega, fitRelease, releaseBall, releaseBodyV,
     createBody, bodyStart, bodyStop, bodyUpdate, bodyAt, sampleAccel, createTrack, pushSample };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (root) { root.BW = root.BW || {}; root.BW.Kin = api; }

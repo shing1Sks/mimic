@@ -175,6 +175,7 @@ if (require.main === module) {
   const src = args.find(a => !a.startsWith('--'));
   if (!src) { console.error('usage: node tools/replay.js <recording dir | input.ndjson> [--legacy] [--zero] [--grip] [--arm] [--keyup] [--aim=G|--pro] [--bumpers] [--json]'); process.exit(2); }
   const aim = args.find(a => a.startsWith('--aim='));
+  if (args.includes('--noapproach')) K.APPROACH.V = 0;
   const o = { legacy: args.includes('--legacy'), zero: args.includes('--zero'), grip: args.includes('--grip'), arm: args.includes('--arm'), keyup: args.includes('--keyup'), bumpers: args.includes('--bumpers'),
     aim: args.includes('--pro') ? 1 : aim ? +aim.slice(6) : undefined };
   const rows = replay(load(src), o);

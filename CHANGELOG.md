@@ -11,13 +11,28 @@ Updated just before each approved release, not on every change.
   join" code next to the empty slots. Needs a secure page for the motion sensors (USB `adb reverse`
   locally, mimic.shing.in once live) and a small signaling endpoint (built into `tools/serve.py` for
   now). No volume keys or iPhone vibration in a browser, and some strict networks block the link.
+- **Browser phones, seamless:** games name the buttons the player actually has (a browser phone's
+  Grip shows HOLD / B / CENTRE / SWITCH, the app's Grip keeps Vol Down / Vol Up). The QR panel works
+  like a lobby: a seat per player, each phone presses a button when ready, and it closes by itself
+  (no reaching for the mouse). A browser phone follows the tab to the next game without a rescan, a
+  one-player game reads whichever phone is moving (an idle app link no longer hides it), and pages
+  without a signaling relay show no QR that could not connect.
+- **Every local play is recorded:** on this machine's server each play saves the game video and every
+  input (no prompt), so feedback can point at a real session; `?rec=0` turns it off.
 - **Point CENTRE:** Point mode gets a CENTRE button that taps F9; the Windows tray turns it into
   "cursor to the middle of the screen".
 - **Emberlane (new):** bowling with the phone as the ball. The release uses the hand's measured
   velocity (accelerometer), not where the phone points, so wrist bend no longer becomes fake aim or
   loft. The lane's straight line comes from the forearm when you pick the ball up. A key released up
   to 150 ms after the swing bottom lets go at the bottom, as real fingers do. Aim Normal (0.4x) or
-  Pro (1:1), optional gutter bumpers, realistic bounces, fast pacing. Why: recorded sessions showed
+  Pro (1:1), optional gutter bumpers, realistic bounces, fast pacing. The first game with the phone
+  starts with a line-up: three practice swings at an empty lane learn how the phone sits in this
+  player's fist (median of agreeing swings; a wild one asks for another), so straight ahead fits
+  any grip. Only practice swings teach it, never real throws (no aim assist).
+  Standing in a room nobody walks, so the game adds a real bowler's approach (2 m/s) to every forward
+  throw: the hand measured 11-13 km/h on swings the player called hard, and the ball felt dead. With
+  it and Aim Normal at 0.25 (was 0.4), the same recorded swings knock twice the pins (98 vs 50 over
+  18 balls, gutters 2 vs 10); a test replays that session so a later change cannot undo it. Why: recorded sessions showed
   balls drifting into the gutter from a reference error and a late key, not the player.
 - **Every game fits the window:** all screens checked at six laptop sizes (browser bars included),
   equal-width buttons, short how-to panels with a "More" toggle.

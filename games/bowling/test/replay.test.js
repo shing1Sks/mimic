@@ -15,6 +15,7 @@ if (!fs.existsSync(path.join(REC, 'input.ndjson'))) {
   process.exit(0);
 }
 const RP = require(path.join(__dirname, '..', 'tools', 'replay.js'));
+require(path.join(__dirname, '..', 'kin.js')).APPROACH.V = 0;   // measurement checks: the hand as measured, without the added approach walk
 const lines = RP.load(REC);
 const legacy = RP.replay(lines, { legacy: true });
 const now = RP.replay(lines, { arm: true, keyup: true, aim: 1 });   // the lane frame and the hand's position (arm-model velocity)

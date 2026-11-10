@@ -3,6 +3,8 @@
 'use strict';
 const path = require('path');
 const K = require(path.join(__dirname, '..', 'kin.js'));
+const APPROACH_V = K.APPROACH.V;
+K.APPROACH.V = 0;   // these checks measure the hand itself; the approach has its own test at the end
 const SW = require(path.join(__dirname, '..', 'tools', 'swing.js'));
 let pass = 0, fail = 0;
 function check(name, cond, info) {
@@ -266,6 +268,44 @@ function relAt(o) {
   const stance = SW.gen({ peakW: 8, seed: 42 }), tr = K.createTrack();
   for (const s of stance) if (s.t < stance.tRel - 900) K.pushSample(tr, Object.assign({}, s, { a: s.t > stance[0].t + 200 }));
   check('no swing (let go standing still): no bottom, released where it is', K.swingBottom(tr.samples, tr.samples[tr.samples.length - 1].t, K.laneRef(0), null) === null);
+}
+
+// --- line-up: the player's grip offset learned from practice swings (kin.js lineup)
+{
+  const r = d => d * Math.PI / 180;
+  const yawQ = y => K.axisAngle(0, 1, 0, y);
+  const fore = h => K.mul(yawQ(h), K.mul(K.swingRot(0, 1.4, 0), K.DEFAULT_Q0));
+  const rb = (h, kmh) => ({ heading: r(h), speed: (kmh || 12) / 3.6 });
+  check('lineup: a slow swing (< 4 km/h) does not count', !K.lineup.valid(rb(10, 3)));
+  check('lineup: a swing more than 45 deg off does not count', !K.lineup.valid(rb(50)) && K.lineup.valid(rb(20)));
+  let L = K.lineup.result([r(14), r(17)], 1);
+  check('lineup: two swings are not enough', !L.done, L);
+  L = K.lineup.result([r(14), r(17), r(12)], 1);
+  check('lineup: three agreeing swings -> done, hold = their median (14 deg)', L.done && near(deg(L.hold), 14, 0.01), deg(L.hold));
+  L = K.lineup.result([r(-14), r(-17), r(-12)], -1);
+  check('lineup: left-handed swings mirror to the same hold (14 deg)', L.done && near(deg(L.hold), 14, 0.01), deg(L.hold));
+  L = K.lineup.result([r(15), r(19), r(-22)], 1);
+  check('lineup: three swings 41 deg apart -> one more swing', !L.done && L.more, L);
+  L = K.lineup.result([r(15), r(19), r(-22), r(14)], 1);
+  check('lineup: ...and the fourth settles it on the median (14.5 deg)', L.done && near(deg(L.hold), 14.5, 0.01), deg(L.hold));
+  L = K.lineup.result([r(40), r(-30), r(10), r(35), r(-20)], 1);
+  check('lineup: five swings always finish', L.done, L);
+  L = K.lineup.result([r(44), r(42), r(43)], 1);
+  check('lineup: the hold is capped at 35 deg', L.done && near(deg(L.hold), 35, 0.01), deg(L.hold));
+  const g = K.gripRef(fore(r(-30)), 0, { hold: r(30) });
+  check('lineup: gripRef takes the learned hold (forearm 30 right, hold 30 -> lane at the phone zero)', near(deg(g.yaw), 0, 0.5), deg(g.yaw));
+}
+
+// --- the approach: a forward walk added to a forward throw (kin.js APPROACH)
+{
+  const ss = SW.gen({ peakW: 8, seed: 41 }), tr = K.createTrack();
+  for (const s of ss) K.pushSample(tr, s);
+  const rel = tr.events.find(e => e.kind === 'release');
+  const a = K.throwFrom(tr.samples, rel.t, K.laneRef(0), SHOULDER, { approach: 0 });
+  const b = K.throwFrom(tr.samples, rel.t, K.laneRef(0), SHOULDER, { approach: APPROACH_V });
+  check('approach: the default walk is 2 m/s (7.2 km/h)', near(APPROACH_V, 2.0, 1e-9), APPROACH_V);
+  check('approach: adds its speed along the lane (forward speed +2 m/s, sideways unchanged)', near(-b.rb.v.z - -a.rb.v.z, 2.0, 0.05) && near(b.rb.v.x, a.rb.v.x, 1e-6), [a.rb.v, b.rb.v]);
+  check('approach: the same sideways error turns into a smaller angle', Math.abs(b.rb.heading) <= Math.abs(a.rb.heading) + 1e-9, [deg(a.rb.heading), deg(b.rb.heading)]);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

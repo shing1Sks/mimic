@@ -21,6 +21,7 @@
   <div id="banner"><div class="b-main"></div><div class="b-sub"></div></div>
   <div id="toast"></div>
   <div id="hint"></div>
+  <div id="lineup" class="hidden"></div>
 </div>
 
 <!-- ============ TITLE ============ -->
@@ -37,7 +38,7 @@
       <button class="mi" data-act="practice">PRACTICE <small>endless racks</small></button>
       <div class="mi opt" data-opt="ball"><span>BALL</span><span class="ov"><i class="arr">&#9664;</i><b>15 LB</b><i class="arr">&#9654;</i></span></div>
       <div class="mi opt" data-opt="hand"><span>BOWLING HAND</span><span class="ov"><i class="arr">&#9664;</i><b>RIGHT</b><i class="arr">&#9654;</i></span></div>
-      <div class="mi opt" data-opt="aim" title="Normal keeps 40% of your aim error, Pro is 1:1"><span>AIM <small>Normal forgives</small></span><span class="ov"><i class="arr">&#9664;</i><b>NORMAL</b><i class="arr">&#9654;</i></span></div>
+      <div class="mi opt" data-opt="aim" title="Normal keeps a quarter of your aim error, Pro is 1:1"><span>AIM <small>Normal forgives</small></span><span class="ov"><i class="arr">&#9664;</i><b>NORMAL</b><i class="arr">&#9654;</i></span></div>
       <div class="mi opt" data-opt="bumpers" title="Rails over the gutters for this game"><span>BUMPERS <small>no gutters</small></span><span class="ov"><i class="arr">&#9664;</i><b>OFF</b><i class="arr">&#9654;</i></span></div>
       <div class="mi opt vol"><span>VOLUME</span><span class="ov"><input class="vol-in" type="range" min="0" max="100" step="5" value="80" aria-label="Volume"><b class="vol-v">80%</b></span></div>
       <div class="mi opt" data-opt="quality" title="Auto lowers the render resolution if the frame rate drops"><span>QUALITY</span><span class="ov"><i class="arr">&#9664;</i><b>AUTO</b><i class="arr">&#9654;</i></span></div>
@@ -57,13 +58,13 @@
     </ul>
     <div class="t-keys">
       <span></span><b>WAND</b><b>GRIP</b>
-      <span>Grab</span><span>hold <kbd>A</kbd></span><span>hold <kbd>Vol Down</kbd></span>
+      <span>Grab</span><span>hold <kbd>A</kbd></span><span data-web="hold <kbd>HOLD</kbd>">hold <kbd>Vol Down</kbd></span>
       <span>Let go</span><span>release</span><span>release</span>
-      <span>Pause</span><span><kbd>B</kbd></span><span>tap <kbd>Vol Up</kbd></span>
-      <span>Re-align</span><span><kbd>Center</kbd></span><span><kbd>CENTRE</kbd> or hold <kbd>Vol Up</kbd></span>
+      <span>Pause</span><span><kbd>B</kbd></span><span data-web="tap <kbd>B</kbd>">tap <kbd>Vol Up</kbd></span>
+      <span>Re-align</span><span><kbd>Center</kbd></span><span data-web="<kbd>CENTRE</kbd>"><kbd>CENTRE</kbd> or hold <kbd>Vol Up</kbd></span>
     </div>
     <details class="t-more"><summary>More</summary>
-      <p>Your swing is the ball: a lazy swing rolls a lazy ball, left goes left, let go early and it drops there. Let go up to a beat after the bottom and the ball leaves from the bottom (thumbs lift late); later than that it lofts. <b>Aim Normal</b> keeps 40% of how far off your line is (a phone swing scatters more than a real one); <b>Pro</b> is 1:1. <b>Bumpers</b> put rails over the gutters. Re-align is optional: only if the lane feels off to one side.</p>
+      <p>Your swing is the ball: a lazy swing rolls a lazy ball, left goes left, let go early and it drops there. Let go up to a beat after the bottom and the ball leaves from the bottom (thumbs lift late); later than that it lofts. You stand still, so the game adds the walk of a real approach to every forward throw. <b>Aim Normal</b> keeps a quarter of how far off your line is (a phone swing scatters more than a real one); <b>Pro</b> is 1:1. <b>Bumpers</b> put rails over the gutters. Your first game starts with a <b>line-up</b>: three practice swings at an empty lane that fit straight ahead to how the phone sits in your hand (redo it from the pause menu).</p>
       <p><b>Mouse (fallback):</b> down to swing back, up to swing through, hold left button to grip, release to bowl. <kbd>Z</kbd>/<kbd>X</kbd> twist, <kbd>Esc</kbd> pause, <kbd>M</kbd> mute.</p>
     </details>
   </div>
@@ -75,10 +76,10 @@
     <div class="pp-icon" aria-hidden="true"><svg viewBox="0 0 48 48" width="44" height="44"><rect x="15" y="5" width="18" height="34" rx="4" fill="none" stroke="currentColor" stroke-width="2.4"/><circle cx="24" cy="33" r="1.8" fill="currentColor"/><path d="M36 30 l7 7 m0 -7 l-7 7" stroke="#ff8a3d" stroke-width="2.6" stroke-linecap="round"/></svg></div>
     <div class="pp-kicker">PHONE FOUND &middot; NO MOTION</div>
     <h2>Switch your phone to Grip</h2>
-    <p class="pp-lead">Your phone is connected but sends no motion. Your real swing is the ball.</p>
+    <p class="pp-lead">A phone is linked but sends no motion. Your real swing is the ball. This closes by itself when motion arrives.</p>
     <ol class="pp-steps">
-      <li><span class="n">1</span><div>Open <b>Grip</b> (or <b>Wand</b>) on the phone. <em>Point and Pad send no motion.</em></div></li>
-      <li><span class="n">2</span><div>Let your arm hang, press <b>CENTRE</b>. This closes by itself when motion arrives.</div></li>
+      <li><span class="n">1</span><div>In the <b>Mimic app</b>, open <b>Grip</b> (or <b>Wand</b>). <em>Point and Pad send no motion.</em></div></li>
+      <li><span class="n">2</span><div class="pp-join"><span>No app? Scan with the phone camera and pick <b>Grip</b> in the browser.</span><div data-mimic-join="grip" data-size="104"></div></div></li>
     </ol>
     <div class="pp-actions">
       <button class="mi ghost" data-act="usemouse">No phone here: bowl with the mouse</button>
@@ -94,12 +95,13 @@
     <div class="menu" id="pause-menu">
       <button class="mi primary" data-act="resume">RESUME</button>
       <button class="mi" data-act="rack">FRESH RACK</button>
+      <button class="mi" data-act="lineup">LINE UP <small>fit aim to your grip</small></button>
       <button class="mi" data-act="restart">RESTART</button>
       <button class="mi" data-act="quit">MAIN MENU</button>
       <div class="mi opt vol"><span>VOLUME</span><span class="ov"><input class="vol-in" type="range" min="0" max="100" step="5" value="80" aria-label="Volume"><b class="vol-v">80%</b></span></div>
       <div class="mi opt" data-opt="quality"><span>QUALITY</span><span class="ov"><i class="arr">&#9664;</i><b>AUTO</b><i class="arr">&#9654;</i></span></div>
     </div>
-    <p class="hint-s">Lane feels off? Optional: point your forearm at the pins, hold <b class="k-align">Vol Up</b>.</p>
+    <p class="hint-s">Balls pulling one way? LINE UP again, or point your forearm at the pins and <span class="k-alignv">hold</span> <b class="k-align">Vol Up</b>.</p>
   </div>
 </div>
 

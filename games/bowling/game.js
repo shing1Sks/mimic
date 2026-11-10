@@ -14,7 +14,7 @@
   const smooth = k => { k = clamp(k, 0, 1); return k * k * (3 - 2 * k); };
   const Q = new URLSearchParams(location.search);
   const DEBUG = Q.get('debug') === '1';
-  // aim gain (kin.js AIM): the AIM option (NORMAL 0.4 / PRO 1:1); ?aim=G overrides it
+  // aim gain (kin.js AIM): the AIM option (NORMAL 0.25 / PRO 1:1); ?aim=G overrides it
   const AIM_Q = Q.get('aim') != null && Q.get('aim') !== '' && isFinite(+Q.get('aim')) ? clamp(+Q.get('aim'), 0, 1.5) : null;
 
   // ------------------------------------------------------------------ body geometry
@@ -29,7 +29,7 @@
   const PLAYER_CSS = ['#ff7a3d', '#2fc3b8', '#b07cff', '#ffcc4d'];
 
   // ------------------------------------------------------------------ settings
-  const settings = { players: 1, hand: 'right', sound: true, ball: 15, aim: 'normal', bumpers: false, volume: 80, quality: 'auto' };
+  const settings = { players: 1, hand: 'right', sound: true, ball: 15, aim: 'normal', bumpers: false, volume: 80, quality: 'auto', hold: null };
   try { Object.assign(settings, JSON.parse(localStorage.getItem('emberlane2') || '{}')); } catch (e) { /* storage blocked */ }
   const saveSettings = () => { try { localStorage.setItem('emberlane2', JSON.stringify(settings)); } catch (e) { /* ignore */ } };
   SFX.setMuted(!settings.sound); SFX.setVolume(settings.volume / 100);
@@ -90,8 +90,8 @@
   }
   const ballMass = () => (settings.ball === 16 ? P.BALL.MASS_16LB : P.BALL.MASS);
   const curPlayer = () => G.players[G.cur];
-  const holdName = () => (!IN.S.padOn ? 'left mouse' : mc.mode === 'grip' ? 'Vol Down' : 'A');
-  const alignName = () => (!IN.S.padOn ? 'C' : mc.mode === 'grip' ? 'Vol Up' : 'Center');
+  const holdName = () => (!IN.S.padOn ? 'left mouse' : mc.mode === 'grip' ? mc.keyName('a') : 'A');
+  const alignName = () => (!IN.S.padOn ? 'C' : mc.mode === 'grip' ? (mc.via === 'browser' ? 'CENTRE' : 'Vol Up') : 'Center');
   /** 'motion' (a phone sending motion), 'phone-mouse' (a phone is here but sends mouse / keys
    * or nothing usable: bowling waits for it) or 'mouse' (no phone: the mouse stands in). */
   function inputState() {
@@ -227,6 +227,8 @@
     toReady(true);
     renderSheet();
     if (n > 1) banner(curPlayer().name + ' UP', 'Frame 1', 'turn', 1.6);
+    G.lineup = null; $('lineup').classList.add('hidden');
+    if (IN.S.padOn && settings.hold == null && !Q.has('nolineup')) beginLineup();
   }
   function toTitle() {
     G.mode = 'title'; G.paused = false;
@@ -252,13 +254,16 @@
     renderSheet(); renderPins();
   }
   /** The lane reference the grip would take now (kin.js gripRef; the mouse is in the lane frame). */
-  function liveGrip(q) { return IN.S.padOn ? K.gripRef(q || IN.S.q, G.refBase, { aligned: G.aligned, side: side() }) : { ref: K.laneRef(0), yaw: 0, src: 'mouse', armYaw: 0, tilt: 0 }; }
+  /** This player's grip offset (rad): the line-up's running estimate, the saved one, or kin's default. */
+  const holdRad = () => (G.lineup ? K.lineup.result(G.lineup.raws, side()).hold : settings.hold != null ? settings.hold * Math.PI / 180 : undefined);
+  function liveGrip(q) { return IN.S.padOn ? K.gripRef(q || IN.S.q, G.refBase, { aligned: G.aligned, side: side(), hold: holdRad() }) : { ref: K.laneRef(0), yaw: 0, src: 'mouse', armYaw: 0, tilt: 0 }; }
   function grab(tPress) {
     G.mode = 'held';
     G.grabT = 0;
     // this throw's lane reference, from the phone at the grip sample: no align needed
     const s = IN.track.samples.find(x => x.t === tPress);
-    G.grip = liveGrip(s ? s.q : IN.S.q);
+    G.gripQ = s ? s.q : IN.S.q;
+    G.grip = liveGrip(G.gripQ);
     // the body tracker (kin.js) is off: on real data it measured the arm model's error, not steps
     if (K.BODY.USE) K.bodyStart(IN.body, tPress || IN.lastT());
     G.bodyOff.set(0, 0, 0);
@@ -303,10 +308,80 @@
       pos: [rb.pos.x, rb.pos.y, rb.pos.z].map(v => +v.toFixed(3)), board: +board.toFixed(1), capped: rb.capped, nFit: f.n, stance: +G.stance.toFixed(3), aligned: G.aligned, body: K.BODY.USE,
     });
     G.lastThrow = { rb, f, t: performance.now(), bp, grip: gr, release: T1.release };
+    if (G.lineup) lineupSwing(tRel, sh);
     G.cyc = { rel: performance.now() };   // timing of this shot (tests, recordings)
     G.atPins = null;
   }
   const boardAt = x => (L.HALF - x) / (2 * L.HALF / 39) + 0.5;
+
+  // ------------------------------------------------------------------ line-up
+  // Three practice swings at an empty lane teach the game how this player's phone sits in the
+  // fist (kin.js lineup): afterwards straight ahead is where they actually swing. Runs once
+  // (first game with the phone), again from the pause menu; real throws never change it.
+  function beginLineup() {
+    if (!IN.S.padOn) { toast('Line up needs the phone in Grip or Wand mode', 2.4); return; }
+    G.lineup = { raws: [], last: null };
+    G.aligned = false;
+    newRack([]);
+    G.sim.ball = null; toReady(true);
+    $('lineup').classList.remove('hidden');
+    renderLineup();
+    if (window.MimicRec) MimicRec.event('lineup', { start: true });
+  }
+  function lineupSwing(tRel, sh) {
+    const g0 = K.gripRef(G.gripQ || IN.S.q, G.refBase, { side: side(), hold: 0 });
+    const T0 = g0.src === 'grip' ? K.throwFrom(IN.track.samples, tRel, g0.ref, { x: sh.x, y: sh.y, z: sh.z },
+      { halfMs: 28, bottom: true, aimGain: 1, clampP: p => { const c = clampBody(p); return { x: c.x, y: c.y, z: c.z }; } }) : null;
+    const ok = !!T0 && K.lineup.valid(T0.rb);
+    if (ok) G.lineup.raws.push(T0.rb.heading);
+    G.lineup.last = ok ? 'ok' : g0.src !== 'grip' ? 'arm' : 'bad';
+    if (ok) SFX.ui('align');
+    if (window.MimicRec) MimicRec.event('lineup', { ok, raw: T0 ? +(T0.rb.heading * 180 / Math.PI).toFixed(1) : null, kmh: T0 ? +(T0.rb.speed * 3.6).toFixed(1) : null, n: G.lineup.raws.length });
+    renderLineup();
+  }
+  /** After a practice ball has rolled long enough to see its line: the next swing, or done. */
+  function lineupNext() {
+    const r = K.lineup.result(G.lineup.raws, side());
+    if (r.done) { lineupFinish(r.hold * 180 / Math.PI); return; }
+    if (r.more) G.lineup.last = 'more';
+    G.sim.ball = null; toReady();
+    renderLineup();
+  }
+  function lineupFinish(holdDeg, skipped) {
+    settings.hold = Math.round(holdDeg * 10) / 10; saveSettings();
+    if (window.MimicRec) MimicRec.event('lineup', { done: true, hold: settings.hold, skipped: !!skipped });
+    G.lineup = { done: true, raws: [], skipped: !!skipped };
+    renderLineup();
+    G.lineup = null;
+    setTimeout(() => { if (!G.lineup) $('lineup').classList.add('hidden'); }, skipped ? 900 : 2600);
+    newRack(); G.sim.ball = null; toReady();
+    mc.rumble(0.35, 60, 1);
+  }
+  function renderLineup() {
+    const Lu = G.lineup, el = $('lineup');
+    if (!Lu || !el) return;
+    const n = Lu.raws.length, need = K.lineup.C.N;
+    let step, main, note = '';
+    if (Lu.done) {
+      step = 'LINE UP · DONE';
+      main = Lu.skipped ? 'Using the standard grip. Line up any time from the pause menu.'
+        : `Lined up. Straight ahead now fits your grip <small>(phone turned ${Math.abs(settings.hold).toFixed(0)}&deg;)</small>. Redo it any time from the pause menu.`;
+    } else if (n === 0 && !Lu.last) {
+      step = 'LINE UP · 1 OF 3';
+      main = `Hold the phone the way you'd hold the ball, top toward the pins. The hand on screen moves with yours. Hold <b>${holdName()}</b> to pick the ball up.`;
+    } else {
+      step = 'LINE UP · 2 OF 3';
+      const left = Math.max(1, need - n);
+      main = `Swing straight at the middle pin and let go. ${left} more ${left === 1 ? 'swing' : 'swings'}; these don't count.`;
+      if (Lu.last === 'bad') note = 'That one was too soft or far off: swing through and let go near the bottom.';
+      if (Lu.last === 'arm') note = 'Pick the ball up with your forearm out in front, phone top forward.';
+      if (Lu.last === 'more') note = 'Those swings disagreed: one more.';
+    }
+    const total = Math.max(need, n + (Lu.last === 'more' ? 1 : 0));
+    const dots = Lu.done ? '' : Array.from({ length: total }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('');
+    el.innerHTML = `<div class="lu-step">${step}</div><div class="lu-main">${main}</div>${note ? `<div class="lu-note">${note}</div>` : ''}`
+      + (dots ? `<div class="lu-dots">${dots}</div>` : '') + (Lu.done ? '' : '<button class="lu-skip" data-act="lineup-skip">Skip</button>');
+  }
 
   function standingPins() { return G.sim.pins.filter(p => P.standing(p)); }
 
@@ -552,6 +627,8 @@
     else if (a === 'resume') setPause(false);
     else if (a === 'restart') { setPause(false); startGame(G.kind); }
     else if (a === 'rack') { setPause(false); if (G.mode === 'ready') { newRack(); } }
+    else if (a === 'lineup') { setPause(false); beginLineup(); }
+    else if (a === 'lineup-skip') { if (G.lineup) lineupFinish(settings.hold != null ? settings.hold : K.REF.HOLD * 180 / Math.PI, true); }
     else if (a === 'quit') toTitle();
     else if (a === 'again') startGame(G.kind);
   });
@@ -776,7 +853,7 @@
         onEvents(evts);
         syncPins();
       }
-      if (G.mode === 'rolling') updateRolling(dt, rdt);
+      if (G.mode === 'rolling') { updateRolling(dt, rdt); if (G.lineup && G.mode === 'rolling' && G.rollT > 1.3) lineupNext(); }
       else if (G.mode === 'result') { G.resultT += rdt; if (G.resultT > (G.result && G.result.celebrate ? 1.8 : 0.35)) startReset(); }
       else if (G.mode === 'reset') updateReset(rdt * (G.reset && G.reset.fast ? 2.5 : 1));
       else if (G.mode === 'dropped') { G.resultT += rdt; if (G.resultT > 1.1) { G.sim.ball = null; toReady(); } }
@@ -884,8 +961,15 @@
       el.classList.toggle('on', on); el.classList.toggle('warn', st === 'phone-mouse');
       const s = el.querySelector('span'); if (s.textContent !== txt) s.textContent = txt;
     }
-    document.querySelectorAll('.k-hold').forEach(k => { k.textContent = !on ? 'left mouse' : mc.mode === 'grip' ? 'Vol Down' : 'A'; });
-    document.querySelectorAll('.k-align').forEach(k => { k.textContent = !on ? 'C' : mc.mode === 'grip' ? 'Vol Up' : 'Center'; });
+    const web = on && mc.mode === 'grip' && mc.via === 'browser';   // browser phone: on-screen HOLD / B / CENTRE
+    document.querySelectorAll('.k-hold').forEach(k => { k.textContent = !on ? 'left mouse' : mc.mode === 'grip' ? mc.keyName('a') : 'A'; });
+    document.querySelectorAll('.k-align').forEach(k => { k.textContent = !on ? 'C' : mc.mode === 'grip' ? (web ? 'CENTRE' : 'Vol Up') : 'Center'; });
+    document.querySelectorAll('.k-alignv').forEach(k => { k.textContent = web ? 'press' : 'hold'; });
+    // the how-to table's Grip column: app volume keys, or a browser phone's on-screen buttons
+    document.querySelectorAll('[data-web]').forEach(k => {
+      if (k.dataset.app == null) k.dataset.app = k.innerHTML;
+      const h = web ? k.dataset.web : k.dataset.app; if (k.innerHTML !== h) k.innerHTML = h;
+    });
     // a phone that is here but sends mouse: say so, do not bowl with the stand-in
     const pp = $('phonepanel'), show = (st === 'phone-mouse' || window.__embUI.forcePhonePanel) && G.mode !== 'loading';
     if (pp.classList.contains('hidden') === show) {

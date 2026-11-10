@@ -71,7 +71,7 @@
   const peers = new Map();          // phone id -> peer
   const listeners = { join: [], leave: [], change: [] };
   const emit = (ev, x) => (listeners[ev] || []).forEach(f => { try { f(x); } catch (e) { console.warn(e); } });
-  let signal = null, info = null, infoP = null, joinN = 0;
+  let signal = null, info = null, infoP = null, joinN = 0, infoKnown = false;
 
   function ensureRoom() {
     if (!room) { room = P().randomId(8); sset('mimic.link.room', room); }
@@ -170,6 +170,10 @@
   // ------------------------------------------------------------------ host: signaling + WebRTC
   function startHost() {
     if (signal) return;
+    // a server without the signaling relay (a static host such as the website before it has one)
+    // answers /signal-info with 404: never poll its /signal mailbox, which would 404 every second
+    if (sameOriginSignal && !infoKnown) { fetchInfo().then(() => { infoKnown = true; if (relayUp()) startHost(); }); return; }
+    if (!relayUp()) return;
     ensureRoom();
     sset('mimic.link.active', '1');
     signal = new (P().Signal)(cfg.signal, room, 'host', onSignal, { wait: 8000 });

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0A0B0D">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Mimic Controller</title>
+<link rel="stylesheet" href="phone.css">
+</head>
+<body data-mode="">
+
+<!-- Pick how to hold the phone. Tapping a mode is also the tap iOS needs for motion permission. -->
+<main id="home" class="screen">
+  <header class="brand">
+    <div class="word">mimic<i></i></div>
+    <div class="tag">your phone is the controller</div>
+  </header>
+
+  <div id="status" class="status"><span class="dot"></span><span class="txt">Starting</span></div>
+
+  <section id="pick" class="modes">
+    <button class="mode" data-mode="grip" style="--a:#FF6B4A">
+      <span class="ic"><svg viewBox="0 0 48 48"><rect x="15" y="5" width="18" height="34" rx="4"/><path d="M11 22c0-3 2-5 4-5M11 28c0-3 2-5 4-5M11 34c0-3 2-5 4-5"/></svg></span>
+      <span class="tx"><b>Grip</b><small>In your fist. Hold to fire, grip or swing.</small></span>
+      <span class="hint">suggested</span>
+    </button>
+    <button class="mode" data-mode="wand" style="--a:#FFB454">
+      <span class="ic"><svg viewBox="0 0 48 48"><rect x="16" y="4" width="16" height="40" rx="4"/><circle cx="24" cy="16" r="3.2"/><path d="M20 28h8M24 24v8"/></svg></span>
+      <span class="tx"><b>Wand</b><small>Like a remote. Point, swing, buttons under your thumb.</small></span>
+      <span class="hint">suggested</span>
+    </button>
+    <button class="mode" data-mode="pad" style="--a:#A68BFF">
+      <span class="ic"><svg viewBox="0 0 48 48"><path d="M10 16h28c4 0 6 3 7 8l1 6c1 5-4 8-7 4l-4-4H13l-4 4c-3 4-8 1-7-4l1-6c1-5 3-8 7-8z"/><path d="M14 23v6M11 26h6"/><circle cx="33" cy="24" r="1.6"/><circle cx="37" cy="28" r="1.6"/></svg></span>
+      <span class="tx"><b>Pad</b><small>Gamepad on the screen. Turn the phone sideways.</small></span>
+      <span class="hint">suggested</span>
+    </button>
+  </section>
+
+  <form id="join" class="join hidden" autocomplete="off">
+    <p>Open a Mimic game on your computer and press <b>Phone browser</b>, then scan the code. Or type the room code:</p>
+    <div class="row"><input id="roomIn" maxlength="40" placeholder="room code" spellcheck="false" autocapitalize="off"><button type="submit">Join</button></div>
+  </form>
+
+  <p id="secure" class="note hidden">This page is not secure (plain http), so the browser hides the motion sensors.
+    <b>Pad</b> works. For Grip and Wand open it over https, or by USB: <code>adb reverse tcp:8765 tcp:8765</code> and open <code id="usbUrl">http://localhost:8765/phone/</code>.</p>
+  <p class="foot">Works in Safari and Chrome. Keep this page open while you play.</p>
+</main>
+
+<!-- The controller. Its contents are built for the chosen mode by phone.js. -->
+<main id="ctl" class="screen hidden">
+  <div class="bar">
+    <button id="menu" class="menu" aria-label="Change mode"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <div id="cstatus" class="cstatus"><span class="dot"></span><span class="txt"></span></div>
+    <div class="spacer"></div>
+  </div>
+  <div id="surface" class="surface"></div>
+  <div id="rotate" class="rotate hidden"><svg viewBox="0 0 48 48"><rect x="16" y="6" width="16" height="30" rx="3"/><path d="M38 30a14 14 0 0 1-12 12M26 38l0 4 4 0"/></svg><p>Turn your phone sideways</p></div>
+</main>
+
+<script src="../lib/mimic-proto.js"></script>
+<script src="phone.js"></script>
+</body>
+</html>

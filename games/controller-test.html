@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mimic Controller Test</title>
+<style>
+  :root { --bg:#0e0f12; --panel:#16181d; --line:#2a2e36; --fg:#e8eaee; --dim:#8a909c; --acc:#7cc4ff; --on:#7be0a0; }
+  * { box-sizing:border-box; }
+  html, body { height:100%; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, sans-serif; padding:clamp(12px, 3svh, 24px) 16px; display:flex; flex-direction:column; gap:clamp(10px, 2svh, 16px); overflow:hidden; }
+  header { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px 24px; }
+  h1 { font-size:20px; margin:0; } .dim { color:var(--dim); }
+  .lead { margin:2px 0 0; }
+  .tools { display:flex; align-items:center; gap:12px; position:relative; }
+  .map { display:flex; flex-wrap:wrap; gap:6px 14px; font-size:13px; color:var(--dim); }
+  .map b { color:var(--fg); font-weight:600; margin-right:2px; }
+  kbd { font:11px/1 system-ui, sans-serif; padding:3px 6px; border:1px solid var(--line); border-bottom-width:2px; border-radius:5px; color:var(--fg); margin-right:4px; }
+  #slots { display:grid; grid-template-columns:repeat(auto-fill, minmax(250px, 1fr)); gap:14px; align-content:start; min-height:0; }
+  .slot { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:clamp(10px, 2svh, 14px) 14px; }
+  .slot.off { opacity:.45; }
+  .slot h2 { margin:0; font-size:17px; display:flex; justify-content:space-between; align-items:baseline; }
+  .mode { font-size:12px; padding:2px 8px; border-radius:10px; border:1px solid var(--line); color:var(--acc); }
+  .btns { display:flex; flex-wrap:wrap; gap:4px; margin:clamp(6px, 1.4svh, 10px) 0; }
+  .row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .row p { margin:8px 0 0; }
+  .b { font-size:11px; padding:2px 6px; border-radius:5px; border:1px solid var(--line); color:var(--dim); }
+  .b.down { background:var(--on); color:#0e0f12; border-color:var(--on); }
+  .num { font:12px/1.6 ui-monospace, monospace; white-space:pre; color:var(--dim); }
+  .aim { flex:none; width:clamp(72px, 15svh, 120px); height:clamp(72px, 15svh, 120px); border:1px solid var(--line); border-radius:50%; position:relative; }
+  .dot { width:12px; height:12px; border-radius:50%; background:var(--acc); position:absolute; transform:translate(-50%,-50%); left:50%; top:50%; }
+  button { background:var(--panel); color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px 12px; font:inherit; cursor:pointer; }
+  details summary { cursor:pointer; }
+  pre { position:absolute; right:0; top:calc(100% + 8px); z-index:2; width:min(640px, calc(100vw - 32px)); margin:0; background:var(--panel); border:1px solid var(--line); padding:12px; border-radius:8px; font-size:12px; white-space:pre-wrap; word-break:break-all; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Mimic controller test</h1>
+    <p class="dim lead">Open Wand or Grip on each phone and move it. Point at the screen and press Centre to align.</p>
+  </div>
+  <div class="tools"><span id="rs" class="dim"></span><button id="en">Enable rumble</button><details><summary class="dim">Raw gamepads</summary><pre id="raw"></pre></details></div>
+  <div class="map"><span><b>Grip</b></span><span><kbd>Vol Down</kbd>a</span><span><kbd>Vol Up</kbd>tap = b</span><span>hold <kbd>Vol Up</kbd>center</span><span>double tap = one</span><span>flick = two</span></div>
+</header>
+<div id="slots"></div>
+<script src="lib/mimic.js"></script>
+<script src="lib/mimic-link.js"></script>
+<script>
+  const NAMES = ['a','b','one','two','minus','plus','home','up','down','left','right','center'];
+  const SLOTS = 4;
+  // P1 keeps the mouse/keyboard fallback; P2..P4 show only real phones.
+  const mcs = Array.from({ length: SLOTS }, (_, i) => new MimicController({ slot: i }));
+  const f = v => v.toFixed(1).padStart(6);
+  const box = document.getElementById('slots');
+  const cards = mcs.map((mc, i) => {
+    const el = document.createElement('div');
+    el.className = 'slot';
+    el.innerHTML = `<h2>P${i + 1} <span class="mode">-</span></h2>
+      <div class="btns">${NAMES.map(n => `<span class="b" data-b="${n}">${n}</span>`).join('')}</div>
+      <div class="row"><div><div class="num"></div><p><button>Kick P${i + 1}</button></p></div><div class="aim"><div class="dot"></div></div></div>`;
+    el.querySelector('button').onclick = () => mc.rumble(1, 120, 0);
+    box.appendChild(el);
+    return { el, mode: el.querySelector('.mode'), num: el.querySelector('.num'), dot: el.querySelector('.dot'),
+      btn: Object.fromEntries([...el.querySelectorAll('.b')].map(b => [b.dataset.b, b])) };
+  });
+  document.getElementById('en').onclick = async () => {
+    document.getElementById('rs').textContent = (await mcs[0].enableRumble({ ask: true }))
+      ? 'rumble ready' : 'rumble unavailable (needs Chrome or Edge, and a re-pair after updating Mimic)';
+  };
+  const raw = () => [...navigator.getGamepads()].filter(Boolean).map(p =>
+    `${p.index}: "${p.id}" buttons=${p.buttons.length} axes=${p.axes.length} [${p.axes.map(a => a.toFixed(3)).join(' ')}]`).join('\n');
+  (function loop() {
+    mcs.forEach((mc, i) => {
+      mc.update();
+      const c = cards[i];
+      const live = mc.connected || i === 0;
+      c.el.classList.toggle('off', !live);
+      c.mode.textContent = mc.connected ? mc.mode : i === 0 ? 'mouse (no phone)' : 'empty';
+      NAMES.forEach(n => c.btn[n].classList.toggle('down', !!mc.isDown(n)));
+      c.num.textContent =
+        `y/p/r° ${f(mc.yaw * 57.3)}${f(mc.pitch * 57.3)}${f(mc.roll * 57.3)}\n` +
+        `spin   ${f(mc.angularSpeed)} rad/s\n` +
+        `accel  ${f(mc.linearAccel.x)}${f(mc.linearAccel.y)}${f(mc.linearAccel.z)}`;
+      c.dot.style.left = (50 + mc.pointer.x * 40) + '%'; c.dot.style.top = (50 - mc.pointer.y * 40) + '%';
+    });
+    document.getElementById('rs').dataset.ready = mcs[0].rumbleReady;
+    document.getElementById('raw').textContent = raw() || '(none yet: press a button on the phone)';
+    requestAnimationFrame(loop);
+  })();
+</script>
+</body>
+</html>

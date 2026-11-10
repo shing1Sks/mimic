@@ -1,0 +1,2 @@
+The MIT License — Copyright © 2010-2023 three.js authors. These files are unmodified r149 examples/jsm
+sources except for their import paths. Full licence: https://github.com/mrdoob/three.js/blob/r149/LICENSE

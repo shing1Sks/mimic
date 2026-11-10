@@ -1,0 +1,129 @@
+// Play recorder: every game loads this. Add ?rec=1 to a game's URL (or press F8) to record:
+//  - video of the whole tab (HUD included) after one click "Share", or of the game canvas if
+//    tab capture is refused or unavailable;
+//  - every controller sample each frame (Mimic Wand / Pad axes and buttons), mouse moves (also
+//    under pointer lock), clicks, wheel and keys;
+//  - game events, if the game calls MimicRec.event(name, data).
+// Everything streams to the local server (tools/serve.py) as it happens, so closing the tab
+// loses at most the last few seconds. Files: recordings/<game>-<time>/video.webm, input.ndjson.
+(function () {
+  'use strict';
+  const q = new URLSearchParams(location.search);
+  const game = (location.pathname.split('/').filter(Boolean).slice(-1)[0] || 'game').replace(/[^A-Za-z0-9_-]/g, '');
+  const pad2 = n => String(n).padStart(2, '0');
+  let session = null, t0 = 0, rec = null, stream = null, lines = [], seq = 0, badge = null, rafId = 0, gestureArmed = false;
+
+  function post(file, body, append, sess) {
+    sess = sess || session;
+    if (!sess) return Promise.resolve();
+    return fetch(`/rec/${sess}/${file}${append ? '?append=1' : ''}`, { method: 'POST', body, keepalive: body.size ? body.size < 60000 : body.length < 60000 })
+      .catch(() => {});
+  }
+  const now = () => +(performance.now() - t0).toFixed(1);
+  function log(o) { if (session) lines.push(JSON.stringify(Object.assign({ t: now() }, o))); }
+  function flushLog() { if (!session || !lines.length) return; const b = lines.join('\n') + '\n'; lines = []; post('input.ndjson', b, true); }
+
+  function showBadge(text) {
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.style.cssText = 'position:fixed;right:10px;bottom:10px;z-index:2147483646;font:600 12px system-ui;color:#fff;background:rgba(200,30,30,.85);padding:4px 9px;border-radius:12px;pointer-events:none;letter-spacing:.06em';
+      document.body.appendChild(badge);
+    }
+    badge.textContent = text; badge.style.display = text ? 'block' : 'none';
+  }
+
+  // ------------------------------------------------------------------ input sampling
+  function samplePads() {
+    rafId = requestAnimationFrame(samplePads);
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    for (const p of pads) {
+      if (!p || !p.connected) continue;
+      log({ k: 'pad', id: p.id.slice(0, 40), i: p.index, ax: p.axes.map(a => +a.toFixed(4)), b: p.buttons.reduce((m, b, i) => b.pressed ? m | (1 << i) : m, 0) });
+    }
+  }
+  const onMove = e => log({ k: 'mm', dx: e.movementX, dy: e.movementY, x: e.clientX, y: e.clientY, lock: !!document.pointerLockElement });
+  const onDown = e => log({ k: 'md', b: e.button, x: e.clientX, y: e.clientY, trusted: e.isTrusted });
+  const onUp = e => log({ k: 'mu', b: e.button });
+  const onKey = e => { if (!e.repeat) log({ k: e.type === 'keydown' ? 'kd' : 'ku', code: e.code }); };
+  const onWheel = e => log({ k: 'wh', dy: Math.sign(e.deltaY) });
+
+  // ------------------------------------------------------------------ video
+  let videoKind = '';
+  function startVideo(s, kind) {
+    stream = s; videoKind = kind;
+    const type = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find(t => MediaRecorder.isTypeSupported(t));
+    rec = new MediaRecorder(s, { mimeType: type, videoBitsPerSecond: 5e6 });
+    // the last chunk arrives after stop(): keep this recording's session name for it
+    const file = kind === 'tab' ? 'video.webm' : 'video-canvas.webm', first = { v: true }, sess = session;
+    rec.ondataavailable = e => { if (e.data && e.data.size) { post(file, e.data, !first.v, sess); first.v = false; } };
+    rec.start(3000);
+    log({ k: 'video', source: kind, w: s.getVideoTracks()[0] && s.getVideoTracks()[0].getSettings().width });
+    showBadge('● REC ' + (kind === 'tab' ? '' : '(canvas) ') + '· F8 stop');
+    s.getVideoTracks().forEach(t => t.addEventListener('ended', () => stop()));
+  }
+  function canvasVideo() {
+    const c = [...document.querySelectorAll('canvas')].sort((a, b) => b.width * b.height - a.width * a.height)[0];
+    if (!c || !c.captureStream) { showBadge('● REC input only · F8 stop'); return; }
+    startVideo(c.captureStream(30), 'canvas');
+  }
+  let asking = false;
+  async function tabVideo() {
+    asking = true;
+    try {
+      const s = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: false, preferCurrentTab: true, selfBrowserSurface: 'include' });
+      if (rec && rec.state !== 'inactive') { rec.stop(); if (stream) stream.getTracks().forEach(t => t.stop()); }   // upgrade from canvas
+      startVideo(s, 'tab');
+    } catch (e) { log({ k: 'video', error: String(e && e.name) }); if (!rec) canvasVideo(); }
+    asking = false;
+  }
+
+  // ------------------------------------------------------------------ start / stop
+  function start() {
+    if (session) return;
+    const d = new Date();
+    session = `${game}-${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
+    t0 = performance.now(); seq = 0; lines = [];
+    post('meta.json', JSON.stringify({ game, url: location.href, started: d.toISOString(), screen: [innerWidth, innerHeight, devicePixelRatio], ua: navigator.userAgent }), false);
+    addEventListener('mousemove', onMove, true); addEventListener('mousedown', onDown, true); addEventListener('mouseup', onUp, true);
+    addEventListener('keydown', onKey, true); addEventListener('keyup', onKey, true); addEventListener('wheel', onWheel, { capture: true, passive: true });
+    samplePads();
+    showBadge('● REC · click once to share the tab');
+    // tab capture needs a real click or key press; until then record inputs, and fall back to the
+    // canvas if no click comes
+    gestureArmed = true;
+    const arm = e => {
+      if (!e.isTrusted || !session || (rec && videoKind === 'tab') || asking) return;
+      removeEventListener('pointerdown', arm, true); removeEventListener('keydown', arm, true);
+      gestureArmed = false;
+      if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) tabVideo(); else if (!rec) canvasVideo();
+    };
+    addEventListener('pointerdown', arm, true); addEventListener('keydown', arm, true);
+    // no click within a minute (playing with the phone only): record the game canvas meanwhile,
+    // and a later click still upgrades to the whole tab (HUD included)
+    setTimeout(() => { if (gestureArmed && session && !rec) canvasVideo(); }, 60000);
+    flusher = setInterval(flushLog, 2000);
+  }
+  let flusher = 0;
+  function stop() {
+    if (!session) return;
+    log({ k: 'stop' });
+    if (rec && rec.state !== 'inactive') rec.stop();
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    cancelAnimationFrame(rafId); clearInterval(flusher); flushLog();
+    removeEventListener('mousemove', onMove, true); removeEventListener('mousedown', onDown, true); removeEventListener('mouseup', onUp, true);
+    removeEventListener('keydown', onKey, true); removeEventListener('keyup', onKey, true); removeEventListener('wheel', onWheel, true);
+    showBadge('saved recording ' + session); setTimeout(() => showBadge(''), 4000);
+    session = null; rec = null; stream = null;
+  }
+
+  addEventListener('keydown', e => { if (e.code === 'F8') { e.preventDefault(); session ? stop() : start(); } }, true);
+  addEventListener('pagehide', () => { if (session) { log({ k: 'pagehide' }); flushLog(); } });
+  window.MimicRec = {
+    start, stop, get active() { return !!session; },
+    /** Games may report what happened: MimicRec.event('hit', {power: .8}). */
+    event(name, data) { log(Object.assign({ k: 'ev', name }, data || {})); },
+  };
+  if (q.get('rec') === '1') {
+    if (document.readyState === 'loading') addEventListener('DOMContentLoaded', start); else start();
+  }
+})();

@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Iron Ludus</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="stage"></div>
+<canvas id="overlay"></canvas>
+<div id="vignette"></div>
+<div id="flash"></div>
+<div id="popups"></div>
+
+<!-- ============ HUD ============ -->
+<div id="hud" class="hidden">
+  <div id="me" class="panel">
+    <div class="who">YOU <span class="hp-num" id="me-hp">100</span></div>
+    <div class="bar hp"><i></i><b></b></div>
+    <div class="bar st"><i></i></div>
+    <div class="lbl"><span>HEALTH</span><span>STAMINA</span></div>
+  </div>
+  <div id="bout" class="panel center">
+    <div id="bout-title">BOUT I</div>
+    <div id="fame">FAME <b>0</b></div>
+  </div>
+  <div id="foe" class="panel right">
+    <div class="who" id="foe-name">CASSIA</div>
+    <div class="bar hp foe"><i></i><b></b></div>
+    <div class="bar poise"><i></i></div>
+    <div class="lbl"><span>HEALTH</span><span>POISE</span></div>
+  </div>
+  <div id="hint"></div>
+  <div id="ctrl-pill"><i></i><span>Using mouse</span></div>
+</div>
+
+<!-- ============ LOADING ============ -->
+<div id="loading" class="screen"><div class="load-box"><div class="sigil"></div><div id="load-text">Raking the sand...</div><div class="load-bar"><i id="load-fill"></i></div></div></div>
+
+<!-- ============ TITLE ============ -->
+<div id="title" class="screen hidden">
+  <div class="t-left">
+    <header>
+      <div class="t-kicker">A MIMIC MOTION GAME</div>
+      <h1>IRON<span>LUDUS</span></h1>
+      <p class="t-sub">Your phone is the sword. Six bouts in the Ashen Circus.</p>
+    </header>
+    <div class="menu" id="title-menu">
+      <button class="mi primary" data-act="ladder">FIGHT THE LADDER</button>
+      <button class="mi" data-act="practice">PRACTICE <small>no death</small></button>
+      <button class="mi" data-act="versus">VERSUS <small>two phones</small></button>
+      <button class="mi opt" data-act="hand">SWORD HAND <b id="opt-hand">RIGHT</b></button>
+      <button class="mi opt" data-act="sound">VOLUME <b class="opt-vol">100%</b></button>
+    </div>
+    <div class="t-connect">
+      <div id="title-ctrl" class="ctrl-status"><i></i><span>Using mouse</span><small>Open Mimic, pick Wand or Grip.</small></div>
+      <div class="t-connect-row"><div class="mimic-scan" data-mimic-join="grip" data-compact></div><div id="rumble-status" class="rumble-status">Vibration: click to set up</div></div>
+    </div>
+  </div>
+  <div class="t-right">
+    <h3>HOW TO PLAY</h3>
+    <ul class="howto">
+      <li><svg viewBox="0 0 24 24"><path d="M12 2v13M8 15h8M12 15v7"/><path d="M10 2h4"/></svg><b>Hold it like a sword</b><span>Top of the phone is the tip</span></li>
+      <li><svg viewBox="0 0 24 24"><path d="M4 20L20 4"/><path d="M14 4h6v6"/></svg><b>Swing to cut</b><span>Faster cuts hit harder</span></li>
+      <li><svg viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M5 8c3 0 5 2 5 4s-2 4-5 4"/><path d="M19 8c-3 0-5 2-5 4s2 4 5 4" opacity=".45"/></svg><b>Cut around their blade</b><span>Show one side, cut the other</span></li>
+      <li><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/><path d="M3 21L21 3"/></svg><b>Parry late</b><span>Blade on the red zone as it closes</span></li>
+      <li><svg viewBox="0 0 24 24"><path d="M5 3h14v8c0 5-3 8-7 10-4-2-7-5-7-10z"/></svg><b>Raise the shield</b><span>Heavy blows break it: sidestep</span></li>
+      <li><svg viewBox="0 0 24 24"><rect x="3" y="8" width="16" height="8" rx="1.5"/><path d="M21 11v2"/><path d="M6 11v2M9 11v2"/></svg><b>Mind your stamina</b><span>Every swing costs. Rest to refill</span></li>
+    </ul>
+    <div class="t-keys">
+      <span></span><b class="c-wand">WAND</b><b class="c-grip">GRIP</b>
+      <span>Shield</span><span>hold <kbd>A</kbd></span><span>hold <kbd>Vol Down</kbd></span>
+      <span>Sidestep</span><span><kbd>B</kbd></span><span>tap <kbd>Vol Up</kbd></span>
+      <span>Thrust</span><span>jab or <kbd>1</kbd></span><span>jab or double-tap <kbd>Vol Up</kbd></span>
+      <span>Align</span><span><kbd>Center</kbd></span><span>hold <kbd>Vol Up</kbd></span>
+      <span>Pause</span><span><kbd>+</kbd> / <kbd>Home</kbd></span><span>blade down, hold <kbd>Vol Down</kbd></span>
+    </div>
+    <details class="t-more"><summary>More</summary>
+      <p>Cut the same side twice and they read it. A hard hit on a raised blade beats it aside. Quick waggles are weak: pause between cuts. Menus: point and press <kbd data-w="a">A</kbd>, <kbd data-w="b">B</kbd> goes back.</p>
+      <p>Mouse (testing): move to aim, flick to cut, hold left for shield, right click to sidestep, <kbd>F</kbd> thrust, <kbd>Esc</kbd> pause.</p>
+    </details>
+  </div>
+</div>
+
+<!-- ============ BOUT CARD ============ -->
+<div id="card" class="screen modal hidden">
+  <div class="card">
+    <div class="c-kicker" id="card-kicker">BOUT I OF VI</div>
+    <h2 id="card-title">CASSIA THE RECRUIT</h2>
+    <p id="card-text"></p>
+    <div id="ladder" class="ladder"></div>
+    <div id="card-stats" class="stats"></div>
+    <div class="menu row" id="card-menu"><button class="mi primary" data-act="continue">FIGHT</button></div>
+    <p class="hint" id="card-hint">Point at the screen, <kbd data-w="center">Center</kbd> to line up, then <kbd data-w="a">A</kbd>.</p>
+  </div>
+</div>
+
+<!-- ============ PAUSE ============ -->
+<div id="pause" class="screen modal hidden">
+  <div class="card">
+    <h2>PAUSED</h2>
+    <div class="menu" id="pause-menu">
+      <button class="mi primary" data-act="resume">RESUME</button>
+      <button class="mi" data-act="restart" id="restart-label">RESTART BOUT</button>
+      <button class="mi opt" data-act="sound">VOLUME <b class="opt-vol">100%</b></button>
+      <button class="mi" data-act="quit">MAIN MENU</button>
+    </div>
+    <p class="why hidden" id="pause-why"></p>
+    <div class="pause-ctl">
+      <div><span>Align</span><b>point, <kbd data-w="center">Center</kbd></b></div>
+      <div><span>Shield</span><b>hold <kbd data-w="a">A</kbd></b></div>
+      <div><span>Sidestep</span><b>tap <kbd data-w="b">B</kbd></b></div>
+      <div><span>Thrust</span><b>jab forward</b></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ RESULTS ============ -->
+<div id="results" class="screen modal hidden">
+  <div class="card wide">
+    <div class="c-kicker" id="res-kicker">THE CROWD HAS SPOKEN</div>
+    <h2 id="res-title">CHAMPION OF THE CIRCUS</h2>
+    <div class="fame-big"><span id="res-fame-l">FAME</span> <b id="res-fame">0</b></div>
+    <div id="res-stats" class="stats"></div>
+    <div class="menu row" id="res-menu">
+      <button class="mi primary" data-act="again" id="res-again">FIGHT AGAIN</button>
+      <button class="mi" data-act="quit">MAIN MENU</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ VERSUS LOBBY ============ -->
+<div id="lobby" class="screen modal hidden">
+  <div class="card wide lobby">
+    <div class="c-kicker">VERSUS &middot; TWO PHONES &middot; ONE ARENA</div>
+    <h2>WHO ENTERS THE SAND?</h2>
+    <div class="slots">
+      <div class="slot t0" id="slot0"><div class="sl-crest"><span>P1</span></div><div class="sl-team">RED</div><div class="sl-ctl"></div><div class="sl-state"></div><div class="sl-join" data-mimic-join="grip" data-size="92"></div></div>
+      <div class="sl-vs">VS</div>
+      <div class="slot t1" id="slot1"><div class="sl-crest"><span>P2</span></div><div class="sl-team">BLUE</div><div class="sl-ctl"></div><div class="sl-state"></div><div class="sl-join" data-mimic-join="grip" data-size="92"></div></div>
+    </div>
+    <div id="lobby-go" class="lobby-go hidden"><div class="go-bar"><i id="lobby-go-fill"></i></div></div>
+    <p class="hint" id="lobby-hint"></p>
+    <p class="hint small">Best of three, 90-second rounds. Ladder rules.</p>
+    <div class="menu row">
+      <button class="mi" data-act="vs-mouse" id="lobby-mouse">JOIN WITH MOUSE</button>
+      <button class="mi" data-act="vs-go">BEGIN</button>
+      <button class="mi" data-act="quit">BACK</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ VERSUS HUD ============ -->
+<div id="vs-hud" class="hidden">
+  <div class="vs-vig" id="vs-vig0"></div><div class="vs-vig r" id="vs-vig1"></div>
+  <div class="vs-divider"></div>
+  <div class="panel vs-p t0" id="vs-p0">
+    <div class="who">P1 &middot; RED <span class="hp-num">100</span><span class="pips"><i></i><i></i></span></div>
+    <div class="bar hp"><i></i><b></b></div>
+    <div class="bar st"><i></i></div>
+  </div>
+  <div class="panel vs-p t1 right" id="vs-p1">
+    <div class="who"><span class="pips"><i></i><i></i></span><span class="hp-num">100</span> P2 &middot; BLUE</div>
+    <div class="bar hp"><i></i><b></b></div>
+    <div class="bar st"><i></i></div>
+  </div>
+  <div class="panel center vs-clock"><div id="vs-round">ROUND 1</div><div id="vs-time">1:30</div></div>
+</div>
+
+<script src="../lib/three.min.js"></script>
+<script type="module" src="../lib/vendor/loaders.js"></script>
+<script src="../lib/mimic.js"></script>
+<script src="../lib/mimic-link.js"></script>
+<script src="../lib/recorder.js"></script>
+<script src="../lib/wandcursor.js"></script>
+<script src="combat.js"></script>
+<script src="audio.js"></script>
+<script src="world.js"></script>
+<script src="fighters.js"></script>
+<script src="fx.js"></script>
+<script src="versus.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

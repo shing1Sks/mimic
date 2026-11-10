@@ -133,20 +133,20 @@
   // Spawn entry: { species, from: layout spawn name | side: 'left'|'right' (ride ambush), n, stagger (s),
   //   tagged, aggro, target: 'stand'|'survivors'|'self', ambient (does not need killing) }.
   const R = (from, n, extra) => Object.assign({ species: 'raptor', from, n: n || 1, stagger: 1 }, extra);
-  // weapon: what the stand hands you (Q / double Vol Up still switches by hand).
+  // weapon: what the stand hands you (there is no switching by hand).
   const MISSIONS = {
     gate3: {
       par: 150, stars: [1800, 2800],
       brief: 'Get your eye in at the visitor gate. Knock down the six practice plates, then stop whatever comes up the road and out of the ferns.',
       objectiveText: 'Plates, then the road, then the ferns.',
-      controls: ['fire', 'align', 'dodge'],
+      controls: ['fire', 'reload', 'align'],
       plan: [{ stand: 'gate', phases: [
         { objective: { type: 'targets', count: 6, label: 'Practice plates' }, targets: true, hint: 'fire', weapon: 'carbine',
           note: 'Six plates in front of the gate. Put the crosshair on each and fire.' },
-        { objective: { type: 'clear', label: 'Road hostiles' }, hint: 'reload', weapon: 'carbine', note: 'Spitters on the road. Shoot the green spit out of the air, or flick to dodge it.',
+        { objective: { type: 'clear', label: 'Road hostiles' }, hint: 'reload', weapon: 'carbine', note: 'Spitters hang back on the road. Shoot the green spit out of the air, then the spitter.',
           waves: [{ id: 'd1', at: 1.5, spawns: [{ species: 'dilo', from: 'road', n: 2, stagger: 4, aggro: 0.5 }] },
             { id: 'd2', after: 'd1', delay: 1.5, spawns: [{ species: 'dilo', from: 'road', n: 1, aggro: 0.6 }] }] },
-        { objective: { type: 'kill', species: 'raptor', count: 3, label: 'Raptors' }, hint: 'dodge', weapon: 'carbine', note: 'Raptors in the ferns. When one crouches to leap: FLICK the phone sideways.',
+        { objective: { type: 'kill', species: 'raptor', count: 3, label: 'Raptors' }, hint: 'fire', weapon: 'carbine', note: 'Raptors stalk the ferns, then rush you. Two hits stop a rush; a headshot ends it.',
           waves: [{ id: 'r1', at: 2, spawns: [R('leftBrush', 1, { aggro: 0.45 })] }, { id: 'r2', after: 'r1', delay: 1.5, spawns: [R('rightBrush', 1, { aggro: 0.55 })] },
             { id: 'r3', after: 'r2', delay: 1, spawns: [R('road', 1, { aggro: 0.9 })] }] },
       ] }],
@@ -155,7 +155,7 @@
       par: 140, stars: [900, 1500],
       brief: 'Three tagged raptors are stalking the survivors at the crashed jeep. Snipe them before they reach it. Do not hit the grazers.',
       objectiveText: 'Kill the 3 tagged raptors. Spare the herd.',
-      controls: ['fire', 'align', 'switch'],
+      controls: ['fire', 'scope', 'align'],
       plan: [{ stand: 'tower', phases: [
         { objective: { type: 'kill', species: 'raptor', tagged: true, count: 3, label: 'Tagged raptors', timeLimit: 150 },
           protect: 'survivors', hint: 'scope', weapon: 'marksman',
@@ -172,18 +172,18 @@
       par: 200, stars: [2400, 3800],
       brief: 'Drive through the raptor paddocks to the feeding station. Three stops, ambushes from both sides, pterosaurs over the river.',
       objectiveText: 'Clear each stop. Keep the jeep moving.',
-      controls: ['fire', 'dodge', 'reload'],
+      controls: ['fire', 'reload', 'align'],
       plan: [
         { stand: 'pens1', phases: [{ objective: { type: 'clear', label: 'Paddock raptors' }, hint: 'reload', weapon: 'carbine', note: 'They come through the broken fences. Follow the red arrows.',
           waves: [{ id: 'f', at: 1.5, spawns: [R('pens1Front', 2, { stagger: 1.5, aggro: 0.5 })] }, { id: 'l', after: 'f', delay: 1, spawns: [R('pens1Left', 2, { stagger: 1.4, aggro: 0.6 })] },
             { id: 'r', after: 'l', delay: 1, spawns: [R('pens1Right', 2, { stagger: 1.2, aggro: 0.7 })] }] }] },
         { ride: 'drive1', to: 'pens2', ambush: [{ at: 0.5, spawns: [R(null, 1, { side: 'left', aggro: 0.6 }), R(null, 1, { side: 'right', stagger: 1.5, aggro: 0.6 })] }] },
-        { stand: 'pens2', phases: [{ objective: { type: 'clear', label: 'Bridge hostiles' }, hint: 'dodge', weapon: 'carbine', note: 'Pterosaurs over the water. Shoot them as they dive, or FLICK to dodge.',
+        { stand: 'pens2', phases: [{ objective: { type: 'clear', label: 'Bridge hostiles' }, hint: 'fire', weapon: 'carbine', note: 'Pterosaurs over the water. Shoot them as they dive.',
           waves: [{ id: 'p1', at: 2, spawns: [{ species: 'ptero', from: 'river', n: 1 }] },
             { id: 'p2', after: 'p1', delay: 1, spawns: [{ species: 'ptero', from: 'river', n: 2, stagger: 2.5 }] },
             { id: 'b', after: 'p2', delay: 1, spawns: [R('pens2Banks', 2, { stagger: 1.5 })] }] }] },
         { ride: 'drive2', to: 'pens3', ambush: [{ at: 0.55, spawns: [R(null, 2, { side: 'right', stagger: 1.2, aggro: 0.6 })] }] },
-        { stand: 'pens3', phases: [{ objective: { type: 'clear', label: 'Feeding station' }, hint: 'dodge', weapon: 'carbine', note: 'Last stop. Watch the roof: FLICK when one leaps.',
+        { stand: 'pens3', phases: [{ objective: { type: 'clear', label: 'Feeding station' }, hint: 'fire', weapon: 'carbine', note: 'Last stop. Watch the roof: stop each rush before it lands.',
           waves: [{ id: 'l', at: 1.5, spawns: [R('pens3Left', 2, { stagger: 1.2 })] }, { id: 'r', at: 5, spawns: [R('pens3Right', 2, { stagger: 1.2 })] },
             { id: 'roof', afterKills: 4, spawns: [R('pens3Roof', 1, { aggro: 1 })] },
             { id: 'last', after: 'roof', delay: 0.5, spawns: [R('pens3Left', 2, { stagger: 0.6, aggro: 1 }), R('pens3Right', 2, { stagger: 0.6, aggro: 1 })] }] }] },
@@ -191,11 +191,11 @@
     },
     horn: {
       par: 90, stars: [2600, 4200],
-      brief: 'A triceratops stampede across open ground. The front plate is armour: hit the flank or the eye, or FLICK aside when one charges.',
+      brief: 'A triceratops stampede across open ground. The front plate is armour: hit the flank or the eye, and stop each charge before it reaches you.',
       objectiveText: 'Hold the line for 75 seconds.',
-      controls: ['fire', 'dodge', 'align'],
+      controls: ['fire', 'reload', 'align'],
       plan: [{ stand: 'field', phases: [
-        { objective: { type: 'survive', time: 75, label: 'Hold the line' }, hint: 'dodge', weapon: 'carbine', note: 'Shoot the flanks or the eye. FLICK when a charge is on you.',
+        { objective: { type: 'survive', time: 75, label: 'Hold the line' }, hint: 'fire', weapon: 'carbine', note: 'Shoot the flanks or the eye. Enough hits stop a charge.',
           waves: [
             { id: 'a1', at: 2, spawns: [{ species: 'trike', from: 'laneA', aggro: 0.8 }] },
             { id: 'b1', at: 13, spawns: [{ species: 'trike', from: 'laneB', aggro: 0.9 }] },
@@ -209,12 +209,12 @@
     },
     apex: {
       par: 180, stars: [3200, 5200],
-      brief: 'The apex predator owns the visitor centre plaza. Its eye and open mouth are the weak spots. Dodge the charge. Extraction comes when it falls.',
+      brief: 'The apex predator owns the visitor centre plaza. Its eye and open mouth are the weak spots. Pour fire into a charge to drop it. Extraction comes when it falls.',
       objectiveText: 'Bring down the apex.',
-      controls: ['fire', 'dodge', 'switch'],
+      controls: ['fire', 'reload', 'align'],
       outro: 'Extraction inbound',
       plan: [{ stand: 'plaza', phases: [
-        { objective: { type: 'boss', species: 'rex', label: 'Bring down the apex' }, hint: 'dodge', weapon: 'carbine', note: 'Aim for the eye, or the mouth when it roars. FLICK when it charges.',
+        { objective: { type: 'boss', species: 'rex', label: 'Bring down the apex' }, hint: 'fire', weapon: 'carbine', note: 'Aim for the eye, or the mouth when it roars. Pour fire into a charge to drop it.',
           waves: [{ id: 'rex', at: 1.5, spawns: [{ species: 'rex', from: 'rexEntry', aggro: 1 }] },
             { id: 'bal', at: 35, spawns: [R('balcony', 2, { stagger: 1.5, ambient: true })] },
             { id: 'bal2', after: 'bal', delay: 25, spawns: [R('balcony', 2, { stagger: 1.5, ambient: true })] }] },

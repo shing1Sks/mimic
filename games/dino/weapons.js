@@ -593,9 +593,7 @@
   function update(dt, c, f) {
     ctx = c;
     const p = c.player || {};
-    // switching
-    if (f.pressed.switch) beginSwitch(((pending >= 0 ? pending : slot) + 1) % ORDER.length);
-    if (f.pressed.slot1) W.select(0); if (f.pressed.slot2) W.select(1); if (f.pressed.slot3) W.select(2);
+    // no switching by hand: each stand hands you the gun that suits it (missions.js giveWeapon)
     if (switchPhase === 1) {
       switchT += dt;
       if (switchT >= SWITCH_DOWN) {
@@ -610,6 +608,8 @@
     }
     const id = ORDER[slot], spec = SPECS[id], st = states[id];
     W.current = st;
+    // one gun per stand, so it never runs dry: the last magazine brings a fresh box of rounds
+    if (st.mag === 0 && st.reserve === 0 && !st.reloading) refill(st, spec);
     const ducking = !!p.ducking;
     const busy = switchPhase !== 0 || ducking;
 

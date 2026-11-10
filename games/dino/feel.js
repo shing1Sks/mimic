@@ -2,9 +2,9 @@
 // rumble. The top half is pure and runs in Node (test/feel.test.js).
 //
 // ADRENALINE: weak-spot hits, kills and clean dodges fill a meter. When it is full and an animal
-// commits to an attack that will reach you (leap, charge, swoop, bite), time drops to a crawl for
-// a few seconds: the animal hangs in the air, the jungle goes grey and quiet, the phone beats like a
-// heart. The aim is untouched (still the phone, 1:1), only the world is slow, so a steady hand can
+// commits to an attack from range (a raptor's rush, a charge, a dive), time drops to a crawl for the
+// last stretch of its run, while it is still out there: the jungle goes grey and quiet, the phone
+// beats like a heart. The aim is untouched (still the phone, 1:1), only the world is slow, so a steady hand can
 // put the round where it belongs. Kill the attacker inside it and the meter refills by half.
 (function (root) {
   'use strict';
@@ -17,7 +17,9 @@
     easeIn: 0.12, easeOut: 0.35, // s (real) to drop into it / climb out of it
     cooldown: 4,                 // s (real) after one ends before the next can start
     gain: { weakHit: 0.1, kill: 0.18, weakKill: 0.34, dodge: 0.25, clutch: 0.5 },
-    kinds: { leap: 1, charge: 1, swoop: 1, bite: 1 },
+    kinds: { leap: 1, charge: 1, swoop: 1 },   // never a bite: that is already at the barrel
+    minDist: 9,                  // m: it starts out there, not in your face
+    lead: 1.1,                   // s of world time before impact when it starts (covers the last ~15 m)
   };
 
   function createClock() {
@@ -65,9 +67,10 @@
   function wantsAdrenaline(c, a) {
     if (c.adren || c.cool > 0 || c.meter < 1 || !a || !ADREN.kinds[a.kind]) return false;
     if (a.playerTarget === false) return false;
-    // close enough to be personal: a raptor's leap range, a charge's run-in, a dive
-    return (a.dist == null || a.dist < 45) && (a.windowMs == null || a.windowMs > 350);
+    return (a.dist == null || (a.dist >= ADREN.minDist && a.dist < 50)) && (a.windowMs == null || a.windowMs > 350);
   }
+  /** World seconds from the attack's start until ADRENALINE drops in (so it ends near the impact). */
+  function adrenalineDelay(windowMs) { return Math.max(0, (windowMs || 0) / 1000 - ADREN.lead); }
 
   /** Start it: lasts until the strike would land (game time stretched by the scale), capped. */
   function startAdrenaline(c, a) {
@@ -101,12 +104,13 @@
     }
   }
 
-  const Pure = { ADREN, HIT_STOP_SCALE, createClock, hitStop, slowMo, envelope, step, charge, wantsAdrenaline, startAdrenaline, endAdrenaline, killStopMs, shotRumble };
+  const Pure = { ADREN, HIT_STOP_SCALE, createClock, hitStop, slowMo, envelope, step, charge, wantsAdrenaline, adrenalineDelay, startAdrenaline, endAdrenaline, killStopMs, shotRumble };
   if (typeof module !== 'undefined' && module.exports) { module.exports = Pure; return; }
 
   // ================================================================== browser
   const DH = root.DH = root.DH || {};
   let ctx = null, clock = createClock(), meterEl = null, flashEl = null, lastRumble = 0, rumbleAsked = false;
+  let pending = null;   // { dino, at (world time) }: an attack whose ADRENALINE starts later in its run
   const isWeak = z => z === 'head' || z === 'eye' || z === 'mouth';
 
   function mc() { const p = DH.Input && DH.Input.phone; return p && p.connected ? p.mc : null; }
@@ -157,7 +161,7 @@
     charge(clock, a);
     if (was < 1 && clock.meter >= 1 && !clock.told) {
       clock.told = true;
-      DH.bus.emit('mission:feed', { text: 'Adrenaline ready: the next lunge at you slows time', kind: 'info' });
+      DH.bus.emit('mission:feed', { text: 'Adrenaline ready: the next rush at you slows time', kind: 'info' });
     }
   }
   function onAttack(d) {
@@ -166,13 +170,19 @@
     const dist = Math.hypot(dino.pos.x - pp.x, dino.pos.z - pp.z);
     // the big ones winding up: a rising buzz in the hand
     if (d.kind === 'charge') rumble(dino.species === 'rex' ? 0.9 : 0.7, 220, 2, true);
-    if (wantsAdrenaline(clock, { kind: d.kind, dist, windowMs: d.windowMs, playerTarget: dino.playerTarget })) {
-      startAdrenaline(clock, { kind: d.kind, windowMs: d.windowMs, id: dino.id });
-      if (DH.Audio && DH.Audio.whoosh) DH.Audio.whoosh(true);
-      flash('ADRENALINE');
-      rumble(1, 160, 2, true);
-      DH.bus.emit('feel:adrenaline', { on: true, dino });
-    }
+    if (!pending && wantsAdrenaline(clock, { kind: d.kind, dist, windowMs: d.windowMs, playerTarget: dino.playerTarget }))
+      pending = { dino, at: ctx.time + adrenalineDelay(d.windowMs), end: ctx.time + d.windowMs / 1000 };
+  }
+  function firePending() {
+    const p = pending, dino = p.dino;
+    pending = null;
+    // stopped or killed before it got that close: nothing to slow down for
+    if (!dino.alive || dino.brain.state !== 'telegraph') return;
+    startAdrenaline(clock, { kind: dino.brain.kind, windowMs: Math.max(400, (p.end - ctx.time) * 1000), id: dino.id });
+    if (DH.Audio && DH.Audio.whoosh) DH.Audio.whoosh(true);
+    flash('ADRENALINE');
+    rumble(1, 160, 2, true);
+    DH.bus.emit('feel:adrenaline', { on: true, dino });
   }
   function onDead(d) {
     if (!d || d.byPlayer === false) return;
@@ -210,10 +220,14 @@
       on('dino:dead', onDead);
       on('dino:roar', d => { if (d && d.dist < 70) rumble(Math.min(1, 1.1 - d.dist / 80), 255, 1, true); });
       on('dino:step', d => { if (d && d.near > 0) rumble(Math.min(1, 0.25 + d.near * 0.7), 60, 0); });
-      on('player:hurt', d => { rumble(Math.min(1, 0.5 + ((d && d.damage) || 10) / 60), 200, 1, true); endAdrenaline(clock); });
+      on('player:hurt', d => {
+        rumble(Math.min(1, 0.5 + ((d && d.damage) || 10) / 60), 200, 1, true); endAdrenaline(clock);
+        // knocked back: the view snaps up and away, then settles (aim itself is untouched)
+        if (ctx) { ctx.addShake(0.9); ctx.addKick(0.07, (Math.random() - 0.5) * 0.06); }
+      });
       on('player:dodged', () => { gain(ADREN.gain.dodge); rumble(0.5, 70, 0, true); if (!clock.adren) slowMo(clock, 0.4, 0.45, 0.03, 0.25); endAdrenaline(clock); });
-      on('mission:retry', () => { const told = clock.told; clock = createClock(); clock.told = told; });
-      on('state', e => { if (e && e.state === 'briefing') clock = createClock(); if (e && e.state !== 'play' && e.state !== 'pause') { clock.slow = null; clock.stop = 0; clock.adren = null; } });
+      on('mission:retry', () => { const told = clock.told; clock = createClock(); clock.told = told; pending = null; });
+      on('state', e => { if (e && e.state === 'briefing') { clock = createClock(); pending = null; } if (e && e.state !== 'play' && e.state !== 'pause') { clock.slow = null; clock.stop = 0; clock.adren = null; } });
     },
     /** Called by core.js each frame with real seconds; returns the world speed. */
     step(rdt, c) {
@@ -223,6 +237,7 @@
         if (DH.Audio && DH.Audio.setSlow) DH.Audio.setSlow(0);   // menus and pause are never muffled
         return 1;
       }
+      if (pending && ctx.time >= pending.at) firePending();
       const k = step(clock, rdt);
       // heartbeat in the hand and the ears while it runs
       if (clock.adren) {

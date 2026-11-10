@@ -297,6 +297,25 @@
     return out;
   }
 
+  /** A point on the animal's stalking ring (radius R around the stand), kept inside the stand's view
+   * cone so the threat plays out in front of you, not at your shoulder. drift: radians along the ring. */
+  function holdGoal(d, R, drift, out) {
+    const pp = playerPos(), st = ctx && ctx.view && ctx.view.stand;
+    const centre = st ? st.yaw + Math.PI : Math.atan2(d.pos.x - pp.x, d.pos.z - pp.z);
+    const lim = st ? Math.max(0.35, (st.arc || 1) * 0.8) : Math.PI;
+    const ang = LOGIC().holdBearing(Math.atan2(d.pos.x - pp.x, d.pos.z - pp.z) + (drift || 0), centre, lim);
+    // at the edge of the cone the stalk turns back the other way
+    if (Math.abs(angDiff(centre, ang)) >= lim - 1e-3 && Math.sign(drift || 0) === Math.sign(angDiff(centre, ang))) d.strafe = -d.strafe;
+    return out.set(pp.x + Math.sin(ang) * R, 0, pp.z + Math.cos(ang) * R);
+  }
+
+  /** Is the animal outside the stand's view cone (it ran past, or came round the side)? */
+  function outOfCone(d) {
+    const pp = playerPos(), st = ctx && ctx.view && ctx.view.stand;
+    if (!st) return false;
+    return Math.abs(angDiff(st.yaw + Math.PI, Math.atan2(d.pos.x - pp.x, d.pos.z - pp.z))) > Math.max(0.35, (st.arc || 1) * 0.8) + 0.15;
+  }
+
   // ------------------------------------------------------------------ per-species locomotion
   const _goal = new T.Vector3();
   function locomote(d, dt) {
@@ -317,16 +336,22 @@
         }
         if (!d.playerTarget) { steer(d, d.target, stalkSpeed(d), dt, { arrive: 1 }); break; }
         if (d.species === 'rex') { rexStalk(d, dt, dPlayer); break; }
-        huntGoal(d, _goal);
-        if (d.species === 'raptor' && b.cooldown > 0 && dPlayer < 13) {
-          // circle at a respectful distance while recovering the nerve
-          const ang = Math.atan2(d.pos.x - pp.x, d.pos.z - pp.z) + d.strafe * 0.6;
-          _goal.set(pp.x + Math.sin(ang) * 11, 0, pp.z + Math.cos(ang) * 11);
-          steer(d, _goal, sp.walk * 1.6, dt, { turnBoost: 2 });
+        if (d.species === 'raptor') {
+          // out to its ring, then stalk sideways through the ferns until it commits to a rush
+          const R = b.holdR || 24;
+          if (Math.random() < dt * 0.15) d.strafe = -d.strafe;
+          if (dPlayer > R + 8) steer(d, holdGoal(d, R, d.offset ? Math.sign(d.offset) * 0.15 : 0, _goal), approachSpeed(d), dt);
+          else if (dPlayer < R - 6) steer(d, holdGoal(d, R, d.strafe * 0.3, _goal), runSp * 0.7, dt, { turnBoost: 2.5 });
+          else steer(d, holdGoal(d, R, d.strafe * 0.35, _goal), sp.walk * 1.7, dt, { turnBoost: 2 });
           break;
         }
+        huntGoal(d, _goal);
         if (d.species === 'dilo') { steer(d, _goal, dPlayer > b.stopDist + 10 ? runSp * 0.75 : sp.walk, dt, { arrive: Math.max(0, b.stopDist - 1) }); break; }
-        if (d.species === 'trike') { steer(d, _goal, dPlayer > 70 ? 4.5 : sp.walk * 1.4, dt, { arrive: Math.max(0, b.chargeDist - 1) }); break; }
+        if (d.species === 'trike') {
+          // one that thundered past walks a wide loop back round to the front before it lines up again
+          if (outOfCone(d)) { steer(d, holdGoal(d, Math.max(b.chargeDist, dPlayer) * 1.25, d.strafe * 0.5, _goal), sp.walk * 2.2, dt); break; }
+          steer(d, _goal, dPlayer > 70 ? 4.5 : sp.walk * 1.4, dt, { arrive: Math.max(0, b.chargeDist - 1) }); break;
+        }
         steer(d, _goal, approachSpeed(d), dt);
         break;
       }
@@ -356,7 +381,7 @@
         break;
       case 'stumble': {
         // a charge collapses: slide, roll onto the shoulder, get back up
-        accel(d, 0, dt * 0.45);
+        accel(d, 0, dt * (d.species === 'raptor' ? 2.2 : 0.45));   // a tumbling raptor must not skid into the stand
         const t = b.t, D = b.dur;
         const roll = t < 0.45 ? t / 0.45 : t > D - 0.7 ? Math.max(0, (D - t) / 0.7) : 1;
         d.roll = roll * 0.38 * d.strafe; d.crouch = roll * 0.8;
@@ -365,10 +390,10 @@
       case 'recover': {
         d.roll *= Math.exp(-dt * 4);
         if (d.species === 'raptor' || d.species === 'dilo') {
-          const ang = Math.atan2(d.pos.x - pp.x, d.pos.z - pp.z) + d.strafe * 0.9;
-          const R = d.species === 'raptor' ? 13 : b.stopDist + 4;
-          _goal.set(pp.x + Math.sin(ang) * R, 0, pp.z + Math.cos(ang) * R);
-          steer(d, _goal, d.species === 'raptor' ? runSp * 0.6 : sp.walk, dt, { turnBoost: 2.5 });
+          // back out to range: a raptor that got to you bolts for the ferns
+          const R = d.species === 'raptor' ? (b.holdR || 24) : b.stopDist + 4;
+          holdGoal(d, R, d.strafe * 0.5, _goal);
+          steer(d, _goal, d.species === 'raptor' ? runSp * 0.85 : sp.walk, dt, { turnBoost: 2.5 });
         } else if (d.species === 'trike' || d.species === 'rex') {
           // run on past, veer off and slow down; then it turns and walks back out
           if (b.t < 0.05) d.veer = d.heading + d.strafe * 1.0;
@@ -395,7 +420,8 @@
   function stalkSpeed(d) { return d.sp.walk + (d.sp.run * 0.5 - d.sp.walk) * d.brain.aggro; }
   function rexStalk(d, dt, dPlayer) {
     const pp = playerPos(), b = d.brain;
-    if (dPlayer < 12) { huntGoal(d, _goal); steer(d, _goal, d.sp.walk * 1.5, dt, { arrive: 5 }); return; }
+    // too close: it backs off to its ring and comes again from range
+    if (dPlayer < 16 || outOfCone(d)) { holdGoal(d, Math.max(b.holdR || 30, dPlayer * 0.9), d.strafe * 0.4, _goal); steer(d, _goal, d.sp.walk * 1.6, dt, { turnBoost: 1.5 }); return; }
     if (d.circle.length > 1) {
       if (d.circleI === 0 && !d.onCircle) { // join the loop at the nearest point
         let best = 0, bd = Infinity; d.circle.forEach((p, i) => { const dd = hdist(p, d.pos); if (dd < bd) { bd = dd; best = i; } });
@@ -417,17 +443,22 @@
     const tMs = b.t * 1000, a = b.kind === 'bite' ? sp.bite : sp.attack;
     switch (b.kind) {
       case 'leap': {
-        // crouch, then spring at the stand
-        const crouchMs = a.telegraphMs - 260;
-        if (tMs < crouchMs) {
+        // crouch and shriek out in the ferns, sprint straight in (two hits tumble it), spring the last metres
+        const remain = Math.max(0.05, (b.windowMs - tMs) / 1000), LEAP = 0.34;
+        if (tMs < a.telegraphMs) {
           accel(d, 0, dt * 2); turnTo(d, yawP, dt, 8);
           d.crouch = Math.min(1, d.crouch + dt * 5);
+        } else if (remain > LEAP && !d.leap) {
+          d.crouch = Math.max(0, d.crouch - dt * 6);
+          turnTo(d, yawP, dt, 3);
+          const want = Math.min(a.rushSpeed * 1.5, Math.max(0, dPlayer - a.reach * 0.6 - a.rushSpeed * LEAP * 0.8) / Math.max(0.05, remain - LEAP));
+          d.speed = want > d.speed ? Math.min(want, d.speed + 30 * dt) : Math.max(want, d.speed - 12 * dt);
         } else {
           if (!d.leap) {
             const land = new T.Vector3(pp.x, 0, pp.z).sub(_w.set(d.pos.x, 0, d.pos.z)).normalize();
             const end = new T.Vector3(pp.x - land.x * 1.6, 0, pp.z - land.z * 1.6);
             end.y = Math.max(groundAt(end.x, end.z), pp.y - 1.75);
-            d.leap = { from: d.pos.clone(), to: end, t: 0, dur: (a.telegraphMs - crouchMs) / 1000 };
+            d.leap = { from: d.pos.clone(), to: end, t: 0, dur: remain };
             oneShot(d, 'Jump', { rate: 1.6, startAt: 0.25 });
           }
           d.crouch = Math.max(0, d.crouch - dt * 6);
@@ -538,7 +569,7 @@
       if (!d.playerTarget && d.pathI < d.path.length) dist = Math.max(dist, 4); // not there until the path is done
       // one attack at a time: two leaps landing together cannot both be dodged, so the others hold off
       if (d.playerTarget && b.state !== 'telegraph' && dinos.some(e => e !== d && e.alive && e.playerTarget && e.brain.state === 'telegraph')) b.cooldown = Math.max(b.cooldown, 0.35);
-      const s = { dist, pathDone: d.pathI >= d.path.length, packLoss: d.packLoss, alarmed: d.alarmed };
+      const s = { dist, pathDone: d.pathI >= d.path.length, packLoss: d.packLoss, alarmed: d.alarmed, front: !d.playerTarget || !outOfCone(d) };
       d.packLoss = false; d.alarmed = false;
       const acts = L.step(b, s, dt);
       for (const a of acts) { act(d, a); if (dinos[i] !== d) break; }

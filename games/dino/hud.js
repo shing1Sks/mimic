@@ -34,20 +34,28 @@
   }
   // seconds before impact when the prompt switches from GET READY to DODGE (a dodge lasts ~0.55 s)
   const DODGE_CALL = Math.min(0.5, ((DH.Player && DH.Player.DODGE_WINDOW) || 0.55) - 0.05);
-  const ORDER_KEYS = ['fire', 'reload', 'align', 'switch', 'dodge', 'pause'];
-  const chip = (id, cls) => { const c = CONTROLS[id]; return `<span class="kc ${cls || ''}"><b>${c.web ? sw(c.phone, c.web) : c.phone}</b><em>${c.verb}</em><small>${c.key}</small></span>`; };
+  // no switching: each stand hands you its gun
+  const ORDER_KEYS = ['fire', 'reload', 'align', 'dodge', 'pause'];
+  /** Mouse/keyboard-only text: hidden whenever a phone drives the game (body.phone, see hud.css). */
+  const km = t => `<span class="kbm">${t}</span>`;
+  const chip = (id, cls) => { const c = CONTROLS[id]; return `<span class="kc kc-${id} ${cls || ''}"><b>${c.web ? sw(c.phone, c.web) : c.phone}</b><em>${c.verb}</em><small class="kbm">${c.key}</small></span>`; };
+  /** Phone mode: only the phone's own controls are shown anywhere. */
+  function phoneMode() {
+    const ph = DH.Input && DH.Input.phone, on = !!(ph && ph.connected);
+    if (document.body.classList.contains('phone') !== on) document.body.classList.toggle('phone', on);
+  }
   const ALIGN_TIP = `${esc('Hold the phone the way you like, point it at the centre of the screen, then press CENTRE on the phone')}${sw(' (or hold VOL UP)', '')}. Do it again any time the crosshair feels off.`;
   const PAIR_TIP = 'On your phone: open Mimic, choose <b>Grip</b>, and pair over Bluetooth. The phone is read as a motion controller: just point it.';
   /** Mimic family hint bar: what the Grip (and the mouse) does on each screen. */
   const kb = (k, t) => `<span><kbd>${k}</kbd>${t}</span>`;
   const VD = sw('Vol Down', 'HOLD'), VU = sw('Vol Up', 'B');
   const HINTS = {
-    title: kb(VD + ' / click', 'start'),
-    select: kb('Point phone / mouse', 'choose') + kb(VD + ' / click', 'play mission') + kb(VU + ' / R', 'back'),
-    briefing: kb(VD + ' / click', 'begin') + kb(VU + ' / R', 'missions'),
-    pause: kb(VD + ' / click', 'choose') + kb(VU + ' / R', 'resume'),
-    results: kb(VD + ' / click', 'choose') + kb(VU + ' / R', 'missions'),
-    settings: kb('Point + ' + VD + ' / click', 'change') + kb(VU + ' / R', 'done'),
+    title: kb(VD + km(' / click'), 'start'),
+    select: kb('Point phone' + km(' / mouse'), 'choose') + kb(VD + km(' / click'), 'play mission') + kb(VU + km(' / R'), 'back'),
+    briefing: kb(VD + km(' / click'), 'begin') + kb(VU + km(' / R'), 'missions'),
+    pause: kb(VD + km(' / click'), 'choose') + kb(VU + km(' / R'), 'resume'),
+    results: kb(VD + km(' / click'), 'choose') + kb(VU + km(' / R'), 'missions'),
+    settings: kb('Point + ' + VD + km(' / click'), 'change') + kb(VU + km(' / R'), 'done'),
   };
   function family(state) {
     let b = $('mbadge'), h = $('mhint');
@@ -143,7 +151,7 @@
     on('mission:callout', d => { H.callout = { text: d.text, side: d.side, until: now() + 2.6 }; el.callout.textContent = d.text; el.callout.className = 'show ' + (d.side || ''); });
     on('dino:attack', d => {
       if (!d.dodgeable && !d.duckable) return;
-      H.prompt = { kind: 'dodge', t0: now(), dur: Math.max(0.15, (d.windowMs || 700) / 1000) };
+      H.prompt = { kind: 'dodge', atk: d.kind, t0: now(), dur: Math.max(0.15, (d.windowMs || 700) / 1000) };
     });
     on('player:dodged', () => { H.prompt = null; H.flash = { text: 'DODGED', until: now() + 0.7 }; });
 
@@ -213,6 +221,7 @@
   // ---------------------------------------------------------------- per-frame HUD
   function update(dt, c) {
     ctx = c || ctx;
+    phoneMode();
     if (H.web !== webGrip()) applyWeb();   // controller changed: swap Vol keys <-> browser buttons
     if (ctx && ctx.state !== 'play') badge();
     if (!ctx || ctx.state !== 'play') return;
@@ -263,7 +272,7 @@
       } else el.amReload.classList.remove('on');
       needReload = w.mag === 0 && !w.reloading && w.reserve > 0;
       empty = w.mag === 0 && !w.reloading && !(w.reserve > 0);
-      el.amHint.textContent = empty ? pk(CONTROLS.switch) + ': switch' : '';
+      el.amHint.textContent = '';
     } else { el.amName.textContent = 'Carbine'; el.amMag.textContent = '–'; el.amRes.textContent = ''; }
 
     // prompt: attack telegraph > result flash > reload > mission hint
@@ -276,15 +285,18 @@
         // A dodge only protects for ~0.55 s (player.js), so during a long wind-up (a charge can
         // telegraph 3 s ahead) say GET READY and only call DODGE in the last half second.
         // Ducking is held, so DUCK shows from the start.
-        const wait = H.prompt.kind === 'dodge' && left > DODGE_CALL;
-        pr = { cls: 'attack ' + H.prompt.kind + (wait ? ' wait' : ''), ctl: H.prompt.kind,
-          word: wait ? 'GET READY' : 'DODGE', frac: Math.max(0, left / H.prompt.dur) };
+        // Everything comes at you from range now: while it is still coming, the call is to shoot it
+        // down (fire); only the last half second offers the flick
+        // with a phone the call stays "stop it" to the end: phone players aim and fire (the
+        // recorded sessions never flicked); the flick still dodges if someone does it
+        const wait = H.prompt.kind === 'dodge' && (left > DODGE_CALL || document.body.classList.contains('phone'));
+        pr = { cls: 'attack ' + H.prompt.kind + (wait ? ' wait' : ''), ctl: wait ? 'fire' : H.prompt.kind,
+          word: wait ? (H.prompt.atk === 'spit' ? 'SHOOT THE SPIT' : 'STOP IT') : 'DODGE', frac: Math.max(0, left / H.prompt.dur) };
       }
     }
     if (!pr && H.flash) { if (t < H.flash.until) pr = { cls: 'flash', word: H.flash.text }; else H.flash = null; }
     if (!pr && H.needAlign && t - H.playT < 7) pr = { cls: 'hint small', ctl: 'align', word: 'POINT AT THE CENTRE, THEN ALIGN' };
     if (!pr && needReload) pr = { cls: 'hint', ctl: 'reload', word: 'RELOADING' };
-    if (!pr && empty) pr = { cls: 'hint', ctl: 'switch', word: 'SWITCH' };
     if (!pr && M && M.mode === 'stand' && w && w.id === 'marksman' && !scoped && M.t < 25) pr = { cls: 'hint small', ctl: 'scope', word: 'SCOPE' };
     if (pr) {
       el.prompt.className = 'show ' + pr.cls;
@@ -292,7 +304,8 @@
       const c = pr.ctl && CONTROLS[pr.ctl];
       const hint = pr.cls.indexOf('hint') >= 0;
       el.prPhone.textContent = c ? pk(c) : '';
-      el.prKey.innerHTML = !c ? '' : hint ? `<b>${pk(c)}</b>${esc(c.key)}` : esc(c.key);
+      const phone = document.body.classList.contains('phone');
+      el.prKey.innerHTML = !c ? '' : hint ? `<b>${pk(c)}</b>${phone ? '' : esc(c.key)}` : phone ? '' : esc(c.key);
       el.ring.style.strokeDashoffset = (238.76 * (1 - (pr.frac == null ? 1 : pr.frac))).toFixed(1);
     } else el.prompt.className = '';
 
@@ -329,7 +342,7 @@
           <div class="brand"><div class="logo">IRONFERN</div><div class="tag">Halcyon Biotech containment failure &middot; day 41</div></div>
           <p class="premise">The park fell six weeks ago. Hold your ground, reach the survivors, put down what owns the island.</p>
           <div class="ti-go">
-            <button class="cta" id="ti-start">${VD} / click to start</button>
+            <button class="cta" id="ti-start">${VD}${km(' / click')} to start</button>
             <div class="mimic-scan" data-mimic-join="grip" data-compact data-label="No app? Scan to play"></div>
           </div>
         </div>
@@ -343,7 +356,7 @@
           <div class="ctl-grid">${ORDER_KEYS.map(k => chip(k, 'lg')).join('')}</div>
           <details class="more"><summary>More</summary>
             <div class="pair">${PAIR_TIP}</div>
-            <div class="small">${ALIGN_TIP} Mouse and keyboard work too (keys shown small). To pause, keep holding ${sw('VOL UP for about 2 seconds', 'CENTRE for about a second')}, or press Esc.</div>
+            <div class="small">${ALIGN_TIP} To pause, keep holding ${sw('VOL UP for about 2 seconds', 'CENTRE for about a second')}${km(', or press Esc')}.${km(' Mouse and keyboard work too (keys shown small).')}</div>
           </details>
         </div>
       </div>`;
@@ -380,9 +393,9 @@
         <div class="br-obj"><span>Objective</span><b>${esc(m.objective)}</b></div>
         <div class="br-align"><b>First, align:</b> point at the centre of the screen, press CENTRE${sw(' (or hold VOL UP)', '')}.</div>
         <div class="br-ctl-lbl">What you will need</div>
-        <div class="ctl-row">${(m.controls || []).slice(0, 3).map(k => chip(k, 'xl')).join('')}</div>
+        <div class="ctl-row">${(m.controls || []).filter(k => CONTROLS[k] && k !== 'switch').slice(0, 3).map(k => chip(k, 'xl')).join('')}</div>
         ${m.best ? `<div class="br-best">${stars(m.best.stars)} Best ${num(m.best.score)}</div>` : ''}
-        <button class="cta" id="br-go">${VD} / click to begin</button>
+        <button class="cta" id="br-go">${VD}${km(' / click')} to begin</button>
       </div>`;
     $('briefing').onclick = () => go('play');
   }
@@ -398,11 +411,11 @@
         <label class="set wide"><span>Phone aim</span><output id="st-pv">${ps.toFixed(2)}</output>
           <input type="range" id="st-psens" min="0.5" max="2.5" step="0.05" value="${ps}"></label>
         <div class="set-note wide" id="st-pnote"></div>
-        <label class="set"><span>Mouse</span><output id="st-sv">${ms.toFixed(2)}</output>
+        <label class="set kbm"><span>Mouse</span><output id="st-sv">${ms.toFixed(2)}</output>
           <input type="range" id="st-sens" min="0.3" max="3" step="0.05" value="${ms}"></label>
         <label class="set"><span>Volume</span><output id="st-vv">${pct(vol)}</output>
           <input type="range" id="st-vol" min="0" max="1" step="0.05" value="${vol}"></label>
-        <div class="set"><span>Invert mouse Y</span><button class="tog" id="st-inv"></button></div>
+        <div class="set kbm"><span>Invert mouse Y</span><button class="tog" id="st-inv"></button></div>
         <div class="set"><span>Graphics</span><button class="tog" id="st-q"></button></div>
         <div class="set-note wide" id="st-qnote"></div>
       </div>`;
@@ -514,6 +527,7 @@
       if (prev === 'briefing') { H.qAtLoad = ctx && ctx.settings ? ctx.settings.quality : 1; H.keysT = 0; H.hurtA = 0; H.prompt = null; H.flash = null; el.feed.innerHTML = ''; H.needAlign = true; H.playT = now(); H.hurtDirs = []; }
     }
     family(state);
+    phoneMode();
     applyWeb();
     H.lastScreen = state;
   }

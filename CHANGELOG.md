@@ -38,6 +38,12 @@ Updated just before each approved release, not on every change.
   (the game never vibrated before); freezes on kills, slow-motion rex and trike deaths; a new gun and
   arm look with spring recoil; Light quality about half the GPU time. Browser phones see HOLD / B /
   CENTRE / SWITCH.
+  Round 2, from the player's session (aim swung -119 to +111 deg chasing raptors that flanked and
+  leapt into the face): phone mode shows only phone controls (no Space / click / Esc anywhere), no
+  weapon switching (each stand hands you its gun), and the threat plays out at range: raptors stalk
+  a 21-27 m ring in front and rush from there (two hits stop a rush), spitters, trike and rex attack
+  from distance and never from outside the view; ADRENALINE drops in during the last ~15 m of a
+  charge. Phone players aim and fire: the flick still dodges but is no longer taught.
 - **Gyrowing: Low pass and the skim score.** Fly under 200 ft and over 70 kt over real terrain to
   build x8 chains with ridge-skim, valley-threading and stunt bonuses; every place, including any
   searched airport, leads with a 2-minute Low pass with a best score. Speed streaks, a tighter

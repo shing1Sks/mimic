@@ -48,7 +48,8 @@ const t = {
   },
   // ------------------------------------------------ timing
   telegraphWindows() {
-    assert.strictEqual(L.attackWindowMs('raptor', 'leap', 7), 850);
+    const rn = L.attackWindowMs('raptor', 'leap', 14), rf = L.attackWindowMs('raptor', 'leap', 30);
+    assert.ok(rn > 650 && rf > rn + 1000, 'a rush from the ferns gives you time to stop it: ' + rn + ' / ' + rf);
     assert.strictEqual(L.attackWindowMs('rex', 'bite', 6), 700);
     assert.strictEqual(L.attackWindowMs('ptero', 'swoop', 40), 800 + 1500);
     const spit = L.attackWindowMs('dilo', 'spit', 26); assert.strictEqual(spit, 900 + 2000, 'a slow glob you can see coming and shoot');
@@ -62,41 +63,66 @@ const t = {
     const a = run(b, { dist: 50 }, 1.1);
     assert.ok(types(a).includes('appear')); assert.strictEqual(b.state, 'approach');
   },
-  raptorLeapsInRangeAndStrikesAfterTheWindow() {
-    const b = L.createBrain('raptor', {});
-    let a = L.step(b, { dist: 30 }, 0.05);
-    assert.strictEqual(b.state, 'approach'); assert.ok(!types(a).includes('attack'));
-    a = L.step(b, { dist: 7 }, 0.05);
+  raptorStalksFirstThenRushesFromRange() {
+    const b = L.createBrain('raptor', { rnd: () => 0.5 });
+    assert.ok(b.holdR >= 20, 'its stalking ring is out in the ferns');
+    let a = L.step(b, { dist: 24 }, 0.05);
+    assert.ok(!types(a).includes('attack'), 'it shows itself before it commits');
+    run(b, { dist: 40 }, 2);
+    assert.ok(!types(L.step(b, { dist: 40 }, 0.05)).includes('attack'), 'too far to rush');
+    assert.ok(!types(L.step(b, { dist: 6 }, 0.05)).includes('attack'), 'never starts an attack at the barrel');
+    assert.ok(!types(L.step(b, { dist: 16 }, 0.05)).includes('attack'), 'not until it is back out on its ring');
+    a = L.step(b, { dist: 24 }, 0.05);
     const atk = a.find(x => x.type === 'attack');
-    assert.ok(atk && atk.kind === 'leap' && atk.dodgeable && !atk.duckable && atk.windowMs === 850);
-    a = run(b, { dist: 3 }, 0.8);
+    assert.ok(atk && atk.kind === 'leap' && atk.dodgeable && !atk.duckable && atk.windowMs > 2000);
+    a = run(b, { dist: 3 }, atk.windowMs / 1000 - 0.1);
     assert.ok(!types(a).includes('strike'), 'not before the window');
-    a = run(b, { dist: 3 }, 0.1);
+    a = run(b, { dist: 3 }, 0.15);
     const st = a.find(x => x.type === 'strike');
     assert.ok(st && st.inReach && st.damage > 0); assert.strictEqual(b.state, 'recover');
     assert.ok(b.cooldown > 0);
   },
+  twoHitsStopARush() {
+    const b = L.createBrain('raptor', { rnd: () => 0.5 }); b.cooldown = 0;
+    L.step(b, { dist: 24 }, 0.05);
+    run(b, { dist: 18 }, 0.5);
+    assert.ok(!L.applyDamage(b, 34, 'body').stumble);
+    const r = L.applyDamage(b, 34, 'body');
+    assert.ok(r.stumble && !r.killed); assert.strictEqual(b.state, 'stumble');
+    assert.ok(!types(run(b, { dist: 3 }, 3)).includes('strike'), 'a stopped rush never lands');
+  },
   strikeOutOfReachDoesNotLand() {
-    const b = L.createBrain('raptor', {});
-    L.step(b, { dist: 7 }, 0.05);
-    const st = run(b, { dist: 20 }, 0.95).find(x => x.type === 'strike');
+    const b = L.createBrain('raptor', { rnd: () => 0.5 }); b.cooldown = 0;
+    const w = L.step(b, { dist: 24 }, 0.05).find(x => x.type === 'attack').windowMs;
+    const st = run(b, { dist: 20 }, w / 1000 + 0.1).find(x => x.type === 'strike');
     assert.ok(st && !st.inReach);
+  },
+  neverAttacksFromOutsideTheView() {
+    const b = L.createBrain('trike', { rnd: () => 0.5 });
+    assert.ok(!types(L.step(b, { dist: b.chargeDist - 1, front: false }, 0.05)).includes('attack'), 'it ran past: no charge from behind');
+    assert.ok(types(L.step(b, { dist: b.chargeDist - 1, front: true }, 0.05)).includes('attack'));
+  },
+  holdBearingKeepsTheThreatInFront() {
+    assert.ok(Math.abs(L.holdBearing(0.2, 0, 1) - 0.2) < 1e-9);
+    assert.ok(Math.abs(L.holdBearing(2.5, 0, 1) - 1) < 1e-9);
+    assert.ok(Math.abs(L.holdBearing(-3, 0, 1) + 1) < 1e-9);
+    assert.ok(Math.abs(L.holdBearing(Math.PI - 0.1, Math.PI, 0.5) - (Math.PI - 0.1)) < 1e-9, 'wraps round');
   },
   packLossMakesRaptorsHesitate() {
     const b = L.createBrain('raptor', {});
-    L.step(b, { dist: 30, packLoss: true }, 0.05);
+    L.step(b, { dist: 40, packLoss: true }, 0.05);
     assert.strictEqual(b.state, 'hesitate');
-    run(b, { dist: 30 }, 2);
+    run(b, { dist: 40 }, 2);
     assert.strictEqual(b.state, 'approach');
   },
   diloStopsAtRangeAndSpits() {
     const b = L.createBrain('dilo', { rnd: () => 0.5 });
-    assert.strictEqual(b.stopDist, 25);
-    assert.ok(!types(L.step(b, { dist: 28 }, 0.05)).includes('attack'));
-    const a = L.step(b, { dist: 24 }, 0.05);
+    assert.strictEqual(b.stopDist, 29);
+    assert.ok(!types(L.step(b, { dist: 32 }, 0.05)).includes('attack'));
+    const a = L.step(b, { dist: 28 }, 0.05);
     const atk = a.find(x => x.type === 'attack');
     assert.ok(atk && atk.kind === 'spit' && atk.dodgeable && !atk.duckable, 'the phone has no duck: every attack is dodged or shot');
-    const later = run(b, { dist: 24 }, atk.windowMs / 1000 + 0.06);
+    const later = run(b, { dist: 28 }, atk.windowMs / 1000 + 0.06);
     assert.ok(types(later).includes('spit') && types(later).includes('strike'));
     assert.ok(types(later).indexOf('spit') < types(later).indexOf('strike'));
   },
@@ -156,7 +182,7 @@ const t = {
     assert.ok(Math.abs(r.damage - 10.2) < 1e-9); assert.ok(!r.killed);
   },
   chargeIsStoppedByEnoughDamage() {
-    assert.ok(!L.chargeStopped('trike', 100)); assert.ok(L.chargeStopped('trike', 130)); assert.ok(!L.chargeStopped('raptor', 1e9));
+    assert.ok(!L.chargeStopped('trike', 100)); assert.ok(L.chargeStopped('trike', 130)); assert.ok(L.chargeStopped('raptor', 50) && !L.chargeStopped('dilo', 1e9));
     const b = L.createBrain('trike', { rnd: () => 0.5 });
     L.step(b, { dist: b.chargeDist - 1 }, 0.05);
     assert.strictEqual(b.state, 'telegraph'); assert.strictEqual(b.kind, 'charge');
@@ -186,8 +212,8 @@ const t = {
     r = L.applyDamage(b, 800 * q, 'body'); assert.ok(r.stagger && r.rage && b.rage);
   },
   bigHitStaggersAndCancelsTheLeap() {
-    const b = L.createBrain('raptor', {});
-    L.step(b, { dist: 7 }, 0.05);
+    const b = L.createBrain('raptor', { rnd: () => 0.5 }); b.cooldown = 0;
+    L.step(b, { dist: 24 }, 0.05);
     assert.strictEqual(b.state, 'telegraph');
     const r = L.applyDamage(b, 80, 'body');
     assert.ok(r.stagger); assert.strictEqual(b.state, 'stagger');

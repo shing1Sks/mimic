@@ -41,14 +41,23 @@ const t = {
   },
   adrenalineNeedsAFullMeterAndALunge() {
     const c = F.createClock();
-    const leap = { kind: 'leap', dist: 8, windowMs: 850 };
+    const leap = { kind: 'leap', dist: 20, windowMs: 2000 };
     assert.strictEqual(F.wantsAdrenaline(c, leap), false, 'meter starts half full');
     F.charge(c, 0.6);
     assert.strictEqual(c.meter, 1, 'clamped at 1');
     assert.strictEqual(F.wantsAdrenaline(c, { kind: 'spit', dist: 25, windowMs: 2000 }), false, 'a spit is not a lunge');
     assert.strictEqual(F.wantsAdrenaline(c, { kind: 'charge', dist: 80, windowMs: 4000 }), false, 'too far away');
-    assert.strictEqual(F.wantsAdrenaline(c, { kind: 'leap', dist: 8, windowMs: 850, playerTarget: false }), false, 'not coming for you');
+    assert.strictEqual(F.wantsAdrenaline(c, { kind: 'leap', dist: 20, windowMs: 2000, playerTarget: false }), false, 'not coming for you');
     assert.ok(F.wantsAdrenaline(c, leap));
+  },
+  adrenalineStartsOutThereNeverAtTheBarrel() {
+    const c = F.createClock(); c.meter = 1;
+    assert.strictEqual(F.wantsAdrenaline(c, { kind: 'bite', dist: 8, windowMs: 700 }), false, 'a bite is already in your face');
+    assert.strictEqual(F.wantsAdrenaline(c, { kind: 'leap', dist: 5, windowMs: 900 }), false, 'too close');
+    assert.ok(F.wantsAdrenaline(c, { kind: 'leap', dist: 24, windowMs: 2400 }), 'a rush from the ferns');
+    const dl = F.adrenalineDelay(2400);
+    assert.ok(Math.abs(dl - (2.4 - F.ADREN.lead)) < 1e-9, 'drops in for the last stretch of the run');
+    assert.strictEqual(F.adrenalineDelay(600), 0);
   },
   adrenalineStretchesTheStrikeAndEmptiesTheMeter() {
     const c = F.createClock(); c.meter = 1;
@@ -66,12 +75,12 @@ const t = {
     const c = F.createClock(); c.meter = 1;
     F.startAdrenaline(c, { kind: 'leap', windowMs: 850 });
     c.meter = 1;
-    assert.strictEqual(F.wantsAdrenaline(c, { kind: 'leap', dist: 6, windowMs: 850 }), false, 'already running');
+    assert.strictEqual(F.wantsAdrenaline(c, { kind: 'leap', dist: 16, windowMs: 1800 }), false, 'already running');
     run(c, F.ADREN.maxReal + 0.1, 0.02);
     assert.strictEqual(c.adren, null);
-    assert.strictEqual(F.wantsAdrenaline(c, { kind: 'leap', dist: 6, windowMs: 850 }), false, 'cooling down');
+    assert.strictEqual(F.wantsAdrenaline(c, { kind: 'leap', dist: 16, windowMs: 1800 }), false, 'cooling down');
     run(c, F.ADREN.cooldown + 0.1, 0.05);
-    assert.ok(F.wantsAdrenaline(c, { kind: 'leap', dist: 6, windowMs: 850 }));
+    assert.ok(F.wantsAdrenaline(c, { kind: 'leap', dist: 16, windowMs: 1800 }));
   },
   endingAdrenalineEasesOutQuickly() {
     const c = F.createClock(); c.meter = 1;

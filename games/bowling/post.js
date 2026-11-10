@@ -42,7 +42,8 @@
       const mat3 OUT = mat3(1.60475, -0.10208, -0.00327, -0.53108, 1.10813, -0.07276, -0.07367, -0.00605, 1.07602);
       c = IN * c; c = RRTAndODTFit(c); c = OUT * c; return clamp(c, 0.0, 1.0); }
     void main(){
-      vec3 c = texture2D(tScene, vUv).rgb + texture2D(tBloom, vUv).rgb * bloom + flashColor * flash;
+      // the strike flash lifts what is already lit and its glow (a flat wash greyed the blacks)
+      vec3 c = texture2D(tScene, vUv).rgb * (1.0 + flash * 0.55) + texture2D(tBloom, vUv).rgb * bloom * (1.0 + flash * 2.8) + flashColor * flash * 0.05;
       c = aces(c * exposure / 0.6); float l = dot(c, vec3(0.2126, 0.7152, 0.0722)); c = clamp(mix(vec3(l), c, saturation), 0.0, 1.0);
       c = pow(c, vec3(1.0 / 2.2));
       gl_FragColor = vec4(c, dot(c, vec3(0.299, 0.587, 0.114))); }`;

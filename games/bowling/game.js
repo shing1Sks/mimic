@@ -65,7 +65,7 @@
   function setQuality(low) { qual.low = low; if (W) W.setQuality(low); resize(); }
   addEventListener('resize', resize);
 
-  let W = null, arms = {}, arm = null, sparks = null, spot = null, cursor = null;
+  let W = null, arms = {}, arm = null, fx = null, spot = null, cursor = null;
 
   // ------------------------------------------------------------------ state
   const G = {
@@ -77,7 +77,7 @@
     resultT: 0, result: null, reset: null, droppedT: 0, decidedT: 0, waitPress: false, t: 0,
     stats: { balls: 0, strikes: 0, spares: 0 }, fps: { n: 0, t: 0, v: 0 }, gutterSaid: false, atArrows: null,
   };
-  window.__emb = { G, IN, K, P, get W() { return W; }, camera, renderer, settings, post };
+  window.__emb = { G, IN, K, P, get W() { return W; }, get fx() { return fx; }, camera, renderer, settings, post };
   // fit checks (UI screens): filled in once the flow functions exist
   window.__embUI = {};
 
@@ -137,7 +137,7 @@
         W.scene.add(arms[s].group);
       }
       arm = arms[settings.hand];
-      sparks = makeSparks(); W.scene.add(sparks.points);
+      fx = makeFX();
       spot = new T.Mesh(new T.RingGeometry(0.06, 0.085, 40), new T.MeshBasicMaterial({ color: new T.Color(3, 1.6, 0.7), transparent: true, opacity: 0.7, depthWrite: false, toneMapped: false }));
       spot.rotation.x = -Math.PI / 2; spot.position.y = 0.003; W.scene.add(spot);
       resize();
@@ -158,36 +158,51 @@
   }
   if (window.__threeLoadersReady) boot(); else addEventListener('three-loaders', boot, { once: true });
 
-  // ------------------------------------------------------------------ sparks (strike)
-  function makeSparks() {
-    const N = 220, pos = new Float32Array(N * 3), vel = new Float32Array(N * 3), life = new Float32Array(N);
-    const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.BufferAttribute(pos, 3));
-    const mat = new T.PointsMaterial({ color: new T.Color(4, 1.8, 0.6), size: 0.02, transparent: true, depthWrite: false, blending: T.AdditiveBlending, toneMapped: false });
-    const points = new T.Points(geo, mat); points.frustumCulled = false;
-    for (let i = 0; i < N; i++) pos[i * 3 + 1] = -10;
-    return {
-      points,
-      burst(x, y, z, n) {
-        let k = 0;
-        for (let i = 0; i < N && k < n; i++) {
-          if (life[i] > 0) continue;
-          life[i] = 0.6 + Math.random() * 0.8; k++;
-          pos[i * 3] = x + (Math.random() - 0.5) * 0.4; pos[i * 3 + 1] = y + Math.random() * 0.3; pos[i * 3 + 2] = z + (Math.random() - 0.5) * 0.4;
-          const a = Math.random() * Math.PI * 2, s = 1 + Math.random() * 3;
-          vel[i * 3] = Math.cos(a) * s * 0.6; vel[i * 3 + 1] = 1.5 + Math.random() * 3; vel[i * 3 + 2] = Math.sin(a) * s * 0.6 + 0.8;
-        }
-      },
-      update(dt) {
-        for (let i = 0; i < N; i++) {
-          if (life[i] <= 0) continue;
-          life[i] -= dt;
-          vel[i * 3 + 1] -= 6 * dt;
-          pos[i * 3] += vel[i * 3] * dt; pos[i * 3 + 1] += vel[i * 3 + 1] * dt; pos[i * 3 + 2] += vel[i * 3 + 2] * dt;
-          if (life[i] <= 0) pos[i * 3 + 1] = -10;
-        }
-        geo.attributes.position.needsUpdate = true;
-      },
+  // ------------------------------------------------------------------ impact effects (fx.js)
+  function makeFX() {
+    const F = BW.FX;
+    const o = { chips: F.particles(600, false, true), glints: F.particles(60, true, false), embers: F.particles(320, true, false), dust: F.particles(160, false, false), track: F.track() };
+    for (const k of ['chips', 'glints', 'embers', 'dust']) W.scene.add(o[k].points);
+    o.chips.mat.uniforms.maxPx.value = 9; o.glints.mat.uniforms.maxPx.value = 90; o.embers.mat.uniforms.maxPx.value = 16; o.dust.mat.uniforms.maxPx.value = 48;
+    W.scene.add(o.track.mesh); W.reflHide.push(o.track.mesh, o.dust.points, o.chips.points);   // (in the lane's soft mirror, flecks read as snow)
+    o.update = dt => {
+      const sc = innerHeight * (qual.low ? 0.7 : 1) / (2 * Math.tan(camera.fov * Math.PI / 360));
+      for (const k of ['chips', 'glints', 'embers', 'dust']) { o[k].mat.uniforms.scale.value = sc; o[k].update(dt); }
+      o.track.mat.uniforms.now.value = G.t;
     };
+    return o;
+  }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  /** A pin struck (by the ball or another pin): lacquer flecks thrown off and a short contact glint. */
+  function impactFX(e, first) {
+    const s = clamp((e.speed - 0.9) / 6, 0, 1), many = qual.low ? 0.5 : 1;
+    const n = Math.round((first ? 26 : 3 + 16 * s) * many);
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, up = rnd(0.2, 1), sp = rnd(0.5, 2.4) * (0.45 + s) * (first ? 1.3 : 1);
+      const red = Math.random() < 0.14;
+      fx.chips.spawn({ x: e.x + rnd(-0.01, 0.01), y: e.y + rnd(-0.01, 0.01), z: e.z + rnd(-0.01, 0.01),
+        vx: Math.cos(a) * sp * (1 - up * 0.5), vy: up * sp * 1.1, vz: Math.sin(a) * sp * (1 - up * 0.5) - (first ? 0.6 : 0),
+        size: rnd(0.005, first ? 0.016 : 0.012), r: red ? 1.1 : 1.45, g: red ? 0.1 : 1.38, b: red ? 0.08 : 1.25, life: rnd(0.45, 1.1), drag: 1.2 });
+    }
+    if (s > 0.12 || first) fx.glints.spawn({ x: e.x, y: e.y, z: e.z, size: first ? 0.15 : 0.04 + 0.08 * s, r: 5.5, g: 3.6, b: 2.2, a: first ? 0.9 : 0.4 + 0.4 * s, life: first ? 0.11 : 0.05 + 0.05 * s, grav: 0 });
+  }
+  /** A pin or the ball slapping the deck: a low puff of dust. */
+  function dustFX(e) {
+    const s = clamp((e.speed - 1) / 4, 0, 1), n = Math.round((2 + 5 * s) * (qual.low ? 0.5 : 1));
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, sp = rnd(0.15, 0.5) * (0.6 + s);
+      fx.dust.spawn({ x: e.x, y: 0.01, z: e.z, vx: Math.cos(a) * sp, vy: rnd(0.05, 0.25), vz: Math.sin(a) * sp, size: rnd(0.03, 0.06), r: 0.62, g: 0.52, b: 0.42, a: 0.16 + 0.14 * s, life: rnd(0.5, 0.9), drag: 2.6, grav: -0.05 });
+    }
+  }
+  /** Embers rising off the deck (a strike, a spare). */
+  function embersFX(x, y, z, n, spread) {
+    n = Math.round(n * (qual.low ? 0.5 : 1));
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * (spread || 0.45), hot = Math.random();
+      fx.embers.spawn({ x: x + Math.cos(a) * r, y: y + rnd(0, 0.25), z: z + Math.sin(a) * r * 0.7,
+        vx: Math.cos(a) * rnd(0.2, 1.1), vy: rnd(1.2, 3.6), vz: Math.sin(a) * rnd(0.2, 0.9) + 0.1,
+        size: rnd(0.01, 0.026), r: 4.5, g: 1.4 + hot * 1.4, b: 0.35 + hot * 0.4, life: rnd(0.8, 1.9), drag: 0.9, grav: 2.4 });
+    }
   }
 
   // ------------------------------------------------------------------ racks
@@ -226,8 +241,8 @@
     newRack();
     toReady(true);
     renderSheet();
-    if (n > 1) banner(curPlayer().name + ' UP', 'Frame 1', 'turn', 1.6);
-    G.lineup = null; $('lineup').classList.add('hidden');
+    if (n > 1) banner(curPlayer().name + ' UP', 'Frame 1', 'turn', 1.6, curPlayer().css);
+    G.lineup = null; $('lineup').classList.add('hidden'); $('hud').classList.remove('lu');
     if (IN.S.padOn && settings.hold == null && !Q.has('nolineup')) beginLineup();
   }
   function toTitle() {
@@ -241,6 +256,7 @@
   }
   function toReady(first) {
     G.mode = 'ready'; G.roll = null; G.pendingRel = null; G.firstHit = false; G.crashPlayed = false; G.gutterSaid = false; G.pitSaid = false; G.atArrows = null; G.result = null;
+    if (fx) fx.track.clear();
     G.sim.ball = null; G.timeScale = 1; G.slowUntil = 0; G.ff = 1; G.skipFF = false; G.endT = null; G.gutterT = null;
     K.bodyStop(IN.body);
     if (G.cyc && G.cyc.result && !G.cyc.ready) { G.cyc.ready = performance.now(); G.lastCycle = G.cyc;
@@ -379,6 +395,7 @@
     }
     const total = Math.max(need, n + (Lu.last === 'more' ? 1 : 0));
     const dots = Lu.done ? '' : Array.from({ length: total }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('');
+    $('hud').classList.toggle('lu', !Lu.done);
     el.innerHTML = `<div class="lu-step">${step}</div><div class="lu-main">${main}</div>${note ? `<div class="lu-note">${note}</div>` : ''}`
       + (dots ? `<div class="lu-dots">${dots}</div>` : '') + (Lu.done ? '' : '<button class="lu-skip" data-act="lineup-skip">Skip</button>');
   }
@@ -398,22 +415,22 @@
       G.stats.strikes++;
       SFX.strike(run); mc.rumble(0.9, 160, 3);
       post.uniforms.flash.value = 0.9;
-      sparks.burst(0, 0.5, -18.6, 120); sparks.burst(0, 1.5, -17.3, 80);
-      panelMoment('STRIKE', run);
-      setCam('celebrate', 1.1); G.celebT = 0;
+      embersFX(0, 0.1, -18.6, 110 + 40 * Math.min(run, 4)); embersFX(0, 0.95, -17.4, 50, 0.8);
+      panelMoment(run >= 2 ? label : 'STRIKE', run);
+      setCam('celebrate', 0.9); G.celebT = 0; G.celebRun = run;
     } else if (!nx.fresh && up.length === 0) {
       label = 'SPARE'; cls = 'spare'; G.stats.spares++;
       SFX.spare(); mc.rumble(0.6, 90, 1);
-      sparks.burst(0, 0.4, -18.6, 60);
+      embersFX(0, 0.1, -18.6, 70);
       panelMoment('SPARE');
-      setCam('celebrate', 1.1); G.celebT = 0;
+      setCam('celebrate', 0.9); G.celebT = 0; G.celebRun = 0;
     } else if (kind === 'gutter' && knocked === 0) {
-      label = 'GUTTER'; sub = 'it happens'; SFX.moment('gutter');
+      label = 'GUTTER'; sub = 'it happens'; cls = 'small gutter'; SFX.moment('gutter');
     } else {
       label = knocked === 0 ? 'MISS' : String(knocked);
       sub = knocked === 1 ? 'pin' : knocked > 1 ? 'pins' : '';
       if (!nx.fresh || nx.frame === 9) { /* nothing */ }
-      if (up.length && nx.fresh && isSplit(up)) { sub = 'SPLIT'; SFX.moment('split'); }
+      if (up.length && nx.fresh && isSplit(up)) { sub = 'SPLIT'; cls = 'small split'; SFX.moment('split'); }
     }
     banner(label, sub, cls, cls === 'strike' ? 2.0 : cls === 'spare' ? 1.8 : 1.3);
     if (window.MimicRec) MimicRec.event('result', { knocked, up: up.map(q => q.n), label });
@@ -474,7 +491,7 @@
     }
     if (t > 1.95) {
       sw.position.set(0, 1.4, -17.9);
-      if (R.turnOver) { G.cur = (G.cur + 1) % G.players.length; G.stance = G.stanceTo = G.stanceFrom = 0; banner(curPlayer().name + ' UP', `Frame ${SC.next(curPlayer().rolls).frame + 1} · pass the phone`, 'turn', 1.8); }
+      if (R.turnOver) { G.cur = (G.cur + 1) % G.players.length; G.stance = G.stanceTo = G.stanceFrom = 0; banner(curPlayer().name + ' UP', `Frame ${SC.next(curPlayer().rolls).frame + 1} · pass the phone`, 'turn', 1.8, curPlayer().css); }
       G.reset = null;
       toReady();
     }
@@ -487,85 +504,145 @@
   }
 
   function showEnd() {
-    const ranked = G.players.map(p => ({ p, s: SC.score(p.rolls).total })).sort((a, b) => b.s - a.s);
-    $('end-title').textContent = G.players.length > 1 ? `${ranked[0].p.name} WINS · ${ranked[0].s}` : `${ranked[0].s}`;
-    $('end-body').innerHTML = sheetHTML(true);
+    const ranked = G.players.map((p, i) => ({ p, i, s: SC.score(p.rolls).total })).sort((a, b) => b.s - a.s);
+    const solo = G.players.length === 1, top = ranked[0];
+    let best = 0; try { best = +localStorage.getItem('emberlane-best') || 0; } catch (e) { /* storage blocked */ }
+    const newBest = top.s > best && G.kind === 'game';
+    if (newBest) try { localStorage.setItem('emberlane-best', String(top.s)); } catch (e) { /* ignore */ }
+    const title = $('end-title');
+    title.innerHTML = solo ? '<b class="cnt" data-to="' + top.s + '">0</b>' : `<span style="color:${top.p.css}">${top.p.name}</span> WINS <b class="cnt" data-to="${top.s}">0</b>`;
+    $('end').querySelector('.e-kicker').textContent = newBest ? 'NEW PERSONAL BEST' : solo ? 'FINAL SCORE' : 'FINAL';
+    $('end').classList.toggle('best', newBest);
+    // per bowler: strikes, spares, open frames, longest run of strikes
+    const stats = G.players.map(p => {
+      const fr = SC.frames(p.rolls), mk = SC.marks(p.rolls).flat();
+      let run = 0, cur = 0; for (const r of p.rolls) { cur = r === 10 ? cur + 1 : 0; run = Math.max(run, cur); }
+      return { x: mk.filter(m => m === 'X').length, sp: mk.filter(m => m === '/').length, open: fr.filter((f, i) => i < 9 && !f.strike && !f.spare).length + (fr[9] && !fr[9].strike && !fr[9].spare ? 1 : 0), run };
+    });
+    const chips = (st, p) => `<div class="e-stats">${solo ? '' : `<span class="e-who" style="color:${p.css}">${p.name}</span>`}<span><b>${st.x}</b> strike${st.x === 1 ? '' : 's'}</span><span><b>${st.sp}</b> spare${st.sp === 1 ? '' : 's'}</span><span><b>${st.open}</b> open</span>${st.run >= 2 ? `<span class="hot"><b>${st.run}</b> in a row</span>` : ''}</div>`;
+    $('end-body').innerHTML = sheetHTML(true, { stagger: true, win: solo ? -1 : top.i, count: true })
+      + (solo ? chips(stats[0], G.players[0]) : ranked.map(r => chips(stats[r.i], r.p)).join(''))
+      + (!newBest && best && G.kind === 'game' ? `<div class="e-best">Best ${best}</div>` : '');
     $('hud').classList.add('hidden');
     $('end').classList.remove('hidden');
+    // the totals count up as the frames land
+    const t0 = performance.now(), els = [...$('end').querySelectorAll('.cnt')];
+    const tick = () => {
+      const k = Math.min(1, (performance.now() - t0 - 350) / 1300), e = 1 - Math.pow(1 - Math.max(0, k), 3);
+      els.forEach(el => { el.textContent = Math.round(+el.dataset.to * e); });
+      if (k < 1 && !$('end').classList.contains('hidden')) requestAnimationFrame(tick);
+    };
+    tick();
+    if (newBest || top.s >= 200) embersFX(0, 0.1, -18.6, 160);
   }
 
   // ------------------------------------------------------------------ HUD
-  function sheetHTML(all) {
+  /** The sheet: per frame the ball boxes (only the last one boxed, as on a real sheet) and the
+   * running total; frames still to come show their number, faintly; the newest mark pops in. */
+  function sheetHTML(all, opts) {
+    opts = opts || {};
     return G.players.map((p, pi) => {
       const mk = SC.marks(p.rolls), sc = SC.score(p.rolls), nx = SC.next(p.rolls);
-      let h = `<div class="row-p${pi === G.cur || all ? ' cur' : ''}"><div class="nm" style="color:${p.css}">${p.name}</div>`;
+      const isCur = pi === G.cur && !all;
+      const fresh = isCur && sheetFresh.p === pi ? sheetFresh : null;
+      let h = `<div class="row-p${pi === G.cur || all ? ' cur' : ''}${opts.win === pi ? ' win' : ''}" style="--pc:${p.css}"><div class="nm">${p.name}</div>`;
       for (let f = 0; f < 10; f++) {
         const m = mk[f] || [];
         const slots = f < 9 ? 2 : 3;
         let bl = '';
         for (let s = 0; s < slots; s++) {
           const v = f < 9 && m.length === 2 && m[0] === '' ? (s === 1 ? 'X' : '') : (m[s] || '');
-          bl += `<span class="${v === 'X' ? 'x' : v === '/' ? 's' : ''}">${v}</span>`;
+          const pop = fresh && fresh.f === f && fresh.s === (f < 9 && v === 'X' ? 1 : s) && v !== '' ? ' pop' : '';
+          bl += `<span class="${v === 'X' ? 'x' : v === '/' ? 's' : v === '-' ? 'm' : ''}${pop}">${v === '/' ? '' : v}</span>`;
         }
-        const now = pi === G.cur && !nx.over && nx.frame === f;
-        h += `<div class="fr${f === 9 ? ' ten' : ''}${now ? ' now' : ''}"><div class="bl">${bl}</div><div class="tot">${sc.cumulative[f] == null ? '' : sc.cumulative[f]}</div></div>`;
+        const now = pi === G.cur && !nx.over && nx.frame === f && !all;
+        const tot = sc.cumulative[f];
+        const delay = opts.stagger ? ` style="animation-delay:${(pi * 10 + f) * 45}ms"` : '';
+        h += `<div class="fr${f === 9 ? ' ten' : ''}${now ? ' now' : ''}${tot == null && !m.length ? ' empty' : ''}"${delay}><div class="bl">${bl}</div><div class="tot">${tot == null ? (m.length ? '' : `<i>${f + 1}</i>`) : tot}</div></div>`;
       }
-      return h + `<div class="sum">${sc.total}</div></div>`;
+      return h + `<div class="sum">${opts.count ? '<b class="cnt" data-to="' + sc.total + '">0</b>' : sc.total}</div></div>`;
     }).join('');
   }
-  function renderSheet() { $('sheet').innerHTML = sheetHTML(false); }
+  let sheetFresh = {}, sheetRolls = '';
+  function renderSheet() {
+    // which ball box is new since the last render (it pops in)
+    const p = curPlayer(), key = G.players.map(q => q.rolls.length).join(',');
+    sheetFresh = {};
+    if (p && key !== sheetRolls && p.rolls.length) {
+      const fr = SC.frames(p.rolls), f = fr.length - 1;
+      sheetFresh = { p: G.cur, f, s: fr[f].rolls.length - 1 };
+    }
+    sheetRolls = key;
+    $('sheet').innerHTML = sheetHTML(false);
+    layoutHUD();
+  }
+  /** The hint and toast sit under the sheet (out of the way of the arm and ball). */
+  function layoutHUD() {
+    const sh = $('sheet'), y = sh.offsetTop + sh.offsetHeight;
+    $('hint').style.top = (y + 12) + 'px';
+    $('toast').style.top = (y + 62) + 'px';
+  }
+  let pinsUp = null;
   function renderPins() {
     const el = $('pins');
     if (!el.children.length) {
-      for (let n = 1; n <= 10; n++) { const i = document.createElement('i'); const s = P.pinSpot(n); i.style.left = (69 + s.x / 0.1524 * 15) + 'px'; i.style.top = (88 + (s.z - L.HEAD_Z) / 0.2639 * 24) + 'px'; el.appendChild(i); }
+      for (let n = 1; n <= 10; n++) { const i = document.createElement('i'); const s = P.pinSpot(n); i.style.left = (58 + s.x / 0.1524 * 14) + 'px'; i.style.top = (86 + (s.z - L.HEAD_Z) / 0.2639 * 23) + 'px'; el.appendChild(i); }
     }
     const up = new Set((G.sim ? G.sim.pins.filter(p => P.standing(p)) : []).map(p => p.n));
-    [...el.children].forEach((i, k) => i.classList.toggle('down', !up.has(k + 1)));
+    [...el.children].forEach((i, k) => {
+      const n = k + 1, wasUp = pinsUp ? pinsUp.has(n) : true;
+      // a pin that fell on this ball flares before it goes dark
+      if (pinsUp && wasUp && !up.has(n) && G.mode === 'rolling') { i.classList.remove('fell'); void i.offsetWidth; i.classList.add('fell'); }
+      if (up.has(n)) i.classList.remove('fell');
+      i.classList.toggle('down', !up.has(n));
+    });
+    pinsUp = up;
   }
   function showBallInfo(rb) {
     const el = $('ballinfo');
     const deg = rb.heading * 180 / Math.PI, revs = Math.abs(rb.sideRoll) * 60 / (2 * Math.PI);
-    el.innerHTML = `<span class="k">SPEED</span><span class="v">${(rb.speed * 3.6).toFixed(1)} km/h <small>${(rb.speed * 2.237).toFixed(1)} mph</small></span>
+    el.innerHTML = `<div class="bi-speed"><b>${(rb.speed * 3.6).toFixed(1)}</b><span>km/h</span><small>${(rb.speed * 2.237).toFixed(1)} mph</small></div>
       <span class="k">ANGLE</span><span class="v">${Math.abs(deg).toFixed(1)}° ${Math.abs(deg) < 0.05 ? '' : deg > 0 ? 'left' : 'right'}</span>
       <span class="k">SIDE ROLL</span><span class="v">${Math.round(revs)} rpm <small>${rb.twist > 0.5 ? 'hook left' : rb.twist < -0.5 ? 'hook right' : ''}</small></span>
       <span class="k">RELEASE</span><span class="v">board ${Math.round(boardAt(rb.pos.x))} <small>${(rb.pos.y - P.BALL.R).toFixed(2)} m up</small></span>
-      <span class="k">AT ARROWS</span><span class="v" id="bi-arrows">…</span>`;
-    el.classList.remove('hidden');
+      <span class="k">AT ARROWS</span><span class="v wait" id="bi-arrows">&middot; &middot; &middot;</span>`;
+    el.classList.remove('hidden', 'in'); void el.offsetWidth; el.classList.add('in');
   }
   let bannerT = 0, toastT = 0;
-  function banner(main, sub, cls, dur) {
+  function banner(main, sub, cls, dur, color) {
     const b = $('banner');
     b.className = ''; void b.offsetWidth;
     b.className = 'show ' + (cls || '');
+    b.style.setProperty('--pc', color || '#ffb36b');
     b.querySelector('.b-main').textContent = main; b.querySelector('.b-sub').textContent = sub || '';
     bannerT = dur || 1.4;
   }
   function toast(html, dur) { const t = $('toast'); t.innerHTML = html; t.classList.add('show'); toastT = dur || 2; }
   function hint(html) { $('hint').innerHTML = html; }
 
-  function panelMoment(word, run) {
-    const t0 = performance.now();
-    let fr = 0;
-    const draw = () => {
-      const k = (performance.now() - t0) / 1000;
-      if (k > 3.2) { W.panel(null); return; }
-      if (fr++ % 3) { requestAnimationFrame(draw); return; }   // 20 Hz is plenty for a distant panel
-      W.panel((g, w, h) => {
-        g.fillStyle = `rgba(10,6,14,${Math.min(0.75, k * 3)})`; g.fillRect(0, 0, w, h);
-        const s = 1 + 0.25 * Math.exp(-k * 5) * Math.sin(k * 30);
-        g.save(); g.translate(w / 2, h * 0.52); g.scale(s, s);
-        g.font = `900 ${Math.round(h * 0.3)}px "Segoe UI", system-ui, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
-        const grd = g.createLinearGradient(0, -h * 0.15, 0, h * 0.15); grd.addColorStop(0, '#fff6e0'); grd.addColorStop(1, '#ff7a2f');
-        g.shadowColor = 'rgba(255,120,40,0.9)'; g.shadowBlur = 30;
-        g.fillStyle = grd; g.fillText(word, 0, 0);
-        g.restore();
-        // rays
-        g.strokeStyle = `rgba(255,170,90,${0.5 * Math.max(0, 1 - k / 2)})`; g.lineWidth = 3;
-        for (let i = 0; i < 18; i++) { const a = i / 18 * Math.PI * 2 + k; g.beginPath(); g.moveTo(w / 2 + Math.cos(a) * h * 0.3, h * 0.52 + Math.sin(a) * h * 0.3); g.lineTo(w / 2 + Math.cos(a) * h * (0.4 + k * 0.4), h * 0.52 + Math.sin(a) * h * (0.4 + k * 0.4)); g.stroke(); }
-      });
-      requestAnimationFrame(draw);
-    };
-    draw();
+  function panelMoment(word, run) { G.panelFx = { word, run: run || 0, k: 0, fr: 0 }; }
+  /** Our masking panel playing the call (strike, spare): redrawn at 20 Hz from the game clock. */
+  function updatePanel(dt) {
+    const M = G.panelFx;
+    if (!M) return;
+    M.k += dt;
+    const k = M.k, word = M.word;
+    if (k > 3.2) { W.panel(null); G.panelFx = null; return; }
+    if (M.fr++ % 3) return;   // 20 Hz is plenty for a distant panel
+    W.panel((g, w, h) => {
+      g.fillStyle = `rgba(10,6,14,${Math.min(0.75, k * 3)})`; g.fillRect(0, 0, w, h);
+      const s = 1 + 0.25 * Math.exp(-k * 5) * Math.sin(k * 30);
+      g.save(); g.translate(w / 2, h * 0.52); g.scale(s, s);
+      g.font = `900 ${Math.round(h * 0.3)}px "Segoe UI", system-ui, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+      const fit = Math.min(1, w * 0.84 / g.measureText(word).width); g.scale(fit, fit);
+      const grd = g.createLinearGradient(0, -h * 0.15, 0, h * 0.15); grd.addColorStop(0, '#fff6e0'); grd.addColorStop(1, '#ff7a2f');
+      g.shadowColor = 'rgba(255,120,40,0.9)'; g.shadowBlur = 30;
+      g.fillStyle = grd; g.fillText(word, 0, 0);
+      g.restore();
+      // rays
+      g.strokeStyle = `rgba(255,170,90,${0.5 * Math.max(0, 1 - k / 2)})`; g.lineWidth = 3;
+      for (let i = 0; i < 18; i++) { const a = i / 18 * Math.PI * 2 + k; g.beginPath(); g.moveTo(w / 2 + Math.cos(a) * h * 0.3, h * 0.52 + Math.sin(a) * h * 0.3); g.lineTo(w / 2 + Math.cos(a) * h * (0.4 + k * 0.4), h * 0.52 + Math.sin(a) * h * (0.4 + k * 0.4)); g.stroke(); }
+    });
   }
 
   // ------------------------------------------------------------------ menus
@@ -657,9 +734,11 @@
     const out = { pos: new T.Vector3(), look: new T.Vector3(), fov: CAM.FOV };
     const b = G.sim && G.sim.ball;
     if (G.camMode === 'title') {
-      const t = G.t * 0.06;
-      out.pos.set(-1.6 + Math.sin(t) * 1.2, 1.05 + Math.sin(t * 1.3) * 0.15, -11.5 + Math.sin(t * 0.7) * 2.5);
-      out.look.set(0.3, 0.35, -18.6); out.fov = 40;
+      // low down the lane, drifting; the lit rack held right of the menu (the look point leads it)
+      const t = G.t * 0.07;
+      out.pos.set(-0.75 + Math.sin(t) * 0.45, 0.62 + Math.sin(t * 1.3) * 0.08, -13.4 + Math.sin(t * 0.7) * 0.9);
+      const dx = -out.pos.x, dz = -18.55 - out.pos.z, k = titleLead();
+      out.look.set(dz * k, 0.34, -18.55 - dx * k); out.fov = 38;
     } else if (G.camMode === 'bowler') {
       const sx = G.stance, bo = G.bodyOff;
       out.pos.set(sx + side() * 0.06 + bo.x, CAM.Y + bo.y * 0.6, BODY.SHOULDER_Z + BODY.ROOM + CAM.BACK + bo.z);
@@ -671,11 +750,16 @@
       out.look.set(b.x[0] * 0.5, 0.12, z - 6);
       out.fov = 46;
     } else if (G.camMode === 'celebrate') {
-      // pull back down the lane to the masking display, drifting in
-      const k = Math.min(1, (G.celebT || 0) / 2.4);
-      out.pos.set(0.35 - k * 0.2, 0.75 + k * 0.1, -12.6 + k * 1.2);
-      out.look.set(0, 1.25, -17.4);
-      out.fov = 44;
+      // an arc low around the swept deck, then a crane up to the masking panel playing the call;
+      // a turkey or better swings wider, from the far side
+      const t = G.celebT || 0, big = (G.celebRun || 0) >= 3;
+      // (the camera backs out before it tilts up, or the masking unit's underside fills the frame)
+      const a = smooth(t / (big ? 1.5 : 1.15)), c = smooth((t - (big ? 1.2 : 0.9)) / 0.9), u = smooth((t - (big ? 1.5 : 1.2)) / 0.85);
+      const th = big ? lerp(-0.34, 0.2, a) : lerp(0.24, -0.04, a), R = lerp(2.25, 1.95, a);
+      const ax = Math.sin(th) * R, az = -18.6 + Math.cos(th) * R, ay = lerp(0.3, big ? 0.62 : 0.5, a);
+      out.pos.set(lerp(ax, 0, c), lerp(ay, 0.92, c), lerp(az, -13.9, c));
+      out.look.set(0, lerp(0.22, 1.22, u), lerp(-18.6, -17.6, u));
+      out.fov = lerp(big ? 50 : 46, 44, u);
     } else if (G.camMode === 'deck') {
       const bx = b ? clamp(b.x[0], -0.4, 0.4) : 0;
       // low, just off the lane's right edge, easing in toward the deck as the pins fly
@@ -687,6 +771,18 @@
       out.pos.copy(camera.position); camera.getWorldDirection(tmpV); out.look.copy(camera.position).add(tmpV);
     }
     return out;
+  }
+  /** How far the title camera looks left of the rack so the rack sits centred in the screen space
+   * right of the how-to card (tan of the angle; measured once per window size). */
+  let leadW = 0, leadK = 0.42;
+  function titleLead() {
+    if (leadW === innerWidth * 10000 + innerHeight) return leadK;
+    const card = document.querySelector('#title .t-right'), r = card && card.getBoundingClientRect();
+    if (!r || !r.width) { if (r) { leadW = innerWidth * 10000 + innerHeight; leadK = 0.3; } return leadK; }
+    const target = (r.right / innerWidth + 1) / 2, ndc = 2 * target - 1;
+    leadW = innerWidth * 10000 + innerHeight;
+    leadK = ndc * Math.tan(38 * Math.PI / 360) * innerWidth / innerHeight;
+    return leadK;
   }
   function updateCamera(dt) {
     const tg = camTarget(dt);
@@ -775,6 +871,8 @@
         mc.rumble(clamp(sp / 9, 0.3, 0.95), 110, 0);
         setCam('deck', 0.25);
       }
+      if (e.kind === 'ball-pin' || e.kind === 'pin-pin') impactFX(e, e.kind === 'ball-pin' && !G.crashPlayed);
+      else if (e.kind === 'floor' && e.speed > 1.1 && e.z < L.HEAD_Z + 1.2) dustFX(e);
       if (e.kind === 'floor' && who === 'ball' && e.speed < 0.6) continue;
       // the big crash is the ball's first hit; later ball-pin contacts are knocks
       const kind = e.kind === 'ball-pin' && G.crashPlayed ? 'pin-pin' : e.kind;
@@ -857,7 +955,7 @@
         syncPins();
       }
       if (G.mode === 'rolling') { updateRolling(dt, rdt); if (G.lineup && G.mode === 'rolling' && G.rollT > 1.3) lineupNext(); }
-      else if (G.mode === 'result') { G.resultT += rdt; if (G.resultT > (G.result && G.result.celebrate ? 1.8 : 0.35)) startReset(); }
+      else if (G.mode === 'result') { G.resultT += rdt; if (G.resultT > (G.result && G.result.celebrate ? (G.result.strike ? (G.celebRun >= 3 ? 2.5 : 2.15) : 1.9) : 0.35)) startReset(); }
       else if (G.mode === 'reset') updateReset(rdt * (G.reset && G.reset.fast ? 2.5 : 1));
       else if (G.mode === 'dropped') { G.resultT += rdt; if (G.resultT > 1.1) { G.sim.ball = null; toReady(); } }
       // the ball in play
@@ -867,10 +965,12 @@
         W.ball.quaternion.set(b.q[0], b.q[1], b.q[2], b.q[3]);
         W.ball.visible = b.gone !== 'back';
         SFX.roll(Math.hypot(b.v[0], b.v[2]), b.x[0], b.x[1], b.x[2], !b.gone && b.x[1] < P.BALL.R + 0.012);
+        if (!b.gone && !b.gutter && b.x[1] < P.BALL.R + 0.01 && b.x[2] < -0.3 && b.x[2] > L.HEAD_Z - 0.3 && Math.abs(b.x[0]) < L.HALF) fx.track.add(b.x[0], b.x[2], G.t);
       } else SFX.roll(0, 0, 0, 0, false);
       if (G.mode === 'title') { W.ball.visible = false; }
       updateArm(rdt);
-      sparks.update(dt);
+      fx.update(dt);
+      updatePanel(rdt);
       if (G.mode === 'deck') G.deckT += dt;
       G.deckT = (G.deckT || 0) + dt; G.celebT = (G.celebT || 0) + rdt;
       updateCamera(rdt);
@@ -927,7 +1027,7 @@
     if (!b) return;
     if (G.camMode === 'bowler' && G.rollT > 0.45 && b.x[2] < -1.5) { setCam('follow', 0.7); G.deckT = 0; }
     if (G.camMode === 'follow' && b.x[2] < -14.2 && !G.firstHit && !(b.gutter && !b.hitPins)) { setCam('deck', 0.8); G.deckT = 0; }
-    if (G.atArrows === null && b.x[2] < -4.57) { G.atArrows = boardAt(b.x[0]); const el = $('bi-arrows'); if (el) el.textContent = 'board ' + Math.round(G.atArrows); }
+    if (G.atArrows === null && b.x[2] < -4.57) { G.atArrows = boardAt(b.x[0]); const el = $('bi-arrows'); if (el) { el.textContent = 'board ' + Math.round(G.atArrows); el.classList.add('got'); } }
     if (b.gutter && !G.gutterSaid) { G.gutterSaid = true; G.gutterT = G.t; SFX.gutter(b.x[0], b.x[1], b.x[2]); }
     if (G.atPins === null && b.x[2] < L.HEAD_Z + 0.25) G.atPins = { x: b.x[0], board: boardAt(b.x[0]), t: G.rollT };
     const C = G.cyc;

@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cadence Cut</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="vignette"></div>
+<div id="flashlayer"></div>
+<div id="walllayer"></div>
+
+<div id="hud" class="hidden">
+  <div class="hud-top">
+    <div class="hud-song"><span id="hudSong"></span><em id="hudDiff"></em></div>
+    <div class="progress"><i id="progress"></i></div>
+    <div class="hud-mods" id="hudMods"></div>
+  </div>
+  <div class="hud-left">
+    <div class="score" id="score">0</div>
+    <div class="mult"><span id="mult">x1</span><div class="multbar"><i id="multfill"></i></div></div>
+    <div class="surge" id="surge"><span>surge</span><div class="surgebar"><i id="surgefill"></i></div></div>
+  </div>
+  <div class="hud-right">
+    <div class="combo" id="combo">0</div>
+    <div class="combo-label">combo</div>
+  </div>
+  <div class="hud-bottom">
+    <div class="energy-label">charge</div>
+    <div class="energy"><i id="energy"></i></div>
+  </div>
+</div>
+<div id="pops"></div>
+<div id="banner"></div>
+<div id="chip" class="mimic-badge"><b>Mimic</b><i></i><span></span></div>
+<div id="mhint" class="mimic-hint hidden"></div>
+<div id="toast"></div>
+
+<section id="splash" class="screen">
+  <div class="brand big">
+    <div class="logo"><span class="l1">CADENCE</span><span class="slash"></span><span class="l2">CUT</span></div>
+    <div class="tag">slash to the beat &middot; a Mimic motion game</div>
+  </div>
+  <div class="press" id="splashPress">Click or press any key to begin</div>
+  <div class="small pair">Sound on. Open Mimic, pick <b>Wand</b> or <b>Grip</b>, pair over Bluetooth. Hold it like a hilt.</div>
+  <div class="mimic-scan" data-mimic-join="grip" data-compact data-label="No app? Scan to play"></div>
+</section>
+
+<section id="menu" class="screen hidden">
+  <div class="brand compact">
+    <div class="logo"><span class="l1">CADENCE</span><span class="slash"></span><span class="l2">CUT</span></div>
+  </div>
+  <div class="tabs">
+    <button class="tab nav" data-tab="campaign">Campaign <b id="starTotal"></b></button>
+    <button class="tab nav" data-tab="free">Free play</button>
+  </div>
+  <div class="menu-body">
+    <div class="songs" id="songs"></div>
+    <div class="side panel">
+      <div class="notice" id="notice" hidden>No phone yet. Open Mimic, pick <b>Wand</b> or <b>Grip</b>, pair over Bluetooth. Mouse is for testing.</div>
+      <div id="detail"></div>
+      <div class="label">Modifiers</div>
+      <div class="mods" id="mods"></div>
+      <button class="nav primary" id="play" data-act="play">Play</button>
+      <details class="help"><summary>Controls</summary><div id="help"></div></details>
+      <div class="side-foot" data-fit-skip><button class="rumble" id="rumble" data-act="rumble"></button><button class="nav setlink" data-act="settings">Settings</button></div>
+    </div>
+  </div>
+</section>
+
+<section id="calib" class="screen hidden">
+  <div class="panel calib-panel">
+    <div class="calib-song" id="calibSong"></div>
+    <div class="calib-intro" id="calibIntro"></div>
+    <div class="phone-art"><div class="screenline"></div><div class="beam"></div></div>
+    <h2 id="calibTitle">Aim at the screen</h2>
+    <p id="calibText"></p>
+    <div class="legend" id="legend"></div>
+    <div class="credit" id="calibCredit"></div>
+  </div>
+</section>
+
+<section id="pause" class="screen hidden">
+  <div class="panel list-panel">
+    <h2>Paused</h2>
+    <button class="nav" data-act="resume">Resume</button>
+    <button class="nav" data-act="restart">Restart</button>
+    <button class="nav" data-act="settings">Settings</button>
+    <button class="nav" data-act="quit">Quit to menu</button>
+    <p class="small" id="pauseTip"></p>
+  </div>
+</section>
+
+<section id="settings" class="screen hidden">
+  <div class="panel list-panel settings-panel">
+    <h2>Settings</h2>
+    <div class="set-row"><span>Playing hand</span><button class="nav step" data-act="set:hand:-1">&#9664;</button><b id="set-hand"></b><button class="nav step" data-act="set:hand:1">&#9654;</button></div>
+    <div class="set-row"><span>Music</span><button class="nav step" data-act="set:music:-1">&#9664;</button><b id="set-music"></b><button class="nav step" data-act="set:music:1">&#9654;</button></div>
+    <div class="set-row"><span>Effects</span><button class="nav step" data-act="set:sfx:-1">&#9664;</button><b id="set-sfx"></b><button class="nav step" data-act="set:sfx:1">&#9654;</button></div>
+    <div class="set-row"><span>Flashes &amp; shake</span><button class="nav step" data-act="set:fx:-1">&#9664;</button><b id="set-fx"></b><button class="nav step" data-act="set:fx:1">&#9654;</button></div>
+    <div class="set-row"><span>Graphics</span><button class="nav step" data-act="set:gfx:-1">&#9664;</button><b id="set-gfx"></b><button class="nav step" data-act="set:gfx:1">&#9654;</button></div>
+    <p class="small set-note" id="set-note"></p>
+    <button class="nav" data-act="setback">Back</button>
+  </div>
+</section>
+
+<section id="results" class="screen hidden">
+  <div class="panel results-panel">
+    <div class="res-head">
+      <div class="grade" id="resGrade">A</div>
+      <div class="res-headtext">
+        <div class="res-title" id="resTitle"></div>
+        <div class="res-sub" id="resSub"></div>
+        <div class="res-stars" id="resStars"></div>
+      </div>
+    </div>
+    <div class="res-score"><span id="resScore">0</span><em id="resBest"></em></div>
+    <div class="unlock" id="resUnlock"></div>
+    <div class="stats">
+      <div><b id="resAcc">0%</b><span>accuracy</span></div>
+      <div><b id="resCombo">0</b><span>max combo</span></div>
+      <div><b id="resCuts">0</b><span>clean cuts</span></div>
+      <div><b id="resPower">0%</b><span>swing power</span></div>
+      <div><b id="resBad">0</b><span>wrong way</span></div>
+      <div><b id="resMiss">0</b><span>missed</span></div>
+    </div>
+    <div class="stats extra" id="resExtra"></div>
+    <div class="res-actions">
+      <button class="nav primary" data-act="next" id="resNext">Next stage</button>
+      <button class="nav" data-act="retry">Play again</button>
+      <button class="nav" data-act="menu">Menu</button>
+    </div>
+  </div>
+</section>
+
+<div id="cursor"></div>
+
+<script src="../lib/three.min.js"></script>
+<script src="../lib/mimic.js"></script>
+<script src="../lib/mimic-link.js"></script>
+<script src="../lib/recorder.js"></script>
+<script src="audio.js"></script>
+<script src="tracks.js"></script>
+<script src="songs.js"></script>
+<script src="logic.js"></script>
+<script src="sweep.js"></script>
+<script src="scene.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

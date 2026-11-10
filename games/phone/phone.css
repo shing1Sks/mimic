@@ -12,7 +12,7 @@ body[data-mode="pad"]  { --a: #A68BFF; }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); overflow: hidden;
-  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-user-select: none; user-select: none;
+  font: 15px/1.45 Roboto, -apple-system, "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif; -webkit-user-select: none; user-select: none;
   -webkit-touch-callout: none; overscroll-behavior: none; }
 button { font: inherit; color: inherit; }
 .hidden { display: none !important; }

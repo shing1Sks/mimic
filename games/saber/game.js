@@ -398,7 +398,7 @@
         const prev = g.song.sections[g.secIdx];
         g.secIdx = si;
         if (prev && !sec.rest && t > 2) {
-          if (sec.intensity === 3 && prev.intensity < 3) { banner('Drop', false); W.shockwave(new T.Vector3(0, 1.4, -8), 9, g.song.accent); dropFlash = 1; }
+          if (sec.intensity === 3 && prev.intensity < 3) { banner('Drop', false); W.shockwave(new T.Vector3(0, 1.4, -12), 7, g.song.accent); dropFlash = 1; }
           else if (sec.intensity === 0 && prev.intensity >= 2) banner('Breathe', false);
           if (sec.intensity > prev.intensity) W.sectionBurst();
         }
@@ -695,7 +695,7 @@
     banner('Surge  x2', false);
     synth.sfxSurge();
     mc.rumble(0.9, 200, 2);
-    W.shockwave(new T.Vector3(0, 1.3, LAY.HIT_Z), 6, 0xffd27a);
+    W.shockwave(new T.Vector3(0, 1.3, LAY.HIT_Z - 3), 4.5, 0xffd27a);
     hitFlash = 1;
   }
 
@@ -805,7 +805,7 @@
   const goldCol = new T.Color('#ffd27a'), tmpCol = new T.Color();
   function sparks(pos, push, q, bad, tint) {
     const Q = W.quality;
-    const n = bad ? 22 : 34 + Math.round(q * 26);
+    const n = Math.round((bad ? 22 : 34 + q * 26) * (Q > 0 ? 0.55 : 1)); // streaks carry the burst when on
     const pv = new T.Vector3(), vv = new T.Vector3();
     if (tint) tmpCol.set(tint);
     const surge = game && game.surgeT > 0;
@@ -828,7 +828,7 @@
         W.streak(pos, vv, c, 0.25 + Math.random() * 0.35, 3.2);
       }
     }
-    W.flash(pos, bad ? 1.0 : 1.4 + q * 0.8, bad ? 0xff5050 : 0xffe3c4);
+    W.flash(pos, bad ? 0.8 : 0.9 + q * 0.6, bad ? 0xff5050 : 0xffe3c4);
   }
 
   const popsEl = $('pops');

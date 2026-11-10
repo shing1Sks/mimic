@@ -41,6 +41,18 @@
     race: { top: '#020804', mid: '#0a1a10', hor: '#305c18', halo: '#9dff6a', line: '#45b456', rail: '#e8ffd0', fog: '#050f08', py: ['#9dff6a', '#3fe0c5'], sides: 6, rot: 0, twist: 0.05, dust: '#d4ffb8' },
     waves: { top: '#030108', mid: '#120626', hor: '#3c1462', halo: '#b07cff', line: '#6b45e6', rail: '#d9c2ff', fog: '#08040f', py: ['#b07cff', '#ff4fa0'], sides: 32, rot: 0, twist: 0, dust: '#cdb8ff' },
   };
+  // Side scenery per theme. kind: geometry; x/w/h/y: ranges [min, max] in metres; float: bobs in the air;
+  // glow: drawn as light (thin outlines) instead of a top-lit silhouette; beacon: light on top that pulses on the beat.
+  const SCENERY = {
+    lantern: { kind: 'ridge', n: 26, x: [16, 70], w: [7, 18], h: [2.5, 8], beacon: 'float' },
+    rush: { kind: 'tower', n: 34, x: [12, 46], w: [1.6, 4.2], h: [5, 24], beacon: 'top' },
+    copper: { kind: 'arch', n: 18, x: [9.5, 13], w: [3.5, 5.5], glow: true, beacon: 'none' },
+    ion: { kind: 'shard', n: 28, x: [9, 34], w: [0.8, 2.6], y: [2.5, 10], float: true, beacon: 'none' },
+    evasion: { kind: 'spire', n: 32, x: [11, 50], w: [0.9, 2.4], h: [6, 26], beacon: 'top' },
+    thrust: { kind: 'frame', n: 20, x: [8, 20], w: [2.2, 4.5], glow: true, beacon: 'centre' },
+    race: { kind: 'mast', n: 26, x: [8.5, 22], w: [0.16, 0.24], h: [6, 15], glow: true, beacon: 'top' },
+    waves: { kind: 'ring', n: 24, x: [9, 30], w: [1.4, 3.8], y: [3, 10], float: true, glow: true, beacon: 'none' },
+  };
   const DEFAULT_THEME = { top: '#050310', mid: '#1a0829', hor: '#5c1a38', halo: '#7340ff', line: '#6b38f2', rail: '#73f2d9', fog: '#0c0616', py: ['#7a4dff', '#ff6a3d'], sides: 8, rot: Math.PI / 8, twist: 0, dust: '#b9a6ff' };
 
   function canvasTex(size, draw) {
@@ -102,26 +114,27 @@
     const C = h => new T.Color(h);
     const skyMat = new T.ShaderMaterial({
       uniforms: {
-        uPulse: { value: 0 }, uTime: { value: 0 }, uAccent: { value: C('#ff6a3d') }, uHeat: { value: 0 }, uBreak: { value: 0 },
+        uPulse: { value: 0 }, uTime: { value: 0 }, uAccent: { value: C('#ff6a3d') }, uHeat: { value: 0 }, uBreak: { value: 0 }, uHard: { value: 0 },
         uTop: { value: C(DEFAULT_THEME.top) }, uMid: { value: C(DEFAULT_THEME.mid) }, uHor: { value: C(DEFAULT_THEME.hor) }, uHalo: { value: C(DEFAULT_THEME.halo) },
       },
       vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
       fragmentShader: [
-        'uniform float uPulse; uniform float uTime; uniform vec3 uAccent; uniform float uHeat; uniform float uBreak;',
+        'uniform float uPulse; uniform float uTime; uniform vec3 uAccent; uniform float uHeat; uniform float uBreak; uniform float uHard;',
         'uniform vec3 uTop; uniform vec3 uMid; uniform vec3 uHor; uniform vec3 uHalo; varying vec3 vD;',
         'float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }',
         'void main(){',
         '  vec3 d = normalize(vD); float y = d.y;',
         '  vec3 c = mix(uMid, uTop, smoothstep(0.02, 0.55, y));',
         '  c = mix(c, uHor * (1.0 + 0.35 * uHeat), exp(-abs(y - 0.01) * 18.0) * 0.9);',
-        '  c += uAccent * exp(-abs(y - 0.005) * 60.0) * (0.35 + 0.25 * uPulse + 0.2 * uHeat);',
-        // giant halo ahead: breathes on the kick, a second ring opens as the combo heats up
+        '  c += uAccent * exp(-abs(y - 0.005) * 60.0) * (0.35 + (0.25 + 0.6 * uHard) * uPulse + 0.2 * uHeat);',
+        // hard: a band of the accent climbs the sky on every beat
+        '  c += uAccent * uHard * 0.22 * uPulse * exp(-abs(y - 0.06 - 0.1 * (1.0 - uPulse)) * 14.0);',
+        // giant halo ahead: the one big shape in the sky; breathes on the kick
         '  vec3 ah = normalize(vec3(0.0, 0.16, -1.0)); float a = acos(clamp(dot(d, ah), -1.0, 1.0));',
         '  float r0 = 0.30 + 0.012 * uPulse;',
         '  float ring = exp(-pow((a - r0) * 38.0, 2.0)) + 0.35 * exp(-pow((a - r0 - 0.06) * 70.0, 2.0));',
-        '  ring += uHeat * 0.3 * exp(-pow((a - 0.44 - 0.02 * uPulse) * 90.0, 2.0));',
         // section change: a ring of light bursts out of the halo
-        '  ring += uBreak * 0.9 * exp(-pow((a - 0.30 - (1.0 - uBreak) * 0.9) * 30.0, 2.0));',
+        '  ring += uBreak * 0.5 * exp(-pow((a - 0.30 - (1.0 - uBreak) * 0.7) * 34.0, 2.0)) * (1.0 - smoothstep(0.6, 1.0, a));',
         '  c += mix(uHalo, uAccent, 0.3) * ring * (0.55 + 0.6 * uPulse) * smoothstep(-0.02, 0.04, y);',
         '  c += uHalo * 0.5 * exp(-a * 3.0) * (0.25 + 0.15 * uPulse);',
         // stars
@@ -138,13 +151,13 @@
     // ---------- floor ----------
     const floorMat = new T.ShaderMaterial({
       uniforms: {
-        uScroll: { value: 0 }, uPulse: { value: 0 }, uAccent: { value: C('#ff6a3d') }, uRip: { value: 1 }, uHit: { value: 0 }, uHeat: { value: 0 },
+        uScroll: { value: 0 }, uPulse: { value: 0 }, uAccent: { value: C('#ff6a3d') }, uRip: { value: 1 }, uHit: { value: 0 }, uHeat: { value: 0 }, uHard: { value: 0 }, uBeatFr: { value: 0 },
         uLine: { value: C(DEFAULT_THEME.line) }, uRail: { value: C(DEFAULT_THEME.rail) }, uFog: { value: C(DEFAULT_THEME.fog) }, uHitZ: { value: LAYOUT.HIT_Z },
       },
       extensions: { derivatives: true },
       vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
       fragmentShader: [
-        'uniform float uScroll; uniform float uPulse; uniform vec3 uAccent; uniform float uRip; uniform float uHit; uniform float uHeat;',
+        'uniform float uScroll; uniform float uPulse; uniform vec3 uAccent; uniform float uRip; uniform float uHit; uniform float uHeat; uniform float uHard; uniform float uBeatFr;',
         'uniform vec3 uLine; uniform vec3 uRail; uniform vec3 uFog; uniform float uHitZ; varying vec3 vW;',
         'float grid(vec2 p){ vec2 w = fwidth(p); vec2 g = abs(fract(p - 0.5) - 0.5) / w; return (1.0 - min(min(g.x, g.y), 1.0)) * (1.0 - smoothstep(0.12, 0.5, max(w.x, w.y))); }',
         'void main(){',
@@ -166,6 +179,9 @@
         '  float rd = length(vec2(vW.x * 0.8, vW.z - uHitZ));',
         '  float rip = exp(-pow((rd - uRip * 26.0) * 0.9, 2.0)) * (1.0 - uRip) * (1.0 - uRip);',
         '  c += mix(uLine, uRail, 0.5) * rip * 0.55;',
+        // hard: a bar of light rushes down the corridor to the player on every beat
+        '  float bd = (uHitZ - vW.z) - (1.0 - uBeatFr) * 60.0;',
+        '  c += mix(uRail, uAccent, 0.5) * uHard * 0.45 * exp(-bd * bd * 0.08) * (1.0 - 0.6 * run);',
         // hit line: where blocks are cut; flares on each cut
         '  float hz = exp(-pow((vW.z - uHitZ) * 7.0, 2.0)) * run;',
         '  c += uRail * hz * (0.07 + 0.55 * uHit);',
@@ -219,21 +235,124 @@
     // ---------- laser fans (high quality) ----------
     // long beams from towers beside the corridor that sweep on the music; brightest in the drops
     const LASER_N = 8;
-    const laserGeo = new T.BoxGeometry(0.16, 0.16, 70, 1, 1, 6); laserGeo.translate(0, 0, -35);
-    {
-      const pos = laserGeo.attributes.position, cols = new Float32Array(pos.count * 3);
-      for (let i = 0; i < pos.count; i++) { const v = Math.pow(1 - Math.min(1, -pos.getZ(i) / 70), 1.5); cols.set([v, v, v], i * 3); }
-      laserGeo.setAttribute('color', new T.BufferAttribute(cols, 3));
-    }
+    const mkLaserGeo = (w, pow) => {
+      const g = new T.BoxGeometry(w, w, 70, 1, 1, 6); g.translate(0, 0, -35);
+      const pos = g.attributes.position, cols = new Float32Array(pos.count * 3);
+      for (let i = 0; i < pos.count; i++) { const v = Math.pow(1 - Math.min(1, -pos.getZ(i) / 70), pow); cols.set([v, v, v], i * 3); }
+      g.setAttribute('color', new T.BufferAttribute(cols, 3));
+      return g;
+    };
+    // a hot core plus a wide soft sheath, so a beam still reads as a beam a few pixels wide
+    const laserGeo = mkLaserGeo(0.26, 1.3), laserHaloGeo = mkLaserGeo(1.3, 2.2);
     const lasers = [];
     for (let i = 0; i < LASER_N; i++) {
       const m = new T.MeshBasicMaterial({ color: ringCol.clone(), vertexColors: true, transparent: true, opacity: 0, blending: T.AdditiveBlending, depthWrite: false, fog: false });
+      const hm = m.clone();
       const b = new T.Mesh(laserGeo, m);
+      const halo = new T.Mesh(laserHaloGeo, hm); halo.frustumCulled = false; b.add(halo);
       const side = i % 2 ? 1 : -1, row = i >> 1;
       b.position.set(side * (8 + row * 1.5), 0, -16 - row * 16);
-      b.userData = { side, row, m };
+      b.userData = { side, row, m, hm };
       b.visible = false; b.frustumCulled = false;
       scene.add(b); lasers.push(b);
+    }
+
+    // ---------- side scenery ----------
+    // One instanced set per kind, back from the corridor, scrolling with it. Solid kinds are silhouettes lit
+    // from the top (vertex gradient x instance colour) so they read against the horizon glow; fog sinks the far ones.
+    function topLit(g, lo, hi) {
+      g.computeBoundingBox();
+      const b = g.boundingBox, pos = g.attributes.position, cols = new Float32Array(pos.count * 3);
+      for (let i = 0; i < pos.count; i++) { const v = lo + (hi - lo) * Math.pow((pos.getY(i) - b.min.y) / Math.max(1e-6, b.max.y - b.min.y), 3.2); cols.set([v, v, v], i * 3); }
+      g.setAttribute('color', new T.BufferAttribute(cols, 3));
+      return g;
+    }
+    const KIND_GEO = {
+      ridge: () => { const g = new T.ConeGeometry(1, 1, 5, 6); g.translate(0, 0.5, 0); return topLit(g, 0.02, 0.9); },
+      tower: () => { const g = new T.BoxGeometry(1, 1, 1, 1, 8, 1); g.translate(0, 0.5, 0); return topLit(g, 0.02, 0.8); },
+      spire: () => { const g = new T.ConeGeometry(1, 1, 6, 6); g.translate(0, 0.5, 0); return topLit(g, 0.02, 0.9); },
+      mast: () => { const g = new T.BoxGeometry(1, 1, 1, 1, 6, 1); g.translate(0, 0.5, 0); return topLit(g, 0.1, 1); },
+      shard: () => topLit(new T.OctahedronGeometry(1, 1).scale(0.55, 1.4, 0.55), 0.1, 1),
+      arch: () => { const g = new T.TorusGeometry(1, 0.05, 4, 20, Math.PI); g.rotateY(Math.PI / 2); return topLit(g, 0.35, 1); },
+      frame: () => { const g = new T.TorusGeometry(1, 0.045, 4, 4); g.rotateZ(Math.PI / 4); return topLit(g, 0.5, 1); },
+      ring: () => topLit(new T.TorusGeometry(1, 0.04, 4, 28), 0.6, 1),
+    };
+    const SC_MAX = 40, SC_SPAN = 190;
+    const sceneryMeshes = {};
+    const solidMat = new T.MeshBasicMaterial({ vertexColors: true, fog: true });
+    const glowSceneMat = new T.MeshBasicMaterial({ vertexColors: true, fog: true, transparent: true, blending: T.AdditiveBlending, depthWrite: false });
+    function sceneryMesh(kind, glow) {
+      if (!sceneryMeshes[kind]) {
+        const m = new T.InstancedMesh(KIND_GEO[kind](), glow ? glowSceneMat : solidMat, SC_MAX);
+        m.setColorAt(0, new T.Color()); m.frustumCulled = false; m.visible = false;
+        scene.add(m); sceneryMeshes[kind] = m;
+      }
+      return sceneryMeshes[kind];
+    }
+    const beaconGeo = new T.BoxGeometry(1, 1, 1);
+    const beacons = new T.InstancedMesh(beaconGeo, new T.MeshBasicMaterial({ fog: true, transparent: true, blending: T.AdditiveBlending, depthWrite: false }), SC_MAX);
+    beacons.setColorAt(0, new T.Color()); beacons.frustumCulled = false; beacons.count = 0;
+    scene.add(beacons);
+    const sc = { def: null, mesh: null, items: [], nShow: 0 };
+    function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+    function buildScenery(key) {
+      const def = SCENERY[key];
+      if (sc.mesh) sc.mesh.visible = false;
+      sc.def = def; sc.items.length = 0;
+      if (!def) { sc.mesh = null; beacons.count = 0; return; }
+      sc.mesh = sceneryMesh(def.kind, def.glow);
+      const r = rng(key.length * 7919 + key.charCodeAt(0) * 131);
+      const lerp = (a, k) => a[0] + (a[1] - a[0]) * k;
+      for (let i = 0; i < def.n; i++) {
+        const side = i % 2 ? 1 : -1;
+        const w = lerp(def.w, r()), h = def.h ? lerp(def.h, Math.pow(r(), 1.5)) : w;
+        const reach = def.kind === 'ridge' || def.kind === 'spire' ? w : def.kind === 'frame' ? w * 0.8 : def.glow || def.float ? 0 : w / 2;
+        sc.items.push({ side, x: side * (lerp(def.x, Math.pow(r(), 1.3)) + reach), w, h, y: def.y ? lerp(def.y, r()) : 0, z0: (i / def.n) * SC_SPAN + r() * 4, ph: r() * Math.PI * 2, rot: r() * Math.PI });
+      }
+      sc.mesh.count = def.n; sc.mesh.visible = true;
+      beacons.count = def.beacon === 'none' ? 0 : def.n;
+    }
+    const _scD = new T.Object3D(), _scC = new T.Color(), _scB = new T.Color(), _scHot = [new T.Color(), new T.Color(), new T.Color()];
+    function updateScenery(beat, pulse, intensity, time, accent) {
+      const def = sc.def, m = sc.mesh;
+      if (!def || !m) return;
+      const hard = themeState.hard, fogC = floorMat.uniforms.uFog.value, halo = ringCol;
+      const fb = Math.floor(beat), fr = beat - fb;
+      const motion = (0.4 + 0.6 * intensity) * (hard ? 2 : 1);
+      // hard: beacons step through the theme's colours on every beat
+      _scHot[0].copy(halo); _scHot[1].copy(floorMat.uniforms.uRail.value); _scHot[2].copy(accent || halo);
+      for (let i = 0; i < sc.items.length; i++) {
+        const it = sc.items[i];
+        const z = 6 - ((it.z0 + envScroll * 0.75) % SC_SPAN);
+        let y = it.y, sx = it.w, sy = it.h, sz = it.w, ry = 0, rz = 0;
+        if (def.float) { y += Math.sin(time * 0.7 + it.ph) * 0.5 * motion; ry = it.rot + time * 0.3 * motion; }
+        if (def.kind === 'arch' || def.kind === 'frame') { sy = sz = sx = it.w; if (def.kind === 'frame') { y = it.w + 0.3; rz = Math.sin(time * 0.4 + it.ph) * 0.12 * motion; } }
+        if (def.kind === 'ring') { sx = sy = sz = it.w; rz = 0; }
+        if (def.kind === 'ridge') sz = it.w * 0.7;
+        // a travelling wave of beat energy lifts the solids a touch
+        const wave = Math.exp(-fr * 4) * (0.5 + 0.5 * Math.sin(i * 0.9 - fb * 1.7));
+        if (!def.float && !def.glow) sy *= 1 + wave * 0.06 * motion;
+        _scD.position.set(it.x, y, z); _scD.rotation.set(0, ry, rz); _scD.scale.set(sx, sy, sz); _scD.updateMatrix();
+        m.setMatrixAt(i, _scD.matrix);
+        // solids: near-black bodies with a rim of the theme colour at the top; outlines glow and pulse
+        const lit = def.glow ? (def.kind === 'arch' ? 0.2 : 0.32) + 0.9 * pulse * (0.5 + 0.5 * wave) * (hard ? 1.5 : 1) : 0.6 + 0.5 * wave * pulse * (hard ? 1.6 : 1);
+        _scC.copy(halo).multiplyScalar(lit);
+        if (!def.glow) _scC.lerp(fogC, 0.25);
+        m.setColorAt(i, _scC);
+        if (beacons.count) {
+          const bsz = def.kind === 'tower' ? 0.5 : def.kind === 'mast' ? 0.45 : 0.4;
+          let by = y + sy + 0.4;
+          if (def.beacon === 'float') by = it.h + 2.2 + Math.sin(time * 1.1 + it.ph) * 0.6 * motion;
+          if (def.beacon === 'centre') by = y;
+          _scD.position.set(it.x, by, z); _scD.rotation.set(0, time * (hard ? 2 : 0.6), 0); _scD.scale.setScalar(bsz * (1 + 0.6 * wave * pulse)); _scD.updateMatrix();
+          beacons.setMatrixAt(i, _scD.matrix);
+          const chase = 0.5 + 0.5 * Math.cos((i * 0.7 - beat * (hard ? 2 : 1)) * Math.PI * 0.5);
+          _scB.copy(hard ? _scHot[(((fb + i) % 3) + 3) % 3] : halo).multiplyScalar(reduced ? 0.5 + 0.3 * chase : 0.25 + 1.6 * pulse * chase + 0.3 * intensity);
+          beacons.setColorAt(i, _scB);
+        }
+      }
+      m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true;
+      if (beacons.count) { beacons.instanceMatrix.needsUpdate = true; beacons.instanceColor.needsUpdate = true; }
     }
 
     // ---------- dust ----------
@@ -329,6 +448,7 @@
 
     // ---------- debris (sliced halves using clipping planes) ----------
     const debris = [];
+    const _down = new T.Vector3(0, -0.8, 0);
     let hotAmt = 1.4;
     function sliceBlock(group, planeNormalW, planeOffsetFromCentre, vel, push) {
       const mesh = group.userData.mesh;
@@ -343,8 +463,8 @@
         scene.add(h);
         const n = nLocal.clone().multiplyScalar(sign);
         debris.push({
-          mesh: h, mats, nLocal: n, cLocal: planeOffsetFromCentre * sign, life: 0, maxLife: 1.1,
-          vel: vel.clone().add(planeNormalW.clone().multiplyScalar(sign * 1.6)).add(push.clone().multiplyScalar(0.25)),
+          mesh: h, mats, nLocal: n, cLocal: planeOffsetFromCentre * sign, life: 0, maxLife: 0.8,
+          vel: vel.clone().add(planeNormalW.clone().multiplyScalar(sign * 2.4)).add(push.clone().multiplyScalar(0.3)).add(_down),
           spinAxis: new T.Vector3().crossVectors(planeNormalW, push).normalize().multiplyScalar(sign).add(new T.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(0.4)).normalize(),
           spin: 5 + Math.random() * 4,
         });
@@ -365,7 +485,8 @@
         const k = d.life / d.maxLife;
         // halves glow white-hot for a moment, and fade before they can fill the lens
         const hot = 1 + hotAmt * Math.max(0, 1 - d.life / 0.16);
-        const near = Math.max(0, Math.min(1, (0.2 - d.mesh.position.z) / 1.2));
+        const near = Math.max(0, Math.min(1, (-0.5 - d.mesh.position.z) / 0.9));
+        d.mesh.scale.setScalar(1 - 0.4 * k);
         d.mats.forEach(m => { m.clippingPlanes[0].copy(_pl); m.opacity = (1 - k * k) * near; m.color.setScalar(hot); });
         if (d.life >= d.maxLife) {
           scene.remove(d.mesh); d.mats.forEach(m => m.dispose()); debris.splice(i, 1);
@@ -699,9 +820,11 @@
       const th = THEMES[key] || DEFAULT_THEME;
       const id = (key || '') + (hard ? '!' : '');
       if (id === themeState.key && !snap) return;
+      if ((themeState.key || '').replace('!', '') !== (key || '')) buildScenery(key);
       themeState.key = id; themeState.hard = hard ? 1 : 0; themeState.glide = 150;
       target.top.set(th.top); target.mid.set(th.mid); target.halo.set(th.halo); target.line.set(th.line); target.rail.set(th.rail);
       target.hor.set(th.hor).multiplyScalar(hard ? 1.3 : 1);
+      if (hard) target.top.lerp(target.halo, 0.06);
       target.fog.set(th.fog); target.pyA.set(th.py[0]); target.pyB.set(th.py[1]); target.dust.set(th.dust);
       if (th.sides !== themeState.sides || th.rot !== themeState.rot) { themeState.pendingSides = th.sides; themeState.pendingRot = th.rot; }
       themeState.pendingTwist = th.twist;
@@ -769,6 +892,8 @@
       su.uTime.value = time;
       su.uHeat.value = heat;
       su.uBreak.value = reduced ? breakT * 0.35 : breakT;
+      const hardK = themeState.hard * (reduced ? 0.35 : 1) * Math.min(1, 0.3 + intensity);
+      su.uHard.value = hardK; fu.uHard.value = hardK; fu.uBeatFr.value = beat - Math.floor(beat);
       if (accent) { fu.uAccent.value.lerp(accent, Math.min(1, dt * 2)); su.uAccent.value.copy(fu.uAccent.value); }
       const tw = themeState.twist;
       rings.forEach((r, i) => {
@@ -781,25 +906,31 @@
         const ph = beat - lag; const fr = ph - Math.floor(ph);
         const p = Math.exp(-fr * 5) * (intensity > 0 ? 1 : 0.35);
         const fade = Math.min(1, Math.max(0, (dist + 4) / 8));
-        r.material.opacity = (0.3 + 0.9 * p) * (1 + 0.45 * heat) * fade * themeState.ringVis;
+        const recede = 1 - 0.55 * Math.min(1, Math.max(0, (dist - 25) / 80));
+        r.material.opacity = (0.3 + 0.9 * p) * (1 + 0.2 * heat) * fade * recede * themeState.ringVis;
         r.material.color.copy(ringCol).lerp(fu.uAccent.value, p * 0.5);
+        if (themeState.hard && !reduced) r.material.color.lerp(fu.uRail.value, p * 0.45);
         const sc = 1 + p * 0.05; r.scale.set(sc, sc, 1);
       });
       // lasers: only in the high tier, only once the music lifts
       if (quality === 2) {
-        const amt = Math.max(0, Math.min(1, (intensity - 0.45) / 0.4)) * (1 + 0.3 * heat);
+        const from = themeState.hard ? 0.2 : 0.45;
+        const amt = Math.max(0, Math.min(1, (intensity - from) / 0.4)) * (1 + 0.3 * heat);
         lasers.forEach((b, i) => {
           const u = b.userData;
           const on = amt > 0.01;
           b.visible = on;
           if (!on) return;
-          const sweep = Math.sin(time * (0.7 + u.row * 0.17) + u.row * 1.3 + (u.side > 0 ? Math.PI : 0)) * 0.55;
+          const sweep = Math.sin(time * (0.7 + u.row * 0.17) + u.row * 1.3 + (u.side > 0 ? Math.PI : 0)) * (themeState.hard ? 0.5 : 0.35);
           // rest pose points up and slightly over the corridor; the sweep fans it across the sky
           b.rotation.set(1.0 + 0.25 * Math.sin(time * 0.5 + i), 0, 0);
-          b.rotateOnWorldAxis(_zAxis, u.side * (0.45 + 0.2 * u.row / 3) + sweep * (reduced ? 0.4 : 1));
+          // lean in over the side scenery, not across the track; hard fans wider and faster
+          b.rotateOnWorldAxis(_zAxis, u.side * (0.08 + 0.1 * u.row / 3) + sweep * (reduced ? 0.4 : 1));
           const flick = reduced ? 0.5 : 0.25 + 0.95 * pulse;
-          u.m.opacity = Math.min(1, amt * flick * 0.85);
+          u.m.opacity = Math.min(1, amt * flick * (themeState.hard ? 0.95 : 0.7));
           u.m.color.copy(ringCol).lerp(fu.uAccent.value, 0.35 + 0.3 * (i % 2));
+          if (themeState.hard && !reduced) u.m.color.lerp(fu.uRail.value, (Math.floor(beat) + i) % 2 ? 0.5 : 0);
+          u.hm.opacity = u.m.opacity * 0.22; u.hm.color.copy(u.m.color);
         });
       }
       for (let side = 0; side < 2; side++) {
@@ -815,6 +946,7 @@
         }
       }
       pylons.instanceMatrix.needsUpdate = true;
+      updateScenery(beat, pulse, intensity, time, fu.uAccent.value);
       // dust drifts toward the player
       for (let i = 0; i < DUST; i++) {
         dustPos[i * 3 + 2] += dt * speed * 1.6;

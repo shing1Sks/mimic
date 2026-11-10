@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Willowlight</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="stage"></div>
+
+<!-- ============ HUD ============ -->
+<div id="hud" class="hidden">
+  <div id="prompts">
+    <div class="prompt" id="prompt-bowl"></div>
+    <div class="prompt" id="prompt-bat"></div>
+  </div>
+  <div id="scorebug">
+    <div class="sb-main">
+      <div class="sb-brand">WL</div>
+      <div class="sb-team" id="sb-team">P1</div>
+      <div class="sb-score" id="sb-score">0-0</div>
+      <div class="sb-overs" id="sb-overs">0.0/2</div>
+      <div class="sb-info" id="sb-info">RUN RATE 0.00</div>
+    </div>
+    <div class="sb-sub">
+      <div class="sb-bowler" id="sb-bowler"></div>
+      <div class="sb-over" id="sb-over"></div>
+    </div>
+  </div>
+  <div id="gun">
+    <div class="g-label">SPEED</div>
+    <div class="g-val"><b id="gun-val">0</b><span>km/h</span></div>
+    <div class="g-tags" id="gun-tags"></div>
+  </div>
+  <div id="shot">
+    <div class="shot-tags" id="shot-tags"></div>
+    <div class="shot-meter" id="shot-meter"><span class="sm-good"></span><span class="sm-perf"></span><i></i><em>EARLY</em><em>LATE</em></div>
+  </div>
+  <div id="pmap"><div class="pm-strip"><div class="pm-zones"><span>SHORT</span><span>GOOD</span><span>FULL</span></div><i id="pmap-dot"></i></div><div class="pm-label">PITCH MAP</div></div>
+  <div id="banner"><div class="b-main"></div><div class="b-sub"></div></div>
+  <div class="toast" id="toast"></div>
+  <div id="replay-bug"><i></i>REPLAY</div>
+</div>
+
+<!-- ============ TITLE ============ -->
+<div id="title" class="screen">
+  <div class="t-left">
+    <header>
+      <div class="t-kicker">A MIMIC MOTION GAME · TWO PHONES</div>
+      <h1>WILLOW<span>LIGHT</span></h1>
+      <p class="t-sub">Floodlit cricket. One phone bowls, one phone bats.</p>
+    </header>
+    <div class="menu" id="title-menu">
+      <button class="mi primary" data-act="versus">2 PLAYERS <small>one bats, one bowls, then swap</small></button>
+      <button class="mi" data-act="solo">SOLO VS COMPUTER <small id="quick-sub">2 each · 3 wickets</small></button>
+      <button class="mi" data-act="options">OPTIONS <small>match, controls, hands, sound, graphics</small></button>
+    </div>
+    <div class="menu hidden" id="opts-menu">
+      <div class="opts-grid" id="opts-grid"></div>
+      <button class="mi back" data-act="back">&#9664; BACK</button>
+    </div>
+    <div class="t-connect">
+      <div id="title-ctrl" class="ctrl-status"><i></i><span>Using mouse</span><small>Open Mimic on your phone in <b>Grip</b> mode, or scan the code.</small></div>
+      <div class="t-connect-row"><div class="mimic-scan" data-mimic-join="grip" data-compact data-players="2"></div><div id="rumble-status" class="rumble-status">Vibration: click to set up</div></div>
+    </div>
+  </div>
+  <div class="t-right">
+    <h3>HOW TO PLAY</h3>
+    <div class="howto-cols">
+      <div class="howto">
+        <h4><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.4"/><path d="M12 8v6M7 21l5-7 5 7M12 9l6-5"/></svg>BOWLING</h4>
+        <ul>
+          <li><b>Point to aim</b><span>The ring on the pitch is your spot</span></li>
+          <li><b>Hold, run in, arm over</b><span>Let go to release: early is fuller, late is shorter</span></li>
+          <li><b>Faster arm = pace</b><span>The speed gun tells you</span></li>
+          <li><b>Twist the wrist = spin</b><span>Clockwise turns right, anticlockwise left</span></li>
+          <li><b>Palm turned = swing</b><span>Seam right swings right</span></li>
+        </ul>
+      </div>
+      <div class="howto">
+        <h4><svg viewBox="0 0 24 24"><path d="M14 3l3 3-9 12-3 1 1-3z"/><circle cx="19" cy="18" r="1.8"/></svg>BATTING</h4>
+        <ul>
+          <li><b>Phone = bat handle</b><span>Top of the phone is the blade</span></li>
+          <li><b>Swing as it arrives</b><span>Fastest at the ball = the middle</span></li>
+          <li><b>Your swing aims</b><span>Its path is where the ball goes</span></li>
+          <li><b>Straight bat or cross bat</b><span>Drive the full ones, pull the short ones</span></li>
+          <li><b>Keep still to leave</b><span>Gentle push = defend</span></li>
+        </ul>
+      </div>
+    </div>
+    <div class="t-keys">
+      <span></span><b>GRIP</b>
+      <span>Hold / bowl / join</span><span data-web="<kbd>HOLD</kbd>"><kbd>Vol Down</kbd></span>
+      <span>Pause</span><span data-web="tap <kbd>B</kbd>">tap <kbd>Vol Up</kbd></span>
+      <span>Align (bat forward)</span><span data-web="<kbd>CENTRE</kbd>"><kbd>CENTRE</kbd> or hold <kbd>Vol Up</kbd></span>
+      <span>Swap roles (lobby)</span><span data-web="<kbd>SWITCH</kbd>">double-tap <kbd>Vol Up</kbd></span>
+    </div>
+    <p class="t-safety">Wear the wrist strap and keep a firm fist: you let go of the key, never the phone.</p>
+  </div>
+</div>
+
+<!-- ============ SOLO ============ -->
+<div id="solo" class="screen modal hidden">
+  <div class="card">
+    <div class="e-kicker">SOLO</div>
+    <h2>VS COMPUTER</h2>
+    <div class="menu" id="solo-menu">
+      <button class="mi primary" data-act="cpu-match">FULL MATCH <small>bat first, then bowl</small></button>
+      <button class="mi" data-act="nets-bat">BATTING NETS <small>face the computer for 2 overs</small></button>
+      <button class="mi" data-act="nets-bowl">BOWLING NETS <small>bowl 2 overs at the computer</small></button>
+      <button class="mi back" data-act="back">&#9664; BACK</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ LOBBY ============ -->
+<div id="lobby" class="screen modal hidden">
+  <div class="card wide lobby">
+    <div class="e-kicker">TWO PHONES · ONE SCREEN</div>
+    <h2>TAKE YOUR SEATS</h2>
+    <div class="slots">
+      <div class="slot" id="slot0"><b class="s-tag">P1</b><div class="s-role bat">BATS FIRST</div><div class="s-state">PRESS TO JOIN</div><div class="s-bar"><i></i></div><div class="s-help"></div><div class="s-join" data-mimic-join="grip" data-size="88"></div></div>
+      <div class="slot" id="slot1"><b class="s-tag">P2</b><div class="s-role bowl">BOWLS FIRST</div><div class="s-state">PRESS TO JOIN</div><div class="s-bar"><i></i></div><div class="s-help"></div><div class="s-join" data-mimic-join="grip" data-size="88"></div></div>
+    </div>
+    <p class="lobby-status" id="lobby-status"></p>
+    <div class="menu row">
+      <button class="mi primary" id="lobby-start">START</button>
+      <button class="mi" id="lobby-swap">SWAP ROLES</button>
+      <button class="mi" id="lobby-back">BACK</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ PAUSE ============ -->
+<div id="pause" class="screen modal hidden">
+  <div class="card">
+    <h2>PAUSED</h2>
+    <div class="menu" id="pause-menu">
+      <button class="mi primary" data-act="resume">RESUME</button>
+      <button class="mi" data-act="restart">RESTART MATCH</button>
+      <button class="mi" data-act="quit">MAIN MENU</button>
+    </div>
+    <p class="hint" id="pause-hint"></p>
+  </div>
+</div>
+
+<!-- ============ INNINGS BREAK ============ -->
+<div id="break" class="screen modal hidden">
+  <div class="card wide">
+    <div class="e-kicker" id="break-kicker">INNINGS BREAK</div>
+    <h2 id="break-title">P1 0/0</h2>
+    <p class="e-sub" id="break-sub"></p>
+    <p class="e-need" id="break-need"></p>
+    <p class="hint" id="break-swap"></p>
+    <div class="menu row" id="break-menu">
+      <button class="mi primary" data-act="continue">START THE CHASE</button>
+      <button class="mi" data-act="quit">MAIN MENU</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MATCH END ============ -->
+<div id="end" class="screen modal hidden">
+  <div class="card wide">
+    <div class="e-kicker" id="end-kicker">MATCH RESULT</div>
+    <h2 id="end-title">P1 WINS</h2>
+    <p class="e-sub" id="end-sub"></p>
+    <div class="e-card" id="end-card"></div>
+    <div class="menu row" id="end-menu">
+      <button class="mi primary" data-act="rematch">REMATCH</button>
+      <button class="mi" data-act="quit">MAIN MENU</button>
+    </div>
+  </div>
+</div>
+
+<div id="flash"></div>
+
+<script src="../lib/three.min.js"></script>
+<script type="module" src="../lib/vendor/loaders.js"></script>
+<script src="../lib/mimic.js"></script>
+<script src="../lib/mimic-link.js"></script>
+<script src="../lib/recorder.js"></script>
+<script src="../lib/wandcursor.js"></script>
+<script src="phys.js"></script>
+<script src="bowl.js"></script>
+<script src="bat.js"></script>
+<script src="field.js"></script>
+<script src="match.js"></script>
+<script src="lobby.js"></script>
+<script src="audio.js"></script>
+<script src="input.js"></script>
+<script src="world.js"></script>
+<script src="actors.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

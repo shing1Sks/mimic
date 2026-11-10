@@ -81,6 +81,24 @@ whenever the real world is visible.
   with a paved runway, open runways of 1,500 ft or more. OurAirports data is released into the public
   domain (https://ourairports.com/data/); credited anyway.
 
+### Map data: OpenStreetMap, via OpenMapTiles vector tiles from OpenFreeMap
+
+- Buildings (footprints, `render_height`, `colour`), roads, railways, rivers, lakes, the sea, land use,
+  woods and parks, and airfield runways, taxiways and aprons, streamed around the aircraft in the
+  real-world mode (`osm.js`, `osm-worker.js`, `osm-layer.js`).
+- Data (c) OpenStreetMap contributors, Open Database License (ODbL 1.0):
+  https://www.openstreetmap.org/copyright
+- Vector tile schema (c) OpenMapTiles: https://www.openmaptiles.org/
+- Tiles served by OpenFreeMap (https://openfreemap.org): a free public instance with no API keys and
+  no stated request limits. Attribution is required for custom clients, so the game shows
+  "(c) OpenStreetMap contributors, (c) OpenMapTiles, OpenFreeMap" in the corner during real-world
+  flights, and the full line on the menus.
+- Good-citizen rules the game follows: only tiles around the aircraft (zoom 13 and 14), nearest
+  first, at most 2 requests at a time (the OpenFreeMap terms allow 4 for offline downloads); every
+  tile is kept in the browser's Cache Storage (`gyrowing-osm-v1`), so revisits download nothing;
+  failures back off, and repeated failures pause the layer for two minutes. With the layer off
+  (Options > Real world: buildings and map > Off) nothing is requested.
+
 ### Ground detail texture
 
 The real-world terrain reuses `aerial_grass_rock_diff.jpg` (Poly Haven, CC0, above) as a brightness-only

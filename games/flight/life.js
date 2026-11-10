@@ -109,9 +109,9 @@
       }
       return null;
     };
-    for (let i = 0; i < 9; i++) {
-      const lake = i >= 6;
-      const c = lake ? tryRoute(lm.lake.x, lm.lake.z, 120, 320) : tryRoute(lm.lighthouse.x + (i - 3) * 1600, lm.lighthouse.z + 1600, 250, 700);
+    for (let i = 0; i < 18; i++) {
+      const lake = i >= 14;
+      const c = lake ? tryRoute(lm.lake.x, lm.lake.z, 120, 320) : tryRoute(lm.lighthouse.x + (i - 7) * 1100, lm.lighthouse.z + 1200 + (i % 3) * 900, 250, 700);
       if (c) boats.push({ c, a: rnd() * 6.28, w: (2.5 + rnd() * 2) / c.r * (rnd() < 0.5 ? 1 : -1), ph: rnd() * 6 });
     }
     L.boats = boats;
@@ -133,7 +133,7 @@
     const roads = (W.roads || []).filter(r => r.len > 300);
     const cars = [];
     const total = roads.reduce((a, r) => a + r.len, 0);
-    for (let i = 0; i < 44 && roads.length; i++) {
+    for (let i = 0; i < 110 && roads.length; i++) {
       let pick = rnd() * total, r = roads[0];
       for (const rr of roads) { if (pick < rr.len) { r = rr; break; } pick -= rr.len; }
       cars.push({ r, s: rnd() * r.len, dir: rnd() < 0.5 ? 1 : -1, v: 12 + rnd() * 10, col: ['#b0241c', '#e8e8e8', '#20324d', '#3a3d40', '#c9b48a', '#2d5a3c'][(rnd() * 6) | 0] });

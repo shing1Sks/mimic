@@ -45,6 +45,10 @@ Updated just before each approved release, not on every change.
   60 deg sport turns at full stick; rumble for skimming, bonuses, rings and stunts. Rebuilt cockpit
   (chrome gauges, leather glareshield, wet compass, real yokes, throttle quadrant, night lighting).
   Faster: tree LOD, Performance tier by default on integrated GPUs, no cockpit glass overlay.
+  Real cities: real-world flights stream OpenStreetMap (OpenFreeMap vector tiles): real buildings
+  with heights and roofs, roads, rivers, coastlines, parks with trees, airport runways and taxiways,
+  city lights at night. Tiles are cached in the browser and requested gently (2 at a time, back-off);
+  new Options row "Real-world map detail". The island gets more villages, boats and traffic.
 - **Tidecast (new):** motion fishing on a golden-hour dock. Cast with a real flick (hold A as a thumb
   on the spool, let go as the rod comes forward: timing and wrist speed set the arc), feel nibbles and
   the strike through the phone, set the hook with an upward jerk, then fight: rod angle against the

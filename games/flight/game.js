@@ -11,7 +11,7 @@
 
   // ---------------------------------------------------------------- settings
   const DEFAULTS = { sens: 1.0, expo: 0.25, invert: false, twist: true, autoRudder: true, assist: 'steady',
-    tod: 1, timeSpeed: 1, wind: 1, volume: 8, quality: 1, showControls: false, showFps: false };
+    tod: 1, timeSpeed: 1, wind: 1, volume: 8, quality: 1, mapDetail: 2, showControls: false, showFps: false };
   const settings = Object.assign({}, DEFAULTS);
   let savedSettings = {};
   try { savedSettings = JSON.parse(localStorage.getItem('gyrowing.settings') || '{}'); Object.assign(settings, savedSettings); } catch (e) { /* storage blocked */ }
@@ -27,6 +27,7 @@
   const WINDS = [['Calm', 0, 0], ['Light breeze', 3, 0], ['Gusty, turbulent', 7, 0.4]];
   const ASSISTS = [['steady', 'Steady: holds attitude'], ['leveller', 'Wing leveller'], ['off', 'Off (raw)']];
   const QUAL = [['Performance', 0.8], ['Balanced', 1], ['Sharp', 1.5]];
+  const MAPDETAIL = ['Off (satellite only)', 'Light', 'Full'];
 
   const OPTIONS = [
     { key: 'sens', label: 'Stick sensitivity', fmt: v => v.toFixed(1) + 'x', step: (v, d) => clamp(Math.round((v + d * 0.1) * 10) / 10, 0.5, 2.5) },
@@ -39,6 +40,7 @@
     { key: 'wind', label: 'Wind (free flight)', fmt: v => WINDS[v][0], step: (v, d) => (v + d + WINDS.length) % WINDS.length },
     { key: 'volume', label: 'Volume', fmt: v => v * 10 + '%', step: (v, d) => clamp(v + d, 0, 10) },
     { key: 'quality', label: 'Graphics', fmt: v => QUAL[v][0], step: (v, d) => (v + d + QUAL.length) % QUAL.length },
+    { key: 'mapDetail', label: 'Real-world map detail', fmt: v => MAPDETAIL[v], step: (v, d) => (v + d + 3) % 3 },
     { key: 'showControls', label: 'Show input monitor', fmt: v => v ? 'On' : 'Off', step: v => !v },
     { key: 'showFps', label: 'Frame rate counter', fmt: v => v ? 'On' : 'Off', step: v => !v },
   ];
@@ -66,7 +68,7 @@
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.3, 60000);
   let T, world, plane, env, puffs, life, cockpit, missionDefs, markers, speedfx;
-  let islandT = null, islandExtra = [], rw = null, rwT = null, DB = null, dbP = null;
+  let islandT = null, islandExtra = [], rw = null, rwT = null, DB = null, dbP = null, osm = null;
   // adaptive resolution: the render scale drops (to 0.6) while the frame rate is under 45 and climbs
   // back to the quality setting's cap when there is room, so a laptop GPU stays smooth
   let dynScale = 1, dynT = 0;
@@ -93,6 +95,7 @@
       if (sh.mapSize.x !== sm) { sh.mapSize.set(sm, sm); if (sh.map) { sh.map.dispose(); sh.map = null; } }
     }
     if (rw) rw.setDetail(settings.quality);
+    if (osm) osm.setQuality(settings.quality, settings.mapDetail);
   }
   function onResize() { applyQuality(); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); hud.resize(); }
   addEventListener('resize', onResize);
@@ -154,7 +157,9 @@
     life = Life.build(scene, T, world);
     islandExtra = scene.children.filter(o => !preExtra.has(o));   // parked aircraft, traffic, boats, birds, cars
     islandT = T;
-    rw = RealWorld.create(scene, renderer, world); applyQuality();
+    rw = RealWorld.create(scene, renderer, world);
+    osm = OSMLayer.create(rw, renderer, world);
+    applyQuality();
     rwT = { heightAt: rw.heightAt, surfaceAt: rw.surfaceAt, onRunway: (x, z, ap) => rw.onRunway(x, z, ap && ap.id), AIRPORT: null, AIRPORTS: [] };
     loadDB().catch(() => {});
     markers = new Markers(scene);
@@ -537,6 +542,7 @@
     paintOptions(); save(); AudioFX.blip(700);
     if (o.key === 'volume') AudioFX.setVolume(settings.volume / 10);
     if (o.key === 'quality') { G.autoLow = G.autoLowRw = false; onResize(); }
+    if (o.key === 'mapDetail') applyQuality();
     if (o.key === 'tod' && !(G.mission && G.mission.def.hours !== undefined)) { G.hours = TOD[settings.tod][1]; world.setTime(G.hours); }
     if (o.key === 'wind' && G.s && !G.mission) { const w = freeWind(); env.wind = { x: w.x, y: 0, z: w.z }; env.turbulence = w.turb; }
   }
@@ -1109,6 +1115,7 @@
     world.update(camera, plane.root.position, G.time, dt, Math.atan2(-w.z, w.x));
     if (G.rwMode) {
       rw.update(camera, plane.root.position, dt);
+      osm.update(camera, dt);
       // height fog follows the local ground, so 3,000 m valleys still get their haze
       const gb = rw.heightAt(camera.position.x, camera.position.z);
       world.fogBase += (Math.max(0, Math.min(gb, camera.position.y - 50)) - world.fogBase) * Math.min(1, dt * 0.5);
@@ -1190,11 +1197,12 @@
     $('soundHint').classList.toggle('hidden', !(AudioFX.suspended && (G.state === 'fly' || G.state === 'menu')));
     $('fps').textContent = Math.round(fps) + ' fps' + (dynScale < 0.999 ? ' · ' + Math.round(dynScale * 100) + '%' : '');
     $('fps').classList.toggle('hidden', !settings.showFps);
+    $('attrib').classList.toggle('fly', G.state === 'fly' || G.state === 'crashing');
     window.__gw = G;
   }
 
   window.addEventListener('gamepadconnected', e => { toast((/mimic/i.test(e.gamepad.id) ? 'Mimic connected: ' : 'Controller connected: ') + e.gamepad.id.slice(0, 40)); updateLegend(); });
-  window.__gyrowing = { G, settings, FM, input, get rw() { return rw; }, get DB() { return DB; }, openPlace, beginLoading, menuAction, show, showResult, toMenu, showGoal, toast, get world() { return world; }, get T() { return T; }, get life() { return life; }, get missions() { return missionDefs; }, startMode, camera, scene, renderer, hud };
+  window.__gyrowing = { G, settings, FM, input, get rw() { return rw; }, get osm() { return osm; }, get DB() { return DB; }, openPlace, beginLoading, menuAction, show, showResult, toMenu, showGoal, toast, get world() { return world; }, get T() { return T; }, get life() { return life; }, get missions() { return missionDefs; }, startMode, camera, scene, renderer, hud };
 
   buildOptions();
   // the airport search box: live suggestions while typing, Enter goes

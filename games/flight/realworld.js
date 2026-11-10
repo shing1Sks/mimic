@@ -134,6 +134,15 @@
       return null;
     }
     RW.rawElev = rawElev;
+    /** Ground under a point as the terrain will build it (DEM + runway flattening); null until the
+     * finest elevation tile there has arrived. For placing map features (osm-layer.js). */
+    RW.groundAt = function (x, z) {
+      if (!RW.F) return null;
+      const t = RW.F.localToTile(x, z, EMAX);
+      if (!elev.get(EMAX, Math.floor(t.x), Math.floor(t.y))) return null;
+      const r = rawElev(x, z);
+      return r === null ? null : Math.max(-0.5, zones.length ? flatten(x, z, r) : r);
+    };
     /** Runway end elevations from the DEM, a least-squares line through samples along the centreline. */
     function settleZone(Z) {
       if (Z.final) return;
@@ -163,7 +172,7 @@
     const detailU = { tDetail: { value: null }, uDetailOn: { value: 0 }, uDetailMean: { value: 0.5 } };
     // the terrain is lit in its own small shader (sun + sky): a MeshBasicMaterial has a fraction of
     // a Lambert's uniforms, and with ~150 tiles each on its own texture that is most of the CPU cost
-    const lightU = { uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color(1, 1, 1) }, uSkyCol: { value: new THREE.Color(0.4, 0.45, 0.5) }, uGndCol: { value: new THREE.Color(0.2, 0.2, 0.15) } };
+    const lightU = { uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color(1, 1, 1) }, uSkyCol: { value: new THREE.Color(0.4, 0.45, 0.5) }, uGndCol: { value: new THREE.Color(0.2, 0.2, 0.15) }, uNight: { value: 0 } };
     if (window.World && World.loadTex) World.loadTex('assets/tex/aerial_grass_rock_diff.jpg', maxAniso, (t, mean) => { detailU.tDetail.value = t; detailU.uDetailMean.value = (mean.r + mean.g + mean.b) / 3; detailU.uDetailOn.value = 1; });
     function detailPatch(sh) {
       Object.assign(sh.uniforms, detailU, lightU);
@@ -171,9 +180,21 @@
 ` + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
 vDWorld = (modelMatrix * vec4(transformed, 1.0)).xyz; vNW = normal;`);
       sh.fragmentShader = `uniform sampler2D tDetail; uniform float uDetailOn, uDetailMean; varying vec3 vDWorld; varying vec3 vNW;
-uniform vec3 uSunDir, uSunCol, uSkyCol, uGndCol;
+uniform vec3 uSunDir, uSunCol, uSkyCol, uGndCol; uniform float uNight;
+uniform sampler2D tOsm; uniform vec4 uOsmRect; uniform float uOsmOn;
 ` + sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.indirectDiffuse;', `vec3 nW = normalize(vNW);
-  vec3 outgoingLight = diffuseColor.rgb * (uSunCol * max(dot(nW, uSunDir), 0.0) + mix(uGndCol, uSkyCol, 0.5 * nW.y + 0.5));`).replace('#include <map_fragment>', `#include <map_fragment>
+  vec3 outgoingLight = diffuseColor.rgb * (uSunCol * max(dot(nW, uSunDir), 0.0) + mix(uGndCol, uSkyCol, 0.5 * nW.y + 0.5));
+  // city lights at night: street and roof pixels of the map overlay glow in scattered points
+  float sparkle = step(0.72, fract(sin(dot(floor(vDWorld.xz / 4.0), vec2(12.9898, 78.233))) * 43758.5453));
+  outgoingLight += vec3(1.0, 0.68, 0.36) * osmLit * uNight * (0.06 + 0.85 * sparkle);`).replace('#include <map_fragment>', `#include <map_fragment>
+        float osmLit = 0.0;
+        if (uOsmOn > 0.5) {
+          // the OpenStreetMap overlay for this tile: roads, water, land use, airfields, footprints
+          vec2 ou = (vDWorld.xz - uOsmRect.xy) / uOsmRect.zw;
+          vec4 o = texture2D(tOsm, clamp(ou, 0.0, 1.0));
+          diffuseColor.rgb = mix(diffuseColor.rgb, o.rgb, o.a * uOsmOn);
+          osmLit = step(0.8, o.a) * (1.0 - step(0.05, o.b - o.r)) * uOsmOn;
+        }
         if (uDetailOn > 0.5) {
           float fd = 1.0 - smoothstep(250.0, 2500.0, length(vDWorld - cameraPosition));
           if (fd > 0.0) {
@@ -248,7 +269,10 @@ uniform vec3 uSunDir, uSunCol, uSkyCol, uGndCol;
       if (n.mesh) { n.mesh.geometry.dispose(); n.mesh.geometry = g; }
       else {
         const mat = new THREE.MeshBasicMaterial({ map: placeholder });
-        mat.onBeforeCompile = detailPatch;
+        // per-tile map overlay (osm-layer.js fills it in); the program is shared, the uniforms are not
+        mat.userData.osm = { tOsm: { value: placeholder }, uOsmRect: { value: new THREE.Vector4(0, 0, 1, 1) }, uOsmOn: { value: 0 } };
+        mat.onBeforeCompile = sh => { detailPatch(sh); Object.assign(sh.uniforms, mat.userData.osm); };
+        mat.customProgramCacheKey = () => 'rw-terrain';
         n.mesh = new THREE.Mesh(g, mat);
         n.mesh.position.set(cx, 0, cz); n.mesh.matrixAutoUpdate = false; n.mesh.updateMatrix();
         terrainG.add(n.mesh);
@@ -375,6 +399,9 @@ uniform vec3 uSunDir, uSunCol, uSkyCol, uGndCol;
       RW.loc = null; RW.F = null; RW.airports = [];
     };
     RW.deactivate = function () { RW.active = false; RW.group.visible = false; };
+    /** Visit the built terrain nodes: fn(node) with { z, x, y, rect, mesh, want }. */
+    RW.forEachNode = fn => { for (const n of nodes.values()) if (n.mesh) fn(n); };
+    RW.tick = () => tick;
     function disposeNode(n) { if (n.mesh) { terrainG.remove(n.mesh); n.mesh.geometry.dispose(); n.mesh.material.dispose(); n.mesh = null; } }
 
     /** Make sure the start area and its runway are loaded: elevation tiles within `radius` m of (x, z). */
@@ -415,6 +442,7 @@ uniform vec3 uSunDir, uSunCol, uSkyCol, uGndCol;
         const K = 1 / 2.9;
         lightU.uSunCol.value.copy(world.sun.color).multiplyScalar(world.sun.intensity * K);
         if (world.hemi) { lightU.uSkyCol.value.copy(world.hemi.color).multiplyScalar(world.hemi.intensity * K); lightU.uGndCol.value.copy(world.hemi.groundColor).multiplyScalar(world.hemi.intensity * K); }
+        lightU.uNight.value = world.night || 0;
       }
       lodT -= dt;
       const cam = camera.position;

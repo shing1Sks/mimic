@@ -855,13 +855,13 @@ void main(){ vec2 c = gl_PointCoord - 0.5; float r = length(c) * 2.0; float a = 
 
     // ---------------- villages + farmhouses
     const villages = [];
-    for (let i = 0; i < 4000 && villages.length < 7; i++) {
+    for (let i = 0; i < 6000 && villages.length < 11; i++) {
       const x = (rnd() - 0.5) * 24000, z = (rnd() - 0.5) * 24000;
       const h = T.heightAt(x, z);
       if (h < 10 || h > 320 || T.slopeAt(x, z) > 0.05) continue;
       if (!clearOfAirport(x, z, 1500)) continue;
       if (villages.some(v => Math.hypot(v.x - x, v.z - z) < 3800)) continue;
-      villages.push({ x, z, n: 35 + ((rnd() * 45) | 0) });
+      villages.push({ x, z, n: 50 + ((rnd() * 70) | 0) });
     }
     const houses = [];
     const placeHouse = (x, z, big) => {
@@ -880,7 +880,7 @@ void main(){ vec2 c = gl_PointCoord - 0.5; float r = length(c) * 2.0; float a = 
         if (placeHouse(v.x + Math.cos(a) * r, v.z + Math.sin(a) * r, rnd() < 0.08)) placed++;
       }
     });
-    for (let k = 0; k < 3000 && houses.length < 560; k++) {
+    for (let k = 0; k < 5000 && houses.length < 900; k++) {
       const x = (rnd() - 0.5) * 26000, z = (rnd() - 0.5) * 26000;
       const h = T.heightAt(x, z); if (h < 8 || h > 400) continue;
       if (forestAt(x, z) > 0.05) continue;

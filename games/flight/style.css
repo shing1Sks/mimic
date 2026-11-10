@@ -223,6 +223,9 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0f13; col
 #attrib { position: fixed; left: 8px; bottom: 8px; z-index: 11; font-size: 10px; color: rgba(255, 255, 255, 0.62); max-width: calc(100vw - 90px);
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); pointer-events: auto; line-height: 1.35; }
 #attrib a { color: rgba(255, 255, 255, 0.8); }
+/* in flight the credit sits in the corner beside the instruments, short; menus show the full one */
+#attrib.fly { left: auto; right: 8px; text-align: right; max-width: min(300px, calc(50vw - 380px)); min-width: 200px; }
+#attrib.fly .long, #attrib:not(.fly) .short { display: none; }
 
 /* ---------- Mimic family: the same badge and device hint bar in every Mimic game ---------- */
 .mimic-badge { position: fixed; top: 14px; right: 16px; z-index: 60; display: flex; align-items: center; gap: 8px; padding: 7px 13px 7px 11px; border-radius: 999px;
@@ -260,11 +263,11 @@ body:has(#attrib:not(.hidden)) #place, body:has(#attrib:not(.hidden)) #rwload { 
   #legend { font-size: 11px; padding: 8px 10px; }
   #legendRows div { padding: 1px 0; }
 }
-/* options in two columns where there is room (12 rows no longer fit a 600 px screen in one); filled
+/* options in two columns where there is room (13 rows no longer fit a 600 px screen in one); filled
    down each column so D-pad up/down still walks the list in order */
 @media (min-width: 1000px) {
   .opt-panel { width: min(1000px, 94vw); }
-  #optRows { display: grid; grid-template-rows: repeat(6, auto); grid-auto-flow: column; grid-auto-columns: 1fr; column-gap: 22px; }
+  #optRows { display: grid; grid-template-rows: repeat(7, auto); grid-auto-flow: column; grid-auto-columns: 1fr; column-gap: 22px; }
   .opt .ov { min-width: 0; }
   .opt .ov em { min-width: 92px; }
 }

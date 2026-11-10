@@ -81,6 +81,10 @@ Updated just before each approved release, not on every change.
   (+$200). Gulls can be shot down and return after 4 s. Why: a death meant up to 100 s of watching, the
   worst part of couch play. Also rumble on every player's own phone or pad, a low-health heartbeat,
   slow motion on the round-winning kill and a 1 v N last-stand callout. The spectator camera is gone.
+  Fairer bots: they react like people (Recruit ~0.9 s, Regular ~0.65, Veteran ~0.43), aim settles and
+  drifts instead of locking on, turn at a limited speed, miss and pause, and no longer know exactly where
+  you are. Difficulty labelled Recruit / Regular / Veteran and starts on Recruit; versus gulls mark on
+  the radar only.
 - **Point CENTRE:** Point mode gets a CENTRE button that taps F9; the Windows tray turns it into
   "cursor to the middle of the screen".
 - **Emberlane (new):** bowling with the phone as the ball. The release uses the hand's measured

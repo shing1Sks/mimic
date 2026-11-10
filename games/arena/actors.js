@@ -9,7 +9,7 @@
  */
 (function (global) {
   'use strict';
-  const T = global.THREE, M = global.ArenaMap, R = global.ArenaRules;
+  const T = global.THREE, M = global.ArenaMap, R = global.ArenaRules, BA = global.ArenaBotAim;
 
   const TEAMS = [
     { name: 'Wardens', short: 'WRD', color: '#58c7d8', hex: 0x58c7d8, names: ['Bram', 'Cole', 'Dace', 'Ines', 'Juno'],
@@ -18,11 +18,8 @@
       jacket: 0x8a4b2c, vest: 0x3b2d25, pants: 0x3d3732, hat: 0x9c2f26, visor: 0xffb347 },
   ];
 
-  const DIFF = {
-    recruit: { label: 'Recruit', reaction: 0.65, initErr: 7.5, errFloor: 1.8, errDecay: 1.4, turn: 4.0, headAim: 0.1, burst: [3, 7], pause: [0.4, 0.8], strafe: 0.15, crouch: 0.1, hear: 24, spot: 55, cone: 0.34 },
-    regular: { label: 'Regular', reaction: 0.42, initErr: 5.5, errFloor: 1.0, errDecay: 2.3, turn: 6.5, headAim: 0.25, burst: [2, 5], pause: [0.28, 0.55], strafe: 0.5, crouch: 0.25, hear: 30, spot: 66, cone: 0.25 },
-    veteran: { label: 'Veteran', reaction: 0.27, initErr: 4, errFloor: 0.55, errDecay: 3.3, turn: 9.5, headAim: 0.4, burst: [2, 4], pause: [0.18, 0.35], strafe: 0.85, crouch: 0.35, hear: 38, spot: 80, cone: 0.17 },
-  };
+  // difficulty tables and the reaction / aim / turning model live in botaim.js (tested in Node)
+  const DIFF = BA.DIFF;
 
   const rand = (a, b) => a + Math.random() * (b - a);
   const wrap = a => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
@@ -572,7 +569,7 @@
       this.a = actor; this.setDifficulty(diffName);
       this.reset();
     }
-    setDifficulty(n) { this.dn = n; this.d = DIFF[n] || DIFF.regular; }
+    setDifficulty(n) { this.dn = DIFF[n] ? n : 'recruit'; this.d = BA.get(n); }
     reset() {
       this.mode = 'advance'; this.path = null; this.pathIdx = 0; this.goal = null; this.repathT = 0;
       this.target = null; this.visible = false; this.lostT = 9; this.reaction = 0; this.errMag = 0; this.errAng = 0;
@@ -581,6 +578,7 @@
       this.coverT = 0; this.stuckT = 0; this.lastPos = { x: this.a.pos.x, z: this.a.pos.z }; this.skipT = 0;
       this.aimYaw = this.a.yaw; this.aimPitch = 0; this.wantCrouch = false; this.retreated = false; this.peekFrom = null;
       this.lane = null; this.laneDir = 1; this.huntT = 0;
+      this.turnSt = { yaw: this.a.yaw, rate: 0 };
     }
     assignLane(lane, map) {
       this.lane = map.lanes[lane]; this.laneName = lane;
@@ -596,23 +594,24 @@
     sense(G) {
       const a = this.a, d = this.d;
       const ex = a.pos.x, ey = a.eyeY(), ez = a.pos.z;
-      let best = null, bestD = Infinity;
+      let best = null, bestD = Infinity, bestAng = 0;
       for (const e of G.actors) {
         if (!e.alive || e.team === a.team) continue;
         const dx = e.pos.x - ex, dz = e.pos.z - ez, dist = Math.hypot(dx, dz);
-        if (dist > d.spot) continue;
         const ang = Math.abs(wrap(Math.atan2(-dx, -dz) - a.yaw));
         const tracking = e === this.target && this.visible;
-        if (dist > 4 && ang > (tracking ? 2.0 : 1.25)) continue;
+        if (!BA.canNotice(d, { dist, angle: ang, tracking })) continue;
         const headY = e.eyeY(), chestY = e.pos.y + 1.1 - 0.3 * e.crouch;
         if (!M.lineOfSight(G.map, ex, ey, ez, e.pos.x, headY, e.pos.z) && !M.lineOfSight(G.map, ex, ey, ez, e.pos.x, chestY, e.pos.z)) continue;
-        if (dist < bestD) { bestD = dist; best = e; }
+        if (dist < bestD) { bestD = dist; best = e; bestAng = ang; }
       }
       if (best) {
         if (best !== this.target || this.lostT > 1.2) {
           const warned = this.lastKnown && Math.hypot(this.lastKnown.x - best.pos.x, this.lastKnown.z - best.pos.z) < 6 && G.time - this.lastKnown.t < 3;
-          this.reaction = d.reaction * rand(0.8, 1.4) * (warned ? 0.6 : 1) + (bestD > 40 ? 0.15 : 0);
-          this.errMag = d.initErr * rand(0.7, 1.2) * (bestD > 30 ? 1.2 : 1);
+          this.reaction = BA.reactionTime(d, { dist: bestD, angle: bestAng, warned }, Math.random);
+          this.seenAt = G.time;
+          if (best.isPlayer && G.rec) G.rec('botSees', { bot: a.name, v: best.ph ? 'P' + (best.ph.slot + 1) : best.name, dist: Math.round(bestD), angle: Math.round(bestAng / DEG), reaction: Math.round(this.reaction * 100) / 100, warned: !!warned });
+          this.errMag = BA.initialError(d, { dist: bestD }, Math.random);
           this.errAng = Math.random() * Math.PI * 2;
           this.aimHead = Math.random() < d.headAim;
           this.wantCrouch = bestD > 12 && Math.random() < d.crouch;
@@ -621,11 +620,13 @@
         this.target = best; this.visible = true; this.lostT = 0;
         best.spotted = G.time;
         this.lastKnown = { x: best.pos.x, y: best.pos.y, z: best.pos.z, t: G.time };
-        // call it out to nearby teammates
+        // call it out to nearby teammates: roughly where, and a moment late (a callout, not a wallhack)
         for (const f of G.actors) {
           if (f === a || !f.alive || f.team !== a.team || !f.bot) continue;
           const fb = f.bot;
-          if (!fb.visible && Math.hypot(f.pos.x - a.pos.x, f.pos.z - a.pos.z) < 30) fb.lastKnown = Object.assign({}, this.lastKnown);
+          if (fb.visible || Math.hypot(f.pos.x - a.pos.x, f.pos.z - a.pos.z) >= 30 || (fb.lastKnown && G.time - fb.lastKnown.t < 1)) continue;
+          const j = BA.heardJitter(Math.hypot(best.pos.x - f.pos.x, best.pos.z - f.pos.z), Math.random);
+          fb.lastKnown = { x: best.pos.x + j.x, y: best.pos.y, z: best.pos.z + j.z, t: G.time - 0.5 };
         }
       } else {
         this.visible = false;
@@ -634,15 +635,20 @@
       for (const n of G.noises) {
         if (n.team === a.team || G.time - n.t > 0.25) continue;
         const dist = Math.hypot(n.x - ex, n.z - ez);
-        if (dist < d.hear * (n.loud ? 1 : 0.4) && !this.visible) this.lastKnown = { x: n.x, y: n.y, z: n.z, t: G.time };
+        if (dist < d.hear * (n.loud ? 1 : 0.4) && !this.visible) {
+          // heard, not seen: they know the direction, not the exact spot
+          const j = BA.heardJitter(dist, Math.random);
+          this.lastKnown = { x: n.x + j.x, y: n.y, z: n.z + j.z, t: G.time };
+        }
       }
     }
 
     onHurt(G, attacker) {
-      this.errMag += 1.5;
+      this.errMag += 2.5; // a flinch: being hit throws the aim off
       if (!this.visible && attacker) {
-        this.lastKnown = { x: attacker.pos.x, y: attacker.pos.y, z: attacker.pos.z, t: G.time };
-        this.reaction = Math.min(this.reaction, this.d.reaction * 0.7);
+        const j = BA.heardJitter(Math.hypot(attacker.pos.x - this.a.pos.x, attacker.pos.z - this.a.pos.z), Math.random);
+        this.lastKnown = { x: attacker.pos.x + j.x, y: attacker.pos.y, z: attacker.pos.z + j.z, t: G.time };
+        this.reaction = Math.min(this.reaction, this.d.reaction * 0.8);
       }
     }
 
@@ -749,21 +755,25 @@
           const ty = this.aimHead ? tg.eyeY() + 0.02 : tg.pos.y + 1.12 - 0.35 * tg.crouch;
           const dx = tg.pos.x - a.pos.x, dy = ty - a.eyeY(), dz = tg.pos.z - a.pos.z;
           const trueYaw = Math.atan2(-dx, -dz), truePitch = Math.atan2(dy, Math.hypot(dx, dz));
-          this.errMag = Math.max(d.errFloor, this.errMag * Math.exp(-d.errDecay * dt));
-          this.errAng += dt * rand(0.5, 2.5);
-          const tvel = Math.hypot(tg.vel.x, tg.vel.z);
-          const err = (this.errMag + tvel * 0.18) * DEG;
+          // tracking: how fast the target crosses this bot's view, which its aim lags behind
+          const lat = (tg.vel.x * -dz + tg.vel.z * dx) / Math.max(0.5, Math.hypot(dx, dz));
+          const angVel = lat / Math.max(1, dist) / DEG;
+          this.errMag = BA.errorStep(this.errMag, d, dt, { angVel, moving: !!move });
+          this.errAng += dt * rand(0.5, 2.5); // the error wanders around the target
+          const err = this.errMag * DEG;
           faceYaw = trueYaw + Math.cos(this.errAng) * err;
           facePitch = truePitch + Math.sin(this.errAng) * err * 0.6;
           // fire when roughly on target
           const off = Math.hypot(wrap(this.aimYaw - trueYaw), this.aimPitch - truePitch);
-          const tol = Math.atan2(0.45, dist) + d.errFloor * DEG;
+          const tol = BA.fireTolerance(d, dist);
           this.pauseT -= dt;
-          if (this.reaction <= 0 && off < tol * 1.6 && a.reloadT <= 0 && a.drawT <= 0) {
+          if (this.reaction <= 0 && off < tol && a.reloadT <= 0 && a.drawT <= 0) {
             if (ammo.mag === 0) G.reload(a);
             else if (this.pauseT <= 0) {
               if (this.burstLeft <= 0) this.burstLeft = w.auto ? Math.round(rand(d.burst[0], d.burst[1]) * (dist < 10 ? 2 : 1)) : 1;
               if (G.tryFire(a, this.aimYaw, this.aimPitch)) {
+                // recoil it does not fully hold down: the aim climbs off and has to come back
+                this.errMag += d.kick * R.recoilKick(w.id, Math.max(0, Math.floor(a.shotsInBurst) - 1)).pitch;
                 this.burstLeft--;
                 if (this.burstLeft <= 0) this.pauseT = w.auto ? rand(d.pause[0], d.pause[1]) * (dist < 10 ? 0.5 : 1) : rand(0.15, 0.45) + (w.id === 'longline' ? 0.6 : 0);
               }
@@ -801,15 +811,20 @@
 
       if (this.mode === 'advance') {
         if (ammo.mag < w.mag && ammo.reserve > 0 && a.reloadT <= 0) G.reload(a);
-        const hunt = G.roundTimeLeft < 50 || G.aliveCount(1 - a.team) <= 1;
+        const hunt = G.roundTimeLeft < d.hunt || G.aliveCount(1 - a.team) <= 1;
         this.repathT -= dt;
         if (hunt) {
+          // sweep toward the enemy's general area (within ~10 m), not straight to where they stand
           if (!this.path || this.repathT <= 0) {
             const foes = G.actors.filter(e => e.alive && e.team !== a.team);
-            if (foes.length) { const f = foes[(this.a.id + Math.floor(G.time / 12)) % foes.length]; this.pathTo(G, f.pos.x, f.pos.z); }
-            this.repathT = 3;
+            if (foes.length) {
+              const f = foes[(this.a.id + Math.floor(G.time / 12)) % foes.length];
+              this.pathTo(G, f.pos.x + rand(-10, 10), f.pos.z + rand(-10, 10));
+            }
+            this.repathT = 6;
           }
           move = this.followPath(G, dt);
+          if (move) { speed *= 0.8; a.walking = true; }
         } else if (this.holdT > 0) {
           this.holdT -= dt;
           const nxt = this.lane[Math.max(0, Math.min(this.lane.length - 1, this.waypoint))];
@@ -850,9 +865,11 @@
         if (move) faceYaw = Math.atan2(-move.x, -move.z);
         else faceYaw = this.aimYaw;
       }
-      const turn = d.turn * (this.mode === 'engage' ? 1 : 0.6);
-      const dyaw = wrap(faceYaw - this.aimYaw);
-      this.aimYaw = wrap(this.aimYaw + Math.max(-turn * dt, Math.min(turn * dt, dyaw * Math.min(1, 14 * dt))));
+      // turning has a top speed that winds up (botaim.js): no instant 180s
+      const engaged = this.mode === 'engage';
+      this.turnSt.yaw = this.aimYaw;
+      this.aimYaw = BA.turnStep(this.turnSt, faceYaw, dt, d, engaged);
+      const turn = d.turn * (engaged ? 1 : 0.6);
       const dp = facePitch - this.aimPitch;
       this.aimPitch += Math.max(-turn * dt, Math.min(turn * dt, dp * Math.min(1, 12 * dt)));
       a.yaw = this.aimYaw; a.pitch = this.aimPitch;

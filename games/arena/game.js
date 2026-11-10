@@ -55,12 +55,18 @@
     ];
     const S = {};
     OPTIONS.forEach(o => { S[o.key] = o.def; });
-    S.mode = 'squad'; S.diff = 'regular'; S.toWin = 5; S.splitMode = 'coop'; S.splitFill = true;
+    S.mode = 'squad'; S.diff = 'recruit'; S.toWin = 5; S.splitMode = 'coop'; S.splitFill = true;
     try { Object.assign(S, JSON.parse(localStorage.getItem('duskwater.settings') || '{}')); } catch (e) { /* defaults */ }
+    // settings saved before the bot rework (v2) kept the old, much harder 'regular': start everyone
+    // on the beatable level once; a choice made after that is kept
+    if (!(S.v >= 2)) { S.diff = 'recruit'; S.v = 2; }
+    if (!A.DIFF[S.diff]) S.diff = 'recruit';
     const save = () => { try { localStorage.setItem('duskwater.settings', JSON.stringify(S)); } catch (e) { /* private mode */ } };
+    /** 'Recruit · easy': the level and what it means, everywhere difficulty is shown. */
+    function diffLabel(v) { const d = A.DIFF[v] || A.DIFF.recruit; return `${d.label} · ${d.blurb}`; }
     const SELECTORS = {
       mode: { values: ['squad', 'solo'], label: v => v === 'squad' ? 'Squad 5v5' : 'Solo vs 5' },
-      diff: { values: ['recruit', 'regular', 'veteran'], label: v => A.DIFF[v].label },
+      diff: { values: ArenaBotAim.ORDER, label: diffLabel },
       toWin: { values: [3, 5, 8], label: v => v + ' rounds' },
     };
 
@@ -112,7 +118,15 @@
       tryFire: (a, yaw, pitch) => tryFire(a, yaw, pitch),
       reload: a => startReload(a),
       switchWeapon: (a, slot) => switchWeapon(a, slot),
+      rec: (name, data) => rec(name, data),
     };
+    /**
+     * Game events into a Mimic session recording (games/lib/recorder.js), when one is running: how
+     * each player died, how fast bots reacted to them, what the gulls did. Balance work reads these.
+     */
+    const r1 = v => Math.round(v * 10) / 10;
+    function rec(name, data) { try { if (window.MimicRec && MimicRec.event) MimicRec.event(name, Object.assign({ gt: r1(G.time), round: game.round }, data)); } catch (e) { /* recording is optional */ } }
+    const who = a => a ? (a.ph ? 'P' + (a.ph.slot + 1) : a.name) : null;
     const game = {
       state: 'splash', phase: 'buy', phaseT: 0, round: 0, score: [0, 0], lossStreak: [0, 0], matchOver: false,
       player: null, mode: 'squad', split: false, feed: [], feedV: 0, lastWinner: -1, stats: { fps: 60 },
@@ -519,6 +533,7 @@
       rumble(ph, 0.9, 140, 3, true);
       hitMarker(ph, false, false);
       addFeed({ kind: 'gull', att: ph.a, v });
+      rec('gullBlind', { by: who(ph.a), v: who(v) });
       if (v.ph) blindPlayer(v.ph, ph.a);
       else if (v.bot) {
         v.blindT = GU.blind;
@@ -558,6 +573,7 @@
       rumble(ph, 1, 240, 2, true);
       showBanner(ph, 'Shot down', `by ${att.name} · flying again in ${GU.downTime}s`, 1, 2.2);
       addFeed({ kind: 'gulldown', att, v: ph.a });
+      rec('gullDown', { by: who(att), v: who(ph.a), botCounter: !!att.bot });
       if (att.ph) { hitMarker(att.ph, false, true); asView(att.ph, () => sfx.hitmarker(false, true)); rumble(att.ph, 0.5, 70, 3, true); }
     }
     /** Spot markers over enemies a gull has seen, and bots shaking off a blinding. */
@@ -569,7 +585,9 @@
         }
         const m = a.spotMark;
         if (!m) continue;
-        const on = a.alive && G.time - (a.gullSpot || -9) < GU.spotHold;
+        // against human enemies (versus) a gull's marks go on the radar only: a diamond through walls
+        // on a person who cannot hide from it is too strong; against bots the diamonds stay
+        const on = game.mode !== 'versus' && a.alive && G.time - (a.gullSpot || -9) < GU.spotHold;
         m.visible = on;
         if (on) {
           m.position.set(a.pos.x, a.pos.y + a.height() + 0.75, a.pos.z);
@@ -710,18 +728,21 @@
         showBanner(ph, `Round ${game.round}`, first ? `Buy phase — ${where}` : 'Buy phase', null, 2.6);
       });
       sfx.ui('ok');
+      rec('round', { diff: S.diff, mode: game.mode, score: game.score.slice(), money: H.map(ph => ph.a.money) });
     }
 
     function botBuy(a) {
       const W = R.WEAPONS, arm = R.ARMOUR.price;
       if (!a.primary) {
         let pick = null;
-        if (a.money >= W.longline.price + arm && Math.random() < (S.diff === 'veteran' ? 0.28 : 0.12)) pick = 'longline';
-        else if (a.money >= W.breaker.price + arm) pick = 'breaker';
+        // how bots shop depends on their level: recruits often settle for the SMG and rarely snipe
+        const d = a.bot ? a.bot.d : A.DIFF.recruit;
+        if (a.money >= W.longline.price + arm && Math.random() < d.longline) pick = 'longline';
+        else if (a.money >= W.breaker.price + arm && Math.random() < d.rifleBuy) pick = 'breaker';
         else if (a.money >= W.skiff.price + arm || (a.money >= W.skiff.price && Math.random() < 0.5)) pick = 'skiff';
         if (pick) { a.money -= W[pick].price; a.giveWeapon(pick); }
       }
-      if (a.armor < 60 && a.money >= arm) { a.money -= arm; a.armor = R.ARMOUR.amount; }
+      if (a.armor < 60 && a.money >= arm && (a.bot.dn !== 'recruit' || Math.random() < 0.5)) { a.money -= arm; a.armor = R.ARMOUR.amount; }
     }
 
     function endRound(winner, reason) {
@@ -733,6 +754,7 @@
         a.money = R.clampMoney(a.money + R.roundReward(a.team === winner, game.lossStreak[a.team]));
       });
       game.lossStreak[winner] = 0; game.lossStreak[loser]++;
+      rec('roundEnd', { winner, reason, score: game.score.slice() });
       game.lastWinner = winner;
       if (game.score[winner] >= S.toWin) game.matchOver = true;
       const name = A.TEAMS[winner].name;
@@ -800,7 +822,7 @@
       const scoped = !!(ph && ph.scoped);
       let spread = R.spreadFor(w, { speed, airborne: !a.onGround, crouched: a.crouch > 0.5, shotsInBurst: a.shotsInBurst, scoped });
       if (ph && ph.aiming && !scoped) spread *= 0.85;
-      if (!ph) spread *= 0.9;
+      if (a.bot) spread *= a.bot.d.spreadMult; // bots never shoot tighter than a player would
       // direction with spread cone
       aimDir(yaw, pitch, _dir);
       _right.set(Math.cos(yaw), 0, -Math.sin(yaw));
@@ -885,8 +907,11 @@
 
     function applyDamage(v, att, w, zone, dist, dir) {
       const d = R.computeDamage(w, zone, dist, v.armor);
+      // a bot's shots on a player hit softer at the easier levels (botaim.js dmgMult); bot on bot is plain
+      if (att.bot && v.isPlayer) { const k = att.bot.d.dmgMult; d.health *= k; d.armor *= k; }
       v.armor = Math.max(0, v.armor - d.armor);
       const dmg = Math.min(v.hp, Math.round(d.health));
+      if (v.isPlayer) rec('hurt', { v: who(v), by: who(att), w: w.id, zone, dist: r1(dist), dmg, hp: v.hp - dmg, seen: att.bot ? r1(G.time - (att.bot.seenAt || G.time)) : null });
       v.hp -= dmg;
       att.dmg += dmg; att.hits++;
       v.damagers[att.id] = (v.damagers[att.id] || 0) + dmg;
@@ -915,6 +940,7 @@
       att.money = R.clampMoney(att.money + R.killReward(w.id));
       Object.keys(v.damagers).forEach(id => { if (+id !== att.id && v.damagers[id] >= 40) { const as = G.actors.find(x => x.id === +id); if (as) as.assists++; } });
       addFeed({ att, v, w, head });
+      if (v.isPlayer || att.isPlayer) rec('kill', { v: who(v), by: who(att), w: w.id, head, dist: r1(Math.hypot(v.pos.x - att.pos.x, v.pos.z - att.pos.z)) });
       // a gull blinded this victim moments ago: its player shares the kill
       const gb = v.blindedBy;
       if (gb && gb !== att && gb.team === att.team && GL.earnsAssist(v.blindedAt, G.time)) {
@@ -1751,6 +1777,7 @@
         if (!lobby) return;
         if (pp.y) lobbyAct(dev, 'mode');
         if (pp.x) lobbyAct(dev, 'fill');
+        if (pp.r1 || pp.l1) cycleLobbyDiff(pp.r1 ? 1 : -1);
         if (f.pressed.menuLeft) lobbyAct(dev, 'left');
         if (f.pressed.menuRight) lobbyAct(dev, 'right');
       }
@@ -1762,6 +1789,7 @@
       if (!lobby) return;
       if (k.KeyM) lobbyAct('kbm', 'mode');
       if (k.KeyN) lobbyAct('kbm', 'fill');
+      if (k.KeyK) cycleLobbyDiff(1);
       if (k.ArrowLeft || k.KeyA) lobbyAct('kbm', 'left');
       if (k.ArrowRight || k.KeyD) lobbyAct('kbm', 'right');
       // everyone ready: a short count, then go
@@ -1783,13 +1811,19 @@
         $('lStatus').classList.remove('go');
       }
     }
+    function cycleLobbyDiff(dir) {
+      const v = ArenaBotAim.ORDER, i = v.indexOf(S.diff);
+      S.diff = v[(i + dir + v.length) % v.length]; save();
+      if (lobby) lobby = Object.assign({}, lobby, { slots: lobby.slots.map(sl => Object.assign({}, sl, { ready: false })) });
+      lobbyGo = 0; sfx.ui('move'); renderLobby();
+    }
     function renderLobby() {
       if (!lobby) return;
       const versus = lobby.mode === 'versus';
       $('lMode').textContent = versus ? 'Team versus' : 'Co-op vs bots';
       $('lFill').textContent = lobby.fill ? 'Fill teams to 5' : 'Players only';
       $('lModeKey').textContent = 'Y / M'; $('lFillKey').textContent = 'X / N';
-      $('lDiff').textContent = A.DIFF[S.diff].label; $('lWin').textContent = S.toWin + ' rounds';
+      $('lDiff').textContent = diffLabel(S.diff); $('lDiffKey').textContent = 'R1 / K'; $('lWin').textContent = S.toWin + ' rounds';
       const cards = [];
       for (let i = 0; i < SP.MAX_PLAYERS; i++) {
         const s = lobby.slots[i];
@@ -1825,6 +1859,7 @@
         lobby = lobby.slots.length ? SP.lobbyInput(lobby, lobby.slots[0].dev, 'mode').st : Object.assign({}, lobby, { mode: lobby.mode === 'coop' ? 'versus' : 'coop' });
         S.splitMode = lobby.mode; save(); renderLobby(); sfx.ui('move');
       },
+      ldiff: () => { if (lobby) cycleLobbyDiff(1); },
       lfill: () => { if (lobby) { lobby = Object.assign({}, lobby, { fill: !lobby.fill, slots: lobby.slots.map(s => Object.assign({}, s, { ready: false })) }); S.splitFill = lobby.fill; save(); renderLobby(); sfx.ui('move'); } },
       rumble: async () => {
         sfx.ui('ok');

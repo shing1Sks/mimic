@@ -69,6 +69,8 @@ const tests = {
     assert.strictEqual(R.roundReward(true, 0), R.ECONOMY.win);
     assert.ok(R.roundReward(false, 3) > R.roundReward(false, 0), 'loss bonus grows with streak');
     assert.ok(R.roundReward(false, 99) <= R.ECONOMY.lossMax);
+    // losing the pistol round still buys an SMG and armour: the losing side is never locked out
+    assert.ok(R.ECONOMY.start - 0 + R.roundReward(false, 0) >= R.WEAPONS.skiff.price + R.ARMOUR.price);
   },
   timeoutWinner() {
     assert.strictEqual(R.timeoutWinner({ alive: 3, hp: 100 }, { alive: 2, hp: 300 }), 0);

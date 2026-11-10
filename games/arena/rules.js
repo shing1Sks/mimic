@@ -52,7 +52,8 @@
   };
 
   const ARMOUR = { price: 650, amount: 100 };
-  const ECONOMY = { start: 800, max: 9000, win: 3100, lossBase: 1400, lossStep: 500, lossMax: 3400, survivorBonus: 0 };
+  // the losing side can afford an SMG and armour, or a rifle, the very next round: no snowballing bots
+  const ECONOMY = { start: 800, max: 9000, win: 3000, lossBase: 1900, lossStep: 500, lossMax: 3400, survivorBonus: 0 };
   const ROUND = { buyTime: 9, liveTime: 105, postTime: 4.5 };
 
   function recoilKick(id, i) {

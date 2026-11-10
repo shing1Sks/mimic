@@ -326,13 +326,14 @@ float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
 
     const tmat = new THREE.MeshLambertMaterial({ vertexColors: true });
     tmat.onBeforeCompile = (sh) => {
-      Object.assign(sh.uniforms, tU);
+      Object.assign(sh.uniforms, tU, window.Clouds ? Clouds.U : {});
       sh.vertexShader = 'attribute float field;\nattribute float forest;\nvarying float vField;\nvarying float vForest;\nvarying vec3 vWPos;\nvarying vec3 vWN;\n' +
         sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvField = field; vForest = forest; vWN = normal;\nvWPos = (modelMatrix * vec4(position, 1.0)).xyz;');
       sh.fragmentShader = `varying float vField; varying float vForest; varying vec3 vWPos; varying vec3 vWN;
 uniform sampler2D tGrassA, tGrassB, tRock, tDirt, tSand, tSnow;
 uniform vec3 mGrassA, mGrassB, mRock, mDirt, mSand, mSnow;
 uniform float uTexOn, uDetail;
+${window.Clouds ? Clouds.CLOUD_GLSL : 'float cloudShadow(vec3 p) { return 1.0; }'}
 vec3 two(sampler2D t, vec2 p, float s1, float s2) {
   if (uDetail < 0.5) return texture2D(t, p / s1).rgb;   // performance tier: one scale only
   return mix(texture2D(t, p / s1).rgb, texture2D(t, p / s2 + 0.37).rgb, 0.45);
@@ -399,7 +400,7 @@ vec3 rel(vec3 c, vec3 m, float k) { float l = dot(c, vec3(0.3, 0.55, 0.15)) / ma
     float dn = vnoise(vWPos.xz * 0.3) * 0.5 + vnoise(vWPos.xz * 0.045) * 0.5;
     diffuseColor.rgb *= mix(1.0, 0.78 + 0.44 * dn, 1.0 - smoothstep(120.0, 1500.0, dist));
   }
-}`);
+}`).replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n  reflectedLight.directDiffuse *= cloudShadow(vWPos);');
     };
     tmat.customProgramCacheKey = () => 'gw-terrain';
     const terrain = new THREE.Group();

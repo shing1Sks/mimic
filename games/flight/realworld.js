@@ -169,22 +169,48 @@
     // ground detail: Sentinel-2 is 10 m a pixel, a blur from a few hundred feet. A CC0 aerial texture
     // (the island's) modulates its brightness near the camera, two scales, fading out by 2.5 km;
     // brightness only, so water, towns and snow keep their real colours
-    const detailU = { tDetail: { value: null }, uDetailOn: { value: 0 }, uDetailMean: { value: 0.5 } };
+    const detailU = { tDetail: { value: null }, uDetailOn: { value: 0 }, uDetailMean: { value: 0.5 },
+      // close-up detail by what the map says is there: asphalt on roads, leaf litter and grass on green
+      tAsphalt: { value: null }, tGreen: { value: null }, uAsMean: { value: 0.5 }, uGrMean: { value: 0.5 }, uDetail2On: { value: 0 } };
     // the terrain is lit in its own small shader (sun + sky): a MeshBasicMaterial has a fraction of
     // a Lambert's uniforms, and with ~150 tiles each on its own texture that is most of the CPU cost
     const lightU = { uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color(1, 1, 1) }, uSkyCol: { value: new THREE.Color(0.4, 0.45, 0.5) }, uGndCol: { value: new THREE.Color(0.2, 0.2, 0.15) }, uNight: { value: 0 } };
     // the water shares the island sea's live uniforms (time, sky colours, sun glitter colour)
+    // Ultra: the sun's shadow map covers the city around the aircraft; the terrain samples it here
+    lightU.uShadowMap = { value: null }; lightU.uShadowMatrix = { value: new THREE.Matrix4() }; lightU.uShadowOn = { value: 0 };
     for (const k of ['uTime', 'uZen', 'uHor', 'uSunColor', 'uDeep']) lightU[k] = (world.waterU && world.waterU[k]) || { value: k === 'uTime' ? 0 : new THREE.Color(0.1, 0.2, 0.3) };
-    if (window.World && World.loadTex) World.loadTex('assets/tex/aerial_grass_rock_diff.jpg', maxAniso, (t, mean) => { detailU.tDetail.value = t; detailU.uDetailMean.value = (mean.r + mean.g + mean.b) / 3; detailU.uDetailOn.value = 1; });
+    if (window.World && World.loadTex) {
+      World.loadTex('assets/tex/aerial_grass_rock_diff.jpg', maxAniso, (t, mean) => { detailU.tDetail.value = t; detailU.uDetailMean.value = (mean.r + mean.g + mean.b) / 3; detailU.uDetailOn.value = 1; });
+      let n2 = 0;
+      World.loadTex('assets/tex/asphalt_02_diff.jpg', maxAniso, (t, mean) => { detailU.tAsphalt.value = t; detailU.uAsMean.value = (mean.r + mean.g + mean.b) / 3; if (++n2 === 2) detailU.uDetail2On.value = 1; });
+      World.loadTex('assets/tex/forrest_ground_01_diff.jpg', maxAniso, (t, mean) => { detailU.tGreen.value = t; detailU.uGrMean.value = (mean.r + mean.g + mean.b) / 3; if (++n2 === 2) detailU.uDetail2On.value = 1; });
+    }
     function detailPatch(sh) {
-      Object.assign(sh.uniforms, detailU, lightU);
+      Object.assign(sh.uniforms, detailU, lightU, window.Clouds ? Clouds.U : {});
       sh.vertexShader = `varying vec3 vDWorld; varying vec3 vNW;
 ` + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
 vDWorld = (modelMatrix * vec4(transformed, 1.0)).xyz; vNW = normal;`);
-      sh.fragmentShader = `uniform sampler2D tDetail; uniform float uDetailOn, uDetailMean; varying vec3 vDWorld; varying vec3 vNW;
+      sh.fragmentShader = `uniform sampler2D tDetail, tAsphalt, tGreen; uniform float uDetailOn, uDetailMean, uAsMean, uGrMean, uDetail2On; varying vec3 vDWorld; varying vec3 vNW;
 uniform vec3 uSunDir, uSunCol, uSkyCol, uGndCol; uniform float uNight;
 uniform sampler2D tOsm; uniform vec4 uOsmRect; uniform float uOsmOn;
 uniform float uTime; uniform vec3 uZen, uHor, uSunColor, uDeep;
+uniform sampler2D uShadowMap; uniform mat4 uShadowMatrix; uniform float uShadowOn;
+float unpackShadowDepth(vec4 v) { return dot(v, (255.0 / 256.0) / vec4(16777216.0, 65536.0, 256.0, 1.0)); }
+float sunShadow(vec3 P) {
+  if (uShadowOn < 0.5) return 1.0;
+  vec4 sc = uShadowMatrix * vec4(P, 1.0); sc.xyz /= sc.w;
+  if (sc.x < 0.0 || sc.x > 1.0 || sc.y < 0.0 || sc.y > 1.0 || sc.z > 1.0) return 1.0;
+  vec2 tx = vec2(1.0 / 4096.0);
+  float s = 0.0, z = sc.z - 0.0012;
+  s += step(z, unpackShadowDepth(texture2D(uShadowMap, sc.xy + vec2(-0.5, -0.5) * tx)));
+  s += step(z, unpackShadowDepth(texture2D(uShadowMap, sc.xy + vec2(0.5, -0.5) * tx)));
+  s += step(z, unpackShadowDepth(texture2D(uShadowMap, sc.xy + vec2(-0.5, 0.5) * tx)));
+  s += step(z, unpackShadowDepth(texture2D(uShadowMap, sc.xy + vec2(0.5, 0.5) * tx)));
+  // fade out toward the edge of the shadowed area
+  vec2 e = min(sc.xy, 1.0 - sc.xy);
+  return mix(1.0, s * 0.25, smoothstep(0.0, 0.08, min(e.x, e.y)));
+}
+${window.Clouds ? Clouds.CLOUD_GLSL : 'float cloudShadow(vec3 p) { return 1.0; }'}
 // water (the sea, and lakes and rivers from the map overlay): the island's wave set, fresnel sky
 // reflection and sun glitter, so real coasts look like the island's sea
 vec2 wv(vec2 p, vec2 d, float f, float a, float s) { float ph = dot(p, d) * f + uTime * s; return d * (a * f * cos(ph)); }
@@ -207,7 +233,7 @@ vec3 waterColour(vec3 P) {
   return col + uSunColor * (pow(sp, 420.0) * 6.0 + pow(sp, 40.0) * 0.12);
 }
 ` + sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.indirectDiffuse;', `vec3 nW = normalize(vNW);
-  vec3 outgoingLight = diffuseColor.rgb * (uSunCol * max(dot(nW, uSunDir), 0.0) + mix(uGndCol, uSkyCol, 0.5 * nW.y + 0.5));
+  vec3 outgoingLight = diffuseColor.rgb * (uSunCol * max(dot(nW, uSunDir), 0.0) * cloudShadow(vDWorld) * sunShadow(vDWorld) + mix(uGndCol, uSkyCol, 0.5 * nW.y + 0.5));
   if (osmWater > 0.001) outgoingLight = mix(outgoingLight, waterColour(vDWorld), osmWater);
   // city lights at night: street and roof pixels of the map overlay glow in scattered points
   float sparkle = step(0.72, fract(sin(dot(floor(vDWorld.xz / 4.0), vec2(12.9898, 78.233))) * 43758.5453));
@@ -229,6 +255,14 @@ vec3 waterColour(vec3 P) {
             float a = dot(texture2D(tDetail, vDWorld.xz / 41.0).rgb, vec3(0.3333)) / uDetailMean;
             float b = dot(texture2D(tDetail, vDWorld.xz / 9.7 + 0.37).rgb, vec3(0.3333)) / uDetailMean;
             diffuseColor.rgb *= mix(1.0, clamp(a * 0.6 + b * 0.4, 0.4, 1.7), 0.55 * fd);
+            if (uDetail2On > 0.5) {
+              float fn = 1.0 - smoothstep(120.0, 900.0, length(vDWorld - cameraPosition));
+              float veg = clamp((diffuseColor.g - max(diffuseColor.r, diffuseColor.b)) * 8.0, 0.0, 1.0);
+              float aS = dot(texture2D(tAsphalt, vDWorld.xz / 5.5).rgb, vec3(0.3333)) / uAsMean;
+              float gr = dot(texture2D(tGreen, vDWorld.xz / 6.5).rgb, vec3(0.3333)) / uGrMean;
+              diffuseColor.rgb *= mix(1.0, clamp(aS, 0.55, 1.5), osmLit * 0.75 * fn);
+              diffuseColor.rgb *= mix(1.0, clamp(gr, 0.45, 1.7), veg * (1.0 - osmLit) * 0.6 * fn);
+            }
           }
         }`);
     }
@@ -429,6 +463,12 @@ vec3 waterColour(vec3 P) {
     RW.deactivate = function () { RW.active = false; RW.group.visible = false; };
     /** Visit the built terrain nodes: fn(node) with { z, x, y, rect, mesh, want }. */
     RW.forEachNode = fn => { for (const n of nodes.values()) if (n.mesh) fn(n); };
+    /** Ultra shadows: hand the terrain the sun's shadow map, and let the terrain cast. */
+    RW.setShadows = function (on, light) {
+      lightU.uShadowOn.value = on && light && light.shadow.map ? 1 : 0;
+      if (lightU.uShadowOn.value) { lightU.uShadowMap.value = light.shadow.map.texture; /* the live matrix: updated in the shadow pass, before the terrain draws */ lightU.uShadowMatrix.value = light.shadow.matrix; }
+      for (const n of nodes.values()) if (n.mesh) n.mesh.castShadow = !!on;
+    };
     RW.tick = () => tick;
     function disposeNode(n) { if (n.mesh) { terrainG.remove(n.mesh); n.mesh.geometry.dispose(); n.mesh.material.dispose(); n.mesh = null; } }
 
@@ -470,7 +510,7 @@ vec3 waterColour(vec3 P) {
         const K = 1 / 2.9;
         lightU.uSunCol.value.copy(world.sun.color).multiplyScalar(world.sun.intensity * K);
         // (the sky light a little stronger than a Lambert surface's: low sun no longer leaves the land black)
-        if (world.hemi) { lightU.uSkyCol.value.copy(world.hemi.color).multiplyScalar(world.hemi.intensity * K * 1.45); lightU.uGndCol.value.copy(world.hemi.groundColor).multiplyScalar(world.hemi.intensity * K * 1.2); }
+        if (world.hemi) { lightU.uSkyCol.value.copy(world.hemi.color).multiplyScalar(world.hemi.intensity * K * 1.8); lightU.uGndCol.value.copy(world.hemi.groundColor).multiplyScalar(world.hemi.intensity * K * 1.3); }
         lightU.uNight.value = world.night || 0;
       }
       lodT -= dt;

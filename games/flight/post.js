@@ -117,7 +117,7 @@ void main() {
     }
     if (this.level >= 2) {
       this.mBright.uniforms.tSrc.value = this.tex; this.mBright.uniforms.uTexel.value.set(1 / this.size.x, 1 / this.size.y);
-      this.mBright.uniforms.uThreshold.value = opts && opts.night ? 0.55 : 0.84;
+      this.mBright.uniforms.uThreshold.value = opts && opts.night ? 0.78 : 0.84;
       this.pass(this.mBright, A);
       // two blur rounds, the second wider: a broad soft glow with a tighter core
       for (const k of [1, 2.2]) {
@@ -144,7 +144,7 @@ void main() {
       this.sunVis += (vis - this.sunVis) * 0.08;
     } else { U.tBloom.value = this.black; U.tRays.value = this.black; this.sunVis = 0; }
     U.tScene.value = this.tex;
-    U.uBloom.value = this.level >= 2 ? (opts && opts.night ? 0.85 : 0.32) : 0;
+    U.uBloom.value = this.level >= 2 ? (opts && opts.night ? 0.42 : 0.32) : 0;
     U.uRays.value = this.level >= 3 ? 0.4 : 0;
     U.uSunVis.value = this.sunVis;
     U.uGlare.value = this.level >= 2 ? 1 : 0;

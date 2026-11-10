@@ -227,6 +227,7 @@
           g.setAttribute('uv', new THREE.BufferAttribute(arr.uv, 2));
           g.computeBoundingSphere();
           const mesh = new THREE.Mesh(g, cur[kind]); mesh.matrixAutoUpdate = false; mesh.userData.kind = kind;
+          mesh.castShadow = mesh.receiveShadow = L.q >= 3;
           group.add(mesh); t[slot] = mesh;
         }
         t.mode = m.mode; t.nb = m.buildings;
@@ -235,7 +236,10 @@
         t.treesDone = true;
         const n = m.trees.length / 4;
         if (n) {
-          const im = new THREE.InstancedMesh(treeGeo, treeMat, n), M4 = new THREE.Matrix4(), Q4 = new THREE.Quaternion(), S = new THREE.Vector3(), P = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0), C = new THREE.Color();
+          // the shared tree, with this tile's bounds, so the whole stand is culled when out of view
+          const tg = new THREE.BufferGeometry(); for (const k in treeGeo.attributes) tg.setAttribute(k, treeGeo.attributes[k]);
+          const r = t.rect; tg.boundingSphere = new THREE.Sphere(new THREE.Vector3((r.x0 + r.x1) / 2, m.trees[1], (r.z0 + r.z1) / 2), Math.hypot(r.x1 - r.x0, r.z1 - r.z0) * 0.6 + 400);
+          const im = new THREE.InstancedMesh(tg, treeMat, n), M4 = new THREE.Matrix4(), Q4 = new THREE.Quaternion(), S = new THREE.Vector3(), P = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0), C = new THREE.Color();
           for (let i = 0; i < n; i++) {
             const s = 9 + m.trees[i * 4 + 3] * 9;
             Q4.setFromAxisAngle(Y, m.trees[i * 4 + 3] * 40); S.set(s * 0.9, s, s * 0.9); P.set(m.trees[i * 4], m.trees[i * 4 + 1] - 0.4, m.trees[i * 4 + 2]);
@@ -243,7 +247,7 @@
             const k = 0.75 + (i * 0.6180339 % 1) * 0.4; C.setRGB(k, k * (0.95 + 0.1 * (i % 3) / 2), k * 0.9); im.setColorAt(i, C);
           }
           im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
-          im.frustumCulled = false; im.matrixAutoUpdate = false;   // (r149 instanced meshes cull by the single tree's bounds)
+          im.matrixAutoUpdate = false;
           group.add(im); t.trees = im;
         }
       }
@@ -271,7 +275,7 @@
     L.setQuality = function (q, level) {
       L.q = Math.max(0, Math.min(QUAL.length - 1, q | 0));
       cur = L.q >= 2 ? mats.pbr : mats.lambert;
-      for (const t of tiles.values()) for (const m of [t.mesh, t.glass]) if (m) m.material = cur[m.userData.kind];
+      for (const t of tiles.values()) for (const m of [t.mesh, t.glass]) if (m) { m.material = cur[m.userData.kind]; m.castShadow = m.receiveShadow = L.q >= 3; }
       if (level !== undefined && level !== L.level) { L.level = level; if (!level) clearAll(); }
       group.visible = !!L.level;
     };
@@ -327,9 +331,11 @@
   /** A small broadleaf-and-conifer-ish tree: trunk and two blobs, vertex coloured (1 unit tall). */
   function treeGeometry() {
     const parts = [
-      [new THREE.CylinderGeometry(0.04, 0.06, 0.4, 5).translate(0, 0.2, 0), new THREE.Color('#4a3524')],
-      [new THREE.IcosahedronGeometry(0.34, 0).scale(1, 0.95, 1).translate(0, 0.62, 0), new THREE.Color('#3e5f2a')],
-      [new THREE.IcosahedronGeometry(0.22, 0).translate(0.08, 0.86, 0.04), new THREE.Color('#4c6e30')],
+      [new THREE.CylinderGeometry(0.035, 0.06, 0.45, 6).translate(0, 0.22, 0), new THREE.Color('#4a3524')],
+      [new THREE.IcosahedronGeometry(0.3, 0).scale(1, 0.85, 1).translate(0, 0.58, 0), new THREE.Color('#38582a')],
+      [new THREE.IcosahedronGeometry(0.22, 0).translate(0.14, 0.72, 0.06), new THREE.Color('#43662d')],
+      [new THREE.IcosahedronGeometry(0.2, 0).translate(-0.12, 0.76, -0.08), new THREE.Color('#3f5f2b')],
+      [new THREE.IcosahedronGeometry(0.18, 0).translate(0.02, 0.9, 0.0), new THREE.Color('#4d7232')],
     ];
     const pos = [], nor = [], col = [];
     for (const [g0, c0] of parts) {

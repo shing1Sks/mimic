@@ -71,6 +71,7 @@
   let T, world, plane, env, puffs, life, cockpit, missionDefs, markers, speedfx;
   let islandT = null, islandExtra = [], rw = null, rwT = null, DB = null, dbP = null, osm = null;
   const post = new Post(renderer);
+  let clouds = null;
   // adaptive resolution: the render scale drops (to 0.6) while the frame rate is under 45 and climbs
   // back to the quality setting's cap when there is room, so a laptop GPU stays smooth
   let dynScale = 1, dynT = 0;
@@ -99,6 +100,7 @@
     if (rw) rw.setDetail(settings.quality);
     if (osm) osm.setQuality(settings.quality, settings.mapDetail);
     if (post) post.level = QUAL[settings.quality][2];
+    if (clouds) { clouds.setLevel(QUAL[settings.quality][2]); world.clouds.visible = QUAL[settings.quality][2] < 2; }
   }
   function onResize() { applyQuality(); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); hud.resize(); }
   addEventListener('resize', onResize);
@@ -162,6 +164,7 @@
     islandT = T;
     rw = RealWorld.create(scene, renderer, world);
     osm = OSMLayer.create(rw, renderer, world);
+    clouds = Clouds.create(scene);
     applyQuality();
     rwT = { heightAt: rw.heightAt, surfaceAt: rw.surfaceAt, onRunway: (x, z, ap) => rw.onRunway(x, z, ap && ap.id), AIRPORT: null, AIRPORTS: [] };
     loadDB().catch(() => {});
@@ -955,6 +958,30 @@
     guide.update({ device: deviceKind(), raw: input.raw, keys: input.keys, thr: G.ctl.throttle, elev: inp.elevator, ail: inp.aileron, show: G.tutorial ? G.guideShow : [] });
   }
 
+  // ---------------------------------------------------------------- Ultra: shadows over the whole city around the aircraft
+  const SH_NEAR = 28, SH_WIDE = 1100;
+  let shadowWide = false;
+  function wideShadow(on) {
+    const sun = world.sun, sc = sun.shadow.camera;
+    if (on !== shadowWide) {
+      shadowWide = on;
+      const r = on ? SH_WIDE : SH_NEAR;
+      sc.left = -r; sc.right = r; sc.top = r; sc.bottom = -r; sc.far = on ? 9000 : 600; sc.updateProjectionMatrix();
+      sun.shadow.bias = on ? -0.0006 : -0.0004; sun.shadow.normalBias = on ? 0.6 : 0.04;
+    }
+    if (on) {
+      // centred ahead of the aircraft, snapped to whole shadow texels so edges do not crawl
+      const ld = world.lightDir || sun.position.clone().sub(sun.target.position).normalize();
+      const fwd = tmpV2.set(0, 0, -1).applyQuaternion(plane.root.quaternion); fwd.y = 0; fwd.normalize();
+      const texel = SH_WIDE * 2 / sun.shadow.mapSize.x;
+      const fx = Math.round((plane.root.position.x + fwd.x * 500) / texel) * texel, fz = Math.round((plane.root.position.z + fwd.z * 500) / texel) * texel;
+      sun.target.position.set(fx, plane.root.position.y - 200, fz);
+      sun.position.copy(sun.target.position).addScaledVector(ld, 4000);
+      sun.target.updateMatrixWorld();
+    }
+    if (rw) rw.setShadows(on, sun);
+  }
+
   // ---------------------------------------------------------------- camera
   const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3(), upV = new THREE.Vector3(0, 1, 0), tmpE = new THREE.Euler(0, 0, 0, 'YXZ'), tmpQ2 = new THREE.Quaternion();
   function updateCamera(dt) {
@@ -1159,6 +1186,7 @@
     updateCamera(dt);
     const w = env.wind;
     world.update(camera, plane.root.position, G.time, dt, Math.atan2(-w.z, w.x));
+    wideShadow(settings.quality >= 3 && G.rwMode && osm && settings.mapDetail > 0);
     if (G.rwMode) {
       rw.update(camera, plane.root.position, dt);
       osm.update(camera, dt);
@@ -1169,6 +1197,7 @@
     markers.update(G.state === 'fly' || G.state === 'pause' ? G.mission : null, G.time);
     puffs.update(dt);
     if (G.state !== 'pause') speedfx.update(camera.position, tmpV.set(s.vel.x, s.vel.y, s.vel.z), G.state === 'fly' ? G.feel : 0, dt, world.night);
+    clouds.update(camera, world, G.rwMode && G.rw ? G.rw.loc.airport.elev : 0, dt);
     const sd = world.sunDir;
     post.render(scene, camera, sd, { night: world.night > 0.5, warm: sd ? clamp(1.1 - sd.y * 2.2, 0.25, 1) : 0.5 });
 

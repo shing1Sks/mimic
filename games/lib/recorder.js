@@ -33,12 +33,20 @@
   }
 
   // ------------------------------------------------------------------ input sampling
+  // Polled every 4 ms and logged only when a pad's report changes, so a phone's ~125 Hz stream is
+  // kept (a frame-rate log merged reports and missed swing peaks). Axes keep 6 decimals: the app
+  // signs its mode in the lowest bit of each int16 axis (value * 32767), which 4 decimals destroyed.
+  // ts = the pad's own report time (performance.now clock).
+  const lastPad = new Map();
   function samplePads() {
-    rafId = requestAnimationFrame(samplePads);
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
     for (const p of pads) {
       if (!p || !p.connected) continue;
-      log({ k: 'pad', id: p.id.slice(0, 40), i: p.index, ax: p.axes.map(a => +a.toFixed(4)), b: p.buttons.reduce((m, b, i) => b.pressed ? m | (1 << i) : m, 0) });
+      const ax = p.axes.map(a => +a.toFixed(6)), b = p.buttons.reduce((m, x, i) => x.pressed ? m | (1 << i) : m, 0);
+      const key = p.id + '|' + ax.join(',') + '|' + b;
+      if (lastPad.get(p.index) === key) continue;
+      lastPad.set(p.index, key);
+      log({ k: 'pad', id: p.id.slice(0, 40), i: p.index, ax, b, ts: +(p.timestamp || 0).toFixed(2) });
     }
   }
   const onMove = e => log({ k: 'mm', dx: e.movementX, dy: e.movementY, x: e.clientX, y: e.clientY, lock: !!document.pointerLockElement });
@@ -87,7 +95,7 @@
     post('meta.json', JSON.stringify({ game, url: location.href, started: d.toISOString(), screen: [innerWidth, innerHeight, devicePixelRatio], ua: navigator.userAgent }), false);
     addEventListener('mousemove', onMove, true); addEventListener('mousedown', onDown, true); addEventListener('mouseup', onUp, true);
     addEventListener('keydown', onKey, true); addEventListener('keyup', onKey, true); addEventListener('wheel', onWheel, { capture: true, passive: true });
-    samplePads();
+    lastPad.clear(); rafId = setInterval(samplePads, 4);
     if (auto) {
       // automatic local recording: no share prompt, the game canvas only (wait for it to exist)
       const tryCanvas = (n) => { if (!session || rec) return; if (document.querySelector('canvas')) canvasVideo(); else if (n < 20) setTimeout(() => tryCanvas(n + 1), 500); };
@@ -117,7 +125,7 @@
     log({ k: 'stop' });
     if (rec && rec.state !== 'inactive') rec.stop();
     if (stream) stream.getTracks().forEach(t => t.stop());
-    cancelAnimationFrame(rafId); clearInterval(flusher); flushLog();
+    clearInterval(rafId); clearInterval(flusher); flushLog();
     removeEventListener('mousemove', onMove, true); removeEventListener('mousedown', onDown, true); removeEventListener('mouseup', onUp, true);
     removeEventListener('keydown', onKey, true); removeEventListener('keyup', onKey, true); removeEventListener('wheel', onWheel, true);
     showBadge('saved recording ' + session); setTimeout(() => showBadge(''), 4000);

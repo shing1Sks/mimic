@@ -137,6 +137,12 @@
       B.sign({ x: 6.0, z: -13, w: 2.4, h: 1.5, up: 1.0, ry: -0.25, bg: '#e8e2cc', fg: '#a01810', lines: [{ t: 'RESTRICTED AREA', size: 52, bold: true }, { t: 'HALCYON BIOTECH STAFF ONLY', size: 30, color: '#222' }, { t: 'NO ENTRY BEYOND GATE 3', size: 30, color: '#222' }] });
       B.sign({ x: -5.6, z: -52, w: 1.3, h: 1.6, up: 1.0, ry: 0.35, tilt: 0.12, bg: '#e8e2cc', fg: '#111', lines: [{ t: 'SPEED', size: 60, bold: true }, { t: 'LIMIT', size: 60, bold: true }, { t: '15', size: 120, bold: true }] });
       B.sign({ x: -6.5, z: -8, w: 1.8, h: 1.2, up: 0.9, ry: 0.4, tilt: -0.2, bg: '#c8a01a', fg: '#111', stripe: '#111', lines: [{ t: 'DANGER', size: 70, bold: true }, { t: 'ANIMAL CROSSING', size: 34, bold: true }] });
+      // the abandoned checkpoint halfway down the road (cover the spitters use, a lane the triceratops comes through)
+      B.model('concrete_barrier', { x: -6.2, z: -38, h: 1.05, ry: 0.35, surface: 'stone' });
+      B.model('concrete_barrier', { x: 7.4, z: -40, h: 1.05, ry: -0.4, tilt: [0, 0.1], surface: 'stone' });
+      crates(B, -7.8, -31, 3, 0.4); barrels(B, 8.2, -61, 3);
+      B.model('barrel_hazard', { x: -6.8, z: -66, h: 1.0, ry: 0.6, tilt: [0, 1.5], dy: 0.3 });
+      mast(B, -7.5, -70, { h: 8, tilt: [0.35, -0.1] });
     };
     return {
       build,
@@ -204,6 +210,10 @@
       B.fenceRun('fence_chainlink_post', { x: -85, z: -100 }, { x: 85, z: -104 }, { h: 2.4, broken: 0.75, gaps: [{ x: -38, z: -101, r: 14 }, { x: 0, z: -102, r: 10 }] });
       B.sign({ x: -48, z: -98, w: 1.6, h: 1.0, up: 0.8, ry: 0.2, tilt: 0.3, bg: '#c8a01a', fg: '#111', stripe: '#111', lines: [{ t: 'HERBIVORE', size: 50, bold: true }, { t: 'PASTURE', size: 50, bold: true }] });
       mast(B, -14, -10, { h: 9, tilt: [0.1, -0.15] });
+      // the valley floor: a ranger truck that never made it, supply crates the hunters weave through
+      B.model('pickup_truck', { x: 38, z: -150, h: 1.8, ry: 2.4, tilt: [0.05, 1.45], dy: 0.6 });
+      crates(B, sv.x - 4, sv.z - 3, 3, 0.8); barrels(B, 26, -110, 3);
+      B.model('log_moss', { x: -70, z: -120, h: 1.2, ry: 0.8 });
     };
     const edge = (x, z) => { const n = W.fbm(x / 40, z / 40, 7, 3) * 18; return Math.max(W.smooth(92 + n, 108 + n, Math.abs(x)), W.smooth(-222 - n, -238 - n, z), W.smooth(-16, -4, z)); };
     return {
@@ -341,6 +351,11 @@
       B.fenceRun('fence_chainlink_post', { x: -100, z: -150 }, { x: 100, z: -146 }, { h: 2.4, broken: 0.6 });
       B.fenceRun('fence_barrier_large', { x: -28, z: 14 }, { x: -12, z: 12 }, { h: 3, broken: 0.3 });
       B.fenceRun('fence_barrier_large', { x: 12, z: 12 }, { x: 30, z: 15 }, { h: 3, broken: 0.3 });
+      // old roadblocks in the scrub on both flanks, a hazard dump off the lanes
+      B.model('concrete_barrier', { x: -49, z: -31, h: 1.05, ry: 0.9, surface: 'stone' });
+      B.model('concrete_barrier', { x: 51, z: -29, h: 1.05, ry: -0.8, tilt: [0, 0.12], surface: 'stone' });
+      B.model('barrel_hazard', { x: 14, z: -62, h: 1.0, ry: 0.4 }); B.model('barrel_hazard', { x: 15.2, z: -61, h: 1.0, ry: 1.4, tilt: [0, 1.5], dy: 0.3 });
+      crates(B, -14, -58, 2, 0.6);
     };
     const edge = (x, z) => { const n = W.fbm(x / 35, z / 35, 3, 3) * 14; return Math.max(W.smooth(88 + n, 104 + n, Math.abs(x)), W.smooth(-150 - n, -168 - n, z), W.smooth(18, 32, z)); };
     const scrubZone = (x, z) => (Math.abs(x) > 26 && Math.abs(x) < 58 && z < 2 && z > -34) ? 1 : 0;
@@ -436,6 +451,9 @@
       const weeds = W.scatter({ seed: 77, count: Math.round(260 * B.q), bounds: [-40, -73, 40, -12], minDist: 1.2, scale: [0.35, 0.8], exclude: [{ circle: { x: C.x, z: C.z, r: 5 } }] });
       B.instances('grass_tall', weeds.map(p => ({ x: p.x, z: p.z, y: 0.02, rot: p.rot, s: p.s, sx: 1.3 })), { shadow: false });
       B.instances('fern', weeds.filter((p, i) => i % 5 === 0).map(p => ({ x: p.x + 0.5, z: p.z, y: 0.02, rot: p.rot, s: 0.6, sx: 1 })), { shadow: false });
+      // the last stand someone made here: sandbag nests either side of the plaza, hazard drums by the gate
+      B.model('sandbags', { x: 9, z: -30, h: 0.9, ry: -0.3 }); B.model('sandbags', { x: -9.5, z: -33, h: 0.9, ry: 0.4 });
+      B.model('barrel_hazard', { x: -13.5, z: -62, h: 1.0, ry: 0.2 }); B.model('barrel_hazard', { x: -14.6, z: -61.2, h: 1.0, ry: 1.1, tilt: [0, 1.5], dy: 0.3 });
     };
     const inside = (x, z) => z > -80 && z < 34 && Math.abs(x) < 46;
     return {

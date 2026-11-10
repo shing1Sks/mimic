@@ -73,6 +73,45 @@
   const angDiff = (a, b) => { const x = b - a; if (!isFinite(x)) return 0; return x - 2 * Math.PI * Math.floor((x + Math.PI) / (2 * Math.PI)); };
 
   // ------------------------------------------------------------------ spawn
+  // Nothing pops in where you can see it: a spawn point in plain view is moved back out of sight
+  // (behind a shed, a ridge, the treeline, out of the stand's view or into the fog) and the animal
+  // walks in to it, so it emerges instead of appearing.
+  const _ray = new T.Vector3();
+  function seen(q, eye) {
+    const st = ctx.view && ctx.view.stand;
+    const dx = q.x - eye.x, dz = q.z - eye.z, dist = Math.hypot(dx, dz);
+    const fog = ctx.scene.fog && ctx.scene.fog.density;
+    if (fog && dist * fog > 1.1) return false;                                   // in the haze: a faint shape that firms up as it comes
+    if (st && Math.abs(angDiff(st.yaw, Math.atan2(-dx, -dz))) > (st.arc || 1.2) + 0.95) return false;   // you cannot turn that far
+    if (ctx.world && ctx.world.raycast) {
+      _ray.set(q.x - eye.x, q.y + 1.1 - eye.y, q.z - eye.z);
+      const L = _ray.length(); _ray.divideScalar(L);
+      const h = ctx.world.raycast(eye, _ray, L);
+      if (h && h.dist < L - 1.5) return false;                                    // a ridge, a wall, a trunk
+    }
+    return true;
+  }
+  function hiddenStart(at, force) {
+    const eye = ctx.view.pos;
+    if (!force && !seen(at, eye)) return null;
+    const dx = at.x - eye.x, dz = at.z - eye.z, L = Math.hypot(dx, dz) || 1, fx = dx / L, fz = dz / L;
+    const river = ctx.world && ctx.world.desc && ctx.world.desc.river, nav = navGrid();
+    let far = null;
+    // open ground (the field, the valley) needs a long way back before the haze or a ridge hides it
+    for (let ext = 10; ext <= 170; ext += 10) for (const lat of [0, 8, -8, 16, -16]) {
+      const x = at.x + fx * ext - fz * lat, z = at.z + fz * ext + fx * lat, y = groundAt(x, z);
+      if (nav && DH.Nav.blocked(nav, x, z)) continue;
+      if (river && y < river.level + 0.3) continue;
+      if (force && Math.hypot(x - at.x, z - at.z) < 6) continue;
+      // it must be able to walk straight in from there (not from the far side of a fence)
+      if (nav && !DH.Nav.freeAlong(nav, x, z, Math.atan2(at.x - x, at.z - z), Math.hypot(at.x - x, at.z - z) - (force ? 2.5 : 0.5), 0.4)) continue;
+      const q = new T.Vector3(x, y, z);
+      if (!seen(q, eye)) return q;
+      far = q;
+    }
+    return far;
+  }
+
   function spawn(species, o) {
     const L = LOGIC(), K = LOOK();
     if (!L || !K || !L.SPECIES[species] || !ctx) return null;
@@ -81,6 +120,22 @@
     const inst = K.instance(variant, { tagged: !!o.tagged });
     if (!inst) return null;
     const at = (o.at && o.at.clone) ? o.at.clone() : new T.Vector3();
+    let path0 = (o.path || []).map(p => p.clone());
+    if (o.hide !== false && ctx.view && ctx.view.pos) {
+      const high = at.y - groundAt(at.x, at.z) > 0.8;
+      if (species === 'ptero') {
+        // a flyer starts out over the horizon side of its spawn and flies in
+        const eye = ctx.view.pos, dx = at.x - eye.x, dz = at.z - eye.z, L = Math.hypot(dx, dz) || 1;
+        at.x += dx / L * 70; at.z += dz / L * 70;
+      } else {
+        const from = high ? new T.Vector3(at.x, groundAt(at.x, at.z), at.z) : at;
+        // a raised spawn's foot is usually inside the building's wall: always start well behind it
+        // (none found: it steps out of a doorway up there, which the layout puts its spawn in)
+        const st = hiddenStart(from, high);
+        // a raised spawn (a roof edge): it comes up from behind the building and jumps on
+        if (st) { path0 = [at.clone()].concat(path0.length && path0[0].distanceTo(at) < 0.5 ? path0.slice(1) : path0); at.copy(st); }
+      }
+    }
     const target = (o.target && o.target.clone) ? o.target.clone() : playerPos().clone();
     const pp = playerPos();
     const playerTarget = species !== 'grazer' && hdist(target, pp) < 15;
@@ -88,7 +143,7 @@
     const brain = L.createBrain(species, { aggro: o.aggro, delay: o.delay || 0, playerTarget });
     const d = {
       id: nextId++, species, variant, alive: true, hp: brain.hp, maxHp: brain.maxHp, pos: at, tagged: !!o.tagged, root: inst.root,
-      inst, brain, sp, path: (o.path || []).map(p => p.clone()), pathI: 0, target, home: target.clone(), playerTarget,
+      inst, brain, sp, path: path0, pathI: 0, target, home: target.clone(), playerTarget,
       circle: (o.circle || []).map(p => p.clone()), circleI: 0, charge: (o.charge || []).map(p => p.clone()),
       heading: 0, speed: 0, desired: 0, vel: new T.Vector3(), knock: new T.Vector3(), pitch: 0, roll: 0,
       flinch: 0, flinchAxis: new T.Vector3(1, 0, 0), crouch: 0, rear: 0, neckPitch: 0, headDown: 0,
@@ -100,7 +155,7 @@
       const alt = rnd(15, 22); // low enough to read against the sky, high enough to need a look up
       at.y = Math.max(at.y, groundAt(at.x, at.z) + alt);
       d.fly = { alt, radius: rnd(22, 32), dir: Math.random() < 0.5 ? 1 : -1, bank: 0, swoop: null, climbV: new T.Vector3() };
-    } else {
+    } else if (!(at.y - groundAt(at.x, at.z) > 0.8)) {
       at.y = groundAt(at.x, at.z);
     }
     const aim = d.path.length ? d.path[0] : target;
@@ -112,6 +167,7 @@
       d.offset = L.flankOffset(mates.length, 9);
     } else if (sp.pack) d.pack = { id: d.id };
     d.born = ctx.time; d.spawnAt = at.clone();
+    if (species !== 'ptero' && at.y - groundAt(at.x, at.z) > 0.8) d.elev = { from: at.clone(), to: at.clone() };   // starts up on a balcony
     // animation actions
     const clips = inst.clips;
     d.actions = {};
@@ -235,6 +291,11 @@
       const hf = groundAt(p.x + fx * L, p.z + fz * L), hb = groundAt(p.x - fx * L, p.z - fz * L);
       const want = -Math.atan2(hf - hb, 2 * L) * 0.8;
       d.pitch += (want - d.pitch) * Math.min(1, dt * 6);
+      if (!d.alive) {
+        // a body lies along the ground across the slope too, not on a level plane through it
+        const W = d.inst.tpl.length * 0.2, hr = groundAt(p.x + fz * W, p.z - fx * W), hl = groundAt(p.x - fz * W, p.z + fx * W);
+        d.roll += (Math.atan2(hl - hr, 2 * W) * 0.9 - d.roll) * Math.min(1, dt * 4);
+      }
     }
     r.rotation.set(0, 0, 0); r.rotation.order = 'YXZ';
     r.rotation.y = d.heading; r.rotation.x = d.pitch; r.rotation.z = d.roll;
@@ -249,6 +310,7 @@
   }
   function steer(d, goal, speed, dt, o) {
     o = o || {};
+    d.lastGoal = goal; d.lastWant = speed;
     const dx = goal.x - d.pos.x, dz = goal.z - d.pos.z, dist = Math.hypot(dx, dz);
     let yaw = Math.atan2(dx, dz);
     // separation from other animals
@@ -260,6 +322,9 @@
       if (dd > 1e-3 && dd < min) { sx += ex / dd * (min - dd) / min; sz += ez / dd * (min - dd) / min; }
     }
     if (sx || sz) yaw = Math.atan2(Math.sin(yaw) + sx * 1.5, Math.cos(yaw) + sz * 1.5);
+    // round sheds, containers, fences, rocks and trunks, not through them (nav.js)
+    const nav = navGrid();
+    if (nav && d.species !== 'ptero') yaw = DH.Nav.steerYaw(nav, d.pos.x, d.pos.z, yaw, Math.max(2.5, d.inst.tpl.length * 0.5), Math.min(1.1, d.inst.tpl.radius * 0.35));
     const turnRate = (d.sp.turnRate || 2) * (o.turnBoost || 1) * (speed < 1 ? 1.6 : 1);
     const off = turnTo(d, yaw, dt, turnRate);
     // slow down for sharp turns and when arriving
@@ -273,16 +338,52 @@
     d.speed += Math.max(-a * dt, Math.min(a * dt, want - d.speed));
     d.desired = want;
   }
+  const navGrid = () => (ctx && ctx.world && ctx.world.nav) || null;
   function advance(d, dt) {
     const s = d.speed;
-    d.pos.x += Math.sin(d.heading) * s * dt + d.knock.x * dt;
-    d.pos.z += Math.cos(d.heading) * s * dt + d.knock.z * dt;
+    let nx = d.pos.x + Math.sin(d.heading) * s * dt + d.knock.x * dt;
+    let nz = d.pos.z + Math.cos(d.heading) * s * dt + d.knock.z * dt;
+    const nav = navGrid();
+    if (nav && d.species !== 'ptero' && !d.elev) {
+      // never into a wall: slide along it, or stop (a charge into a shed ends at the shed)
+      const c = DH.Nav.constrain(nav, d.pos.x, d.pos.z, nx, nz);
+      if (c.x !== nx || c.z !== nz) { d.knock.multiplyScalar(0.3); if (c.x === d.pos.x && c.z === d.pos.z) d.speed *= 0.5; }
+      nx = c.x; nz = c.z;
+    }
+    d.pos.x = nx; d.pos.z = nz;
     d.knock.multiplyScalar(Math.exp(-dt * 5));
     if (d.species !== 'ptero' || !d.alive) {
       const g = groundAt(d.pos.x, d.pos.z);
       if (d.species === 'ptero') d.pos.y = Math.max(g, d.pos.y);
-      else d.pos.y = g;
+      else if (d.elev) {
+        // along a roof or a balcony: the path's own height, never under the ground
+        const E = d.elev, L2 = (E.to.x - E.from.x) ** 2 + (E.to.z - E.from.z) ** 2;
+        const t = L2 > 1e-6 ? Math.max(0, Math.min(1, ((d.pos.x - E.from.x) * (E.to.x - E.from.x) + (d.pos.z - E.from.z) * (E.to.z - E.from.z)) / L2)) : 1;
+        d.pos.y = Math.max(g, E.from.y + (E.to.y - E.from.y) * t);
+      } else d.pos.y = g;
     }
+  }
+  /** An animal that wants to move but has made no headway for a couple of seconds is boxed in by
+   * something steering cannot see round: plan a way round on the grid (nav.js findPath). */
+  function unstick(d, dt) {
+    const nav = navGrid(), st = d.brain.state;
+    if (!nav || d.species === 'ptero' || d.leap || d.detour || !d.lastGoal || (d.lastWant || 0) < 1 || !(st === 'approach' || st === 'recover' || st === 'wander' || st === 'flee')) { d.stuck = null; return; }
+    if (!d.stuck) d.stuck = { t: 0, x: d.pos.x, z: d.pos.z };
+    d.stuck.t += dt;
+    if (d.stuck.t < 2.2) return;
+    const moved = Math.hypot(d.pos.x - d.stuck.x, d.pos.z - d.stuck.z);
+    if (moved < 2 && hdist(d.pos, d.lastGoal) > 3) {
+      const p = DH.Nav.findPath(nav, d.pos.x, d.pos.z, d.lastGoal.x, d.lastGoal.z, 9000);
+      if (p && p.length) d.detour = p;
+    }
+    d.stuck = { t: 0, x: d.pos.x, z: d.pos.z };
+  }
+  /** A jump along a path (onto a roof, off a balcony): a short arc, then on with the path. */
+  function hop(d, to) {
+    const dist = Math.hypot(to.x - d.pos.x, to.z - d.pos.z);
+    d.leap = { from: d.pos.clone(), to: to.clone(), t: 0, dur: Math.max(0.45, Math.min(0.95, dist / 7 + Math.abs(to.y - d.pos.y) * 0.06)), hop: true, arc: 1 + Math.abs(to.y - d.pos.y) * 0.25 };
+    d.speed = 0; d.elev = null;
+    oneShot(d, 'Jump', { rate: 1.3, startAt: 0.15 });
   }
   /** Where a player-hunting animal is heading: the stand (live: rides move), pushed out to its flank. */
   function huntGoal(d, out) {
@@ -306,7 +407,16 @@
     const ang = LOGIC().holdBearing(Math.atan2(d.pos.x - pp.x, d.pos.z - pp.z) + (drift || 0), centre, lim);
     // at the edge of the cone the stalk turns back the other way
     if (Math.abs(angDiff(centre, ang)) >= lim - 1e-3 && Math.sign(drift || 0) === Math.sign(angDiff(centre, ang))) d.strafe = -d.strafe;
-    return out.set(pp.x + Math.sin(ang) * R, 0, pp.z + Math.cos(ang) * R);
+    out.set(pp.x + Math.sin(ang) * R, 0, pp.z + Math.cos(ang) * R);
+    // a ring point inside a shed or a rock: the nearest open spot beside it
+    const nav = navGrid();
+    if (nav && DH.Nav.blocked(nav, out.x, out.z)) {
+      for (const [da, dr] of [[0.12, 0], [-0.12, 0], [0, 4], [0, -4], [0.25, 3], [-0.25, 3], [0.4, 0], [-0.4, 0]]) {
+        const x = pp.x + Math.sin(ang + da) * (R + dr), z = pp.z + Math.cos(ang + da) * (R + dr);
+        if (!DH.Nav.blocked(nav, x, z)) return out.set(x, 0, z);
+      }
+    }
+    return out;
   }
 
   /** Is the animal outside the stand's view cone (it ran past, or came round the side)? */
@@ -322,18 +432,45 @@
     const b = d.brain, sp = d.sp, pp = playerPos();
     const dPlayer = hdist(d.pos, pp);
     if (d.species === 'ptero') return flyer(d, dt);
+    if (d.leap && d.leap.hop) {
+      const L = d.leap; L.t += dt; const u = Math.min(1, L.t / L.dur);
+      d.pos.lerpVectors(L.from, L.to, u); d.pos.y += Math.sin(Math.PI * u) * L.arc;
+      turnTo(d, Math.atan2(L.to.x - L.from.x, L.to.z - L.from.z), dt, 6);
+      if (u >= 1) {
+        d.leap = null; d.pos.y = Math.max(d.pos.y, groundAt(d.pos.x, d.pos.z)); sfx('stomp1', d.pos, 0.35, 1.3, 5);
+        // landed up on something (a roof, a balcony): it stands at that height until the path moves on
+        if (d.pos.y - groundAt(d.pos.x, d.pos.z) > 0.8) d.elev = { from: L.to.clone(), to: L.to.clone() };
+      }
+      return;
+    }
     const runSp = sp.run * (0.85 + 0.15 * b.aggro) * (b.rage ? 1.2 : 1);
+    // a detour found by A* (stuck behind a fence or a row of sheds): walk it first
+    if (d.detour && (b.state === 'approach' || b.state === 'recover' || b.state === 'wander' || b.state === 'flee')) {
+      const q = d.detour[0];
+      if (hdist(d.pos, q) < 1.6) d.detour.shift();
+      if (!d.detour.length) d.detour = null;
+      else { const g = steer(d, _goal.set(d.detour[0].x, 0, d.detour[0].z), Math.max(sp.walk * 1.6, Math.min(runSp * 0.7, d.lastWant || 0)), dt); void g; if (!d.leap) advance(d, dt); return; }
+    }
     switch (b.state) {
       case 'approach': {
         // follow the path first
         if (d.pathI < d.path.length) {
           const p = d.path[d.pathI];
-          const r = Math.max(2.5, d.inst.tpl.length * 0.4);
+          const prev = d.pathI > 0 ? d.path[d.pathI - 1] : d.spawnAt;
+          const high = q => q.y - groundAt(q.x, q.z) > 0.8;
+          if (high(p) || high(prev)) {
+            // a raised stretch (roof, balcony): big drops and climbs are jumps, the rest follows its height
+            // drops are jumped from where it stands; a climb is walked up to and jumped from close in
+            if (p.y < d.pos.y - 1.5 || (p.y > d.pos.y + 1.5 && hdist(d.pos, p) < 4.5)) { hop(d, p); d.pathI++; break; }
+            d.elev = p.y > d.pos.y + 1.5 ? null : { from: prev, to: p };
+          } else d.elev = null;
+          const r = Math.max(d.elev ? 1.2 : 2.5, d.inst.tpl.length * (d.elev ? 0.2 : 0.4));
           if (hdist(d.pos, p) < r) d.pathI++;
           const spd = d.playerTarget ? approachSpeed(d) : stalkSpeed(d);
           steer(d, p, spd, dt);
           break;
         }
+        d.elev = null;
         if (!d.playerTarget) { steer(d, d.target, stalkSpeed(d), dt, { arrive: 1 }); break; }
         if (d.species === 'rex') { rexStalk(d, dt, dPlayer); break; }
         if (d.species === 'raptor') {
@@ -456,7 +593,7 @@
         } else {
           if (!d.leap) {
             const land = new T.Vector3(pp.x, 0, pp.z).sub(_w.set(d.pos.x, 0, d.pos.z)).normalize();
-            const end = new T.Vector3(pp.x - land.x * 1.6, 0, pp.z - land.z * 1.6);
+            const end = new T.Vector3(pp.x - land.x * 3.0, 0, pp.z - land.z * 3.0);   // lands at the bonnet, not inside the jeep
             end.y = Math.max(groundAt(end.x, end.z), pp.y - 1.75);
             d.leap = { from: d.pos.clone(), to: end, t: 0, dur: remain };
             oneShot(d, 'Jump', { rate: 1.6, startAt: 0.25 });
@@ -576,6 +713,7 @@
       if (dinos[i] !== d || !d.alive) continue;
       if (b.state === 'wait') continue;
       locomote(d, dt);
+      unstick(d, dt);
       placeRoot(d, dt);
       d.hp = b.hp;
       animate(d, dt);
@@ -701,6 +839,7 @@
       d.speed = Math.max(0, d.speed - dt * (d.species === 'trike' || d.species === 'rex' ? 7 : 12));
       advance(d, dt); placeRoot(d, dt);
     }
+    else if (d.corpseT < 1.5 && d.species !== 'ptero') placeRoot(d, dt);   // settle onto the slope
     if (d.corpseT < 6) {
       animate(d, dt);
       d.root.updateMatrixWorld(true);

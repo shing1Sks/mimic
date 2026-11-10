@@ -75,6 +75,28 @@
   const TEX = {};
   const N_PART = 260, N_TRACER = 12, N_SHELL = 18, N_DECAL = 56;
   const parts = [], tracers = [], shells = [], decals = [];
+  // bullet marks on the world: a dark chipped hole on stone, wood and metal, a gouge in dirt
+  const N_HOLE = 48, holes = [];
+  let hi = 0;
+  function holeTex() {
+    return canvasTex(64, g => {
+      const r = g.createRadialGradient(32, 32, 1, 32, 32, 30);
+      r.addColorStop(0, 'rgba(8,7,6,1)'); r.addColorStop(0.28, 'rgba(18,15,12,0.95)'); r.addColorStop(0.55, 'rgba(40,34,28,0.55)'); r.addColorStop(1, 'rgba(60,52,44,0)');
+      g.fillStyle = r; g.beginPath();
+      for (let i = 0; i <= 14; i++) { const a = i / 14 * Math.PI * 2, rr = 22 + Math.sin(i * 2.7) * 6; g.lineTo(32 + Math.cos(a) * rr, 32 + Math.sin(a) * rr); }
+      g.fill();
+    });
+  }
+  function hole(point, n, kind) {
+    if (kind === 'foliage' || kind === 'water' || !holes.length) return;
+    const m = holes[hi]; hi = (hi + 1) % N_HOLE;
+    m.position.copy(point).addScaledVector(n, 0.012);
+    m.quaternion.setFromUnitVectors(_z, n);
+    _q.setFromAxisAngle(_z, Math.random() * 6.28); m.quaternion.multiply(_q);
+    m.scale.setScalar((kind === 'dirt' ? rnd(0.16, 0.24) : rnd(0.07, 0.11)) * distScale(point));
+    m.visible = true;
+    if (!m.parent) ctx.scene.add(m);
+  }
   let pi = 0, ti = 0, si = 0, di = 0;
   let worldLight = null, worldLightT = 0;
   let vmFlash = null, vmLight = null, vmFlashT = 0, vmFlashDur = 0.055, vmAnchor = null, vmFlashSize = 0.16;
@@ -144,6 +166,7 @@
       spawn(point, TEX.soft, [1, 0.72, 0.35], { vel: hemi(n, 0.35, rnd(4, 11)), life: rnd(0.12, 0.3), s0: 0.05 * s, s1: 0.015 * s, op: 1, add: true, grav: GRAV, drag: 1 });
     }
     if (k.sparks) { worldFlash(point, 6 * s, 0.05); }
+    hole(point, n.clone(), kind);
   }
 
   function blood(point, dir, scale, attachTo) {
@@ -269,6 +292,8 @@
       const dgeo = new T.PlaneGeometry(1, 1);
       const dmat = new T.MeshStandardMaterial({ map: TEX.blood, color: 0x5a0606, transparent: true, depthWrite: false, roughness: 0.35, metalness: 0, polygonOffset: true, polygonOffsetFactor: -4 });
       for (let i = 0; i < N_DECAL; i++) { const m = new T.Mesh(dgeo, dmat); m.visible = false; m.renderOrder = 2; decals.push(m); }
+      const hmat = new T.MeshBasicMaterial({ map: holeTex(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 });
+      for (let i = 0; i < N_HOLE; i++) { const m = new T.Mesh(dgeo, hmat); m.visible = false; m.renderOrder = 2; holes.push(m); c.scene.add(m); }
       worldLight = new T.PointLight(0xffb066, 0, 30, 2);
       c.scene.add(worldLight);
       ready = true;
@@ -281,6 +306,7 @@
       tracers.forEach(t => { t.live = false; t.mesh.visible = false; if (!t.mesh.parent) ctx.scene.add(t.mesh); });
       shells.forEach(s => { s.live = false; s.mesh.visible = false; });
       decals.forEach(d => { if (d.parent) d.parent.remove(d); d.visible = false; });
+      holes.forEach(h => { h.visible = false; if (!h.parent) ctx.scene.add(h); });
       if (worldLight && !worldLight.parent) ctx.scene.add(worldLight);
       if (worldLight) worldLight.intensity = 0;
     },

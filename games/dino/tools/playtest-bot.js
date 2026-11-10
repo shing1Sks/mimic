@@ -18,6 +18,39 @@
   const move = (dx, dy) => window.dispatchEvent(new MouseEvent('mousemove', { movementX: dx, movementY: dy, bubbles: true }));
   const shot = name => bot.wantShots.push(name);
 
+  // ---------------------------------------------------------------- cleanliness audit
+  // Every frame, for every animal: did it appear in plain view (pop), is it inside something solid
+  // (clip), off the ground (float), or moving without its legs (slide)?
+  bot.audit = { pop: [], clip: [], float: [], slide: [], frames: 0 };
+  const seenIds = new Set(), lastPos = new Map(), _p2 = new T.Vector3(), _dir = new T.Vector3();
+  const note = (k, d, extra) => { const a = bot.audit[k]; if (a.length < 400) a.push(Object.assign({ t: +(__dh.time).toFixed(1), id: d.id, sp: d.species, st: d.brain.state, x: +d.pos.x.toFixed(1), z: +d.pos.z.toFixed(1) }, extra || {})); };
+  function onScreenClear(d) {
+    const c = __dh.camera; _p2.copy(d.pos); _p2.y += d.inst.tpl.height * 0.6; _p2.project(c);
+    if (_p2.z > 1 || Math.abs(_p2.x) > 1 || Math.abs(_p2.y) > 1) return false;
+    const w = __dh.world, eye = c.position; _dir.copy(d.pos); _dir.y += d.inst.tpl.height * 0.6; _dir.sub(eye); const L = _dir.length(); _dir.divideScalar(L);
+    const fog = __dh.scene.fog && __dh.scene.fog.density; if (fog && L * fog > 1.1) return false;
+    const h = w && w.raycast ? w.raycast(eye, _dir, L) : null; return !(h && h.dist < L - 1.5);
+  }
+  function audit() {
+    if (__dh.state !== 'play' || !DH.Dinos) return;
+    bot.audit.frames++;
+    const nav = (__dh.world && __dh.world.nav) || window.__navAudit, dt = Math.max(1e-3, __dh.dt);
+    for (const d of DH.Dinos.list()) {
+      if (!d.root.visible) continue;
+      if (!seenIds.has(d.id)) { seenIds.add(d.id); if (d.species !== 'ptero' && d.species !== 'grazer' && onScreenClear(d)) note('pop', d, { dist: Math.round(d.pos.distanceTo(__dh.camera.position)) }); }
+      if (!d.alive || d.species === 'ptero') { lastPos.delete(d.id); continue; }
+      if (nav && DH.Nav.blocked(nav, d.pos.x, d.pos.z) && !d.leap && !d.elev) note('clip', d);
+      const g = __dh.world.heightAt(d.pos.x, d.pos.z);
+      if (!d.leap && !d.elev && Math.abs(d.pos.y - g) > 0.35) note('float', d, { dy: +(d.pos.y - g).toFixed(2) });
+      const lp = lastPos.get(d.id);
+      if (lp && !d.leap && __dh.dt > 0.004) {
+        const v = Math.hypot(d.pos.x - lp.x, d.pos.z - lp.z) / dt, legs = Math.abs(d.speed);
+        if (v > 2.5 && v > legs * 2.2 + 1.5 && d.knock.length() < 0.5) note('slide', d, { v: +v.toFixed(1), legs: +legs.toFixed(1) });
+      }
+      lastPos.set(d.id, { x: d.pos.x, z: d.pos.z });
+    }
+  }
+
   // ---------------------------------------------------------------- bus
   const on = (e, f) => DH.bus.on(e, f);
   let phaseStat = null;
@@ -134,6 +167,7 @@
     const c = window.__dh; if (!c) return;
     const now = performance.now() / 1000, dt = Math.min(0.05, now - (lastT || now)); lastT = now;
     bot.frames++;
+    audit();
     if (now - bot.fpsT >= 1) { if (bot.fpsT) bot.fpsS.push(bot.frames / (now - bot.fpsT)); bot.fpsT = now; bot.frames = 0; }
     for (let i = bot.pendingDodge.length - 1; i >= 0; i--) if (c.time >= bot.pendingDodge[i]) { bot.pendingDodge.splice(i, 1); bot.dodges++; tap('Space'); }
     if (c.state !== 'play') { if (bot.firing) { mouse('mouseup'); bot.firing = false; } return; }

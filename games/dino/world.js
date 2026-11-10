@@ -28,6 +28,57 @@
   }
   const V = p => new THREE.Vector3(p.x, p.y, p.z);
 
+  /** The obstacle grid (DH.Nav) of a built world: collider walls between knee and head height (a
+   * floor or a roof is not an obstacle), instanced colliders by their footprint, tree trunks as
+   * discs. The stands, the jeep's road and the designed spawn paths are kept open. */
+  function buildNav(B, d, hgt) {
+    const N = DH.Nav; if (!N) return null;
+    const g = N.createGrid(d.center.x, d.center.z, d.size, 0.75), PAD = 0.4;
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), m4 = new THREE.Matrix4(), mw = new THREE.Matrix4();
+    const inBand = (y0, y1, x, z) => { const gy = hgt(x, z); return y1 > gy + 0.3 && y0 < gy + 2.2; };
+    const seg = (p, q) => N.markSegment(g, p.x, p.z, q.x, q.z, PAD);
+    B.root.updateMatrixWorld(true);
+    B.colliders.forEach(col => col.traverse(o => {
+      if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
+      const geo = o.geometry;
+      if (o.isInstancedMesh) {
+        if (!geo.boundingBox) geo.computeBoundingBox();
+        const bb = geo.boundingBox, corners = [[bb.min.x, bb.min.z], [bb.max.x, bb.min.z], [bb.max.x, bb.max.z], [bb.min.x, bb.max.z]];
+        for (let i = 0; i < o.count; i++) {
+          o.getMatrixAt(i, m4); mw.multiplyMatrices(o.matrixWorld, m4);
+          a.set(0, bb.min.y, 0).applyMatrix4(mw); b.set(0, bb.max.y, 0).applyMatrix4(mw);
+          if (!inBand(Math.min(a.y, b.y), Math.max(a.y, b.y), a.x, a.z)) continue;
+          const w = corners.map(([x, z]) => new THREE.Vector3(x, (bb.min.y + bb.max.y) / 2, z).applyMatrix4(mw));
+          for (let k = 0; k < 4; k++) seg(w[k], w[(k + 1) % 4]);
+        }
+        return;
+      }
+      const pos = geo.attributes.position, ix = geo.index, nt = ix ? ix.count / 3 : pos.count / 3;
+      const vi = k => (ix ? ix.getX(k) : k);
+      for (let t = 0; t < nt; t++) {
+        a.fromBufferAttribute(pos, vi(t * 3)).applyMatrix4(o.matrixWorld);
+        b.fromBufferAttribute(pos, vi(t * 3 + 1)).applyMatrix4(o.matrixWorld);
+        c.fromBufferAttribute(pos, vi(t * 3 + 2)).applyMatrix4(o.matrixWorld);
+        const y0 = Math.min(a.y, b.y, c.y), y1 = Math.max(a.y, b.y, c.y);
+        if (y1 - y0 < 0.25) continue;   // flat: a floor, a deck, a roof
+        if (!inBand(y0, y1, (a.x + b.x + c.x) / 3, (a.z + b.z + c.z) / 3)) continue;
+        seg(a, b); seg(b, c); seg(c, a);
+      }
+    }));
+    B.trunks.forEach(t => { if (t.y1 - t.y0 > 1.5) N.markCircle(g, t.x, t.z, t.r + PAD); });
+    N.fillEnclosed(g);   // before the openings below, so a path skimming a shed does not hollow it out
+    // keep open: where you stand, where the jeep drives, and the routes the animals were designed to take
+    for (const k in d.stands) N.clearCircle(g, d.stands[k].pos.x, d.stands[k].pos.z, 3.2);
+    const open = (pts, r) => { for (let i = 1; i < pts.length; i++) { const p = pts[i - 1], q = pts[i], L = Math.hypot(q.x - p.x, q.z - p.z); for (let s = 0; s <= L; s += 0.75) N.clearCircle(g, p.x + (q.x - p.x) * s / L, p.z + (q.z - p.z) * s / L, r); } };
+    for (const k in d.rails) open(d.rails[k], 3);
+    for (const k in d.spawns) {
+      const sp = d.spawns[k];
+      if (sp.air || !sp.path) continue;
+      open(sp.path.filter(p => p.y == null || p.y < hgt(p.x, p.z) + 1), 1.3);
+    }
+    return g;
+  }
+
   /** Light quality: every static world material except the ground goes Lambert (no GGX, no
    * environment lookups): on an Iris Xe the jungle's plants cost about a third less to shade. The
    * missing image-based ambient comes back as an ambient cube (envAmbient) so they keep their light. */
@@ -332,6 +383,9 @@
       return best;
     }
 
+    // ---- navigation grid: everything solid at body height, so the animals walk round it (nav.js)
+    const nav = buildNav(B, d, hgt);
+
     // ---- per-frame
     let t = 0; const lastSun = { x: 1e9, z: 1e9 };
     function update(dt, c) {
@@ -363,7 +417,7 @@
     const world = {
       id: missionId, stands, rails, spawns, points: toV(d.points),
       heightAt: (x, z) => hgt(x, z),
-      raycast, update, dispose, root: B.root, desc: d,
+      raycast, update, dispose, root: B.root, desc: d, nav,
     };
     ctx.shadowDirty = true;
     return world;

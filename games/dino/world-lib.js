@@ -418,7 +418,7 @@
             path: [{ x: -110, y: 22, z: -126 }, { x: -60, y: 18, z: -124 }, { x: -15, y: 13, z: -128 }, { x: 12, y: 8, z: -129 }, { x: 20, y: 4.5, z: -130 }] },
           pens2Banks: { points: [P(-8, -148), P(52, -150), P(-16, -152), P(46, -154)], path: [P(-8, -148), P(6, -147), P(16, -145), P(20, -138)] },
           pens3Left: { points: [P(-27, -250), P(-31, -244)], path: [P(-27, -250), P(-19, -249), P(-11, -246), P(-2, -241)] },
-          pens3Right: { points: [P(27, -248), P(31, -242)], path: [P(27, -248), P(19, -246), P(11, -244), P(2, -241)] },
+          pens3Right: { points: [P(27, -248), P(31, -242)], path: [P(27, -248), P(19, -246.8), P(9.5, -245.8), P(2, -241)] },   // clear of the east shed's corner
           pens3Roof: { elevated: true, raw: true, points: [{ x: 6.5, y: roofY, z: -251 }],
             path: [{ x: 6.5, y: roofY, z: -251 }, { x: 4, y: 7.2, z: -246 }, { x: 1.5, y: 7.2, z: -241.5 }] },
         },
@@ -487,8 +487,8 @@
           rexCircle: { points: [ring[0]], path: ring, raw: false },
           rexCharge: { points: [C], path: [C, P(0, -26), P(0, -12)] },
           balcony: { elevated: true, raw: true,
-            points: [{ x: 12.2, y: balY, z: -17.5 }, { x: 12.2, y: balY, z: -14.5 }],
-            path: [{ x: 12.2, y: balY, z: -17.5 }, { x: 8.5, y: 0, z: -15 }, { x: 4, y: 0, z: -12.5 }, { x: 1.5, y: top, z: -3.4 }] },
+            points: [{ x: 12.75, y: balY, z: -17.5 }, { x: 12.75, y: balY, z: -17.1 }],   // in the dark doorway: they step out of the building
+            path: [{ x: 11.8, y: balY, z: -17.4 }, { x: 8.5, y: 0, z: -15 }, { x: 4, y: 0, z: -12.5 }, { x: 1.5, y: top, z: -3.4 }] },
         },
         points: { gate: P(0, -74), fountain: C },
         roads: [{ pts: [P(0, -74), P(0, -110), P(6, -150), P(-10, -200)], width: 8 }],

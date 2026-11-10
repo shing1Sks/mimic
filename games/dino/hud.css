@@ -419,3 +419,4 @@ body.phone .kbm { display: none !important; }
 /* phone mode is aim + fire: the flick still dodges, but it is not taught */
 body.phone .kc-dodge { display: none; }
 body.phone .ctl-grid { grid-template-columns: repeat(2, 1fr); }   /* four phone controls: a 2 x 2 grid */
+body.phone .ctl-grid .kc:nth-child(5):last-child { grid-column: auto; }   /* with the flick hidden, four chips fill the 2 x 2 */

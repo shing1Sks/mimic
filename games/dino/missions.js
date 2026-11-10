@@ -136,25 +136,33 @@
   // weapon: what the stand hands you (there is no switching by hand).
   const MISSIONS = {
     gate3: {
-      par: 150, stars: [1800, 2800],
-      brief: 'Get your eye in at the visitor gate. Knock down the six practice plates, then stop whatever comes up the road and out of the ferns.',
-      objectiveText: 'Plates, then the road, then the ferns.',
+      par: 240, stars: [3600, 5600],
+      brief: 'Get your eye in at the visitor gate. Knock down the practice plates, then hold the gate against whatever comes up the road and out of the ferns. Something big uses this road.',
+      objectiveText: 'Plates, the road, the ferns, then hold the gate.',
       controls: ['fire', 'reload', 'align'],
       plan: [{ stand: 'gate', phases: [
         { objective: { type: 'targets', count: 6, label: 'Practice plates' }, targets: true, hint: 'fire', weapon: 'carbine',
           note: 'Six plates in front of the gate. Put the crosshair on each and fire.' },
         { objective: { type: 'clear', label: 'Road hostiles' }, hint: 'reload', weapon: 'carbine', note: 'Spitters hang back on the road. Shoot the green spit out of the air, then the spitter.',
+          banner: ['CONTACT', 'Movement on the road'],
           waves: [{ id: 'd1', at: 1.5, spawns: [{ species: 'dilo', from: 'road', n: 2, stagger: 4, aggro: 0.5 }] },
-            { id: 'd2', after: 'd1', delay: 1.5, spawns: [{ species: 'dilo', from: 'road', n: 1, aggro: 0.6 }] }] },
-        { objective: { type: 'kill', species: 'raptor', count: 3, label: 'Raptors' }, hint: 'fire', weapon: 'carbine', note: 'Raptors stalk the ferns, then rush you. Two hits stop a rush; a headshot ends it.',
+            { id: 'd2', after: 'd1', delay: 1.5, spawns: [{ species: 'dilo', from: 'road', n: 1, aggro: 0.6 }, R('rightBrush', 1, { aggro: 0.4, stagger: 2 })] }] },
+        { objective: { type: 'clear', label: 'Raptors in the ferns' }, hint: 'fire', weapon: 'carbine', note: 'Raptors stalk the ferns, then rush you. Two hits stop a rush; a headshot ends it.',
+          banner: ['THE FERNS ARE MOVING', 'Raptors, both sides'],
           waves: [{ id: 'r1', at: 2, spawns: [R('leftBrush', 1, { aggro: 0.45 })] }, { id: 'r2', after: 'r1', delay: 1.5, spawns: [R('rightBrush', 1, { aggro: 0.55 })] },
-            { id: 'r3', after: 'r2', delay: 1, spawns: [R('road', 1, { aggro: 0.9 })] }] },
+            { id: 'r3', after: 'r2', delay: 1, spawns: [R('road', 1, { aggro: 0.9 })] },
+            { id: 'pack', after: 'r3', delay: 2, spawns: [R('leftBrush', 2, { stagger: 1.2, aggro: 0.8 }), R('rightBrush', 1, { stagger: 1.8, aggro: 0.8 })] }] },
+        { objective: { type: 'clear', label: 'Hold the gate' }, hint: 'fire', weapon: 'carbine', note: 'A triceratops is coming down the road. The front plate is armour: hit the eye or wait for the flank.',
+          banner: ['GATE BREACH', 'Triceratops on the road'],
+          waves: [{ id: 't', at: 2.5, spawns: [{ species: 'trike', from: 'road', aggro: 0.9 }] },
+            { id: 'cover', at: 9, spawns: [{ species: 'dilo', from: 'road', n: 2, stagger: 3, aggro: 0.7 }] },
+            { id: 'end', after: 't', delay: 1, spawns: [R('leftBrush', 1, { aggro: 1 }), R('rightBrush', 1, { aggro: 1, stagger: 1 })] }] },
       ] }],
     },
     overwatch: {
-      par: 140, stars: [900, 1500],
-      brief: 'Three tagged raptors are stalking the survivors at the crashed jeep. Snipe them before they reach it. Do not hit the grazers.',
-      objectiveText: 'Kill the 3 tagged raptors. Spare the herd.',
+      par: 260, stars: [2200, 3600],
+      brief: 'Tagged raptors are stalking the survivors at the crashed jeep. Snipe them before they reach it, and keep watching: they hunt in waves. Do not hit the grazers.',
+      objectiveText: 'Three waves of tagged hunters. Spare the herd.',
       controls: ['fire', 'scope', 'align'],
       plan: [{ stand: 'tower', phases: [
         { objective: { type: 'kill', species: 'raptor', tagged: true, count: 3, label: 'Tagged raptors', timeLimit: 150 },
@@ -166,23 +174,35 @@
             { id: 'b', after: 'a', delay: 2, spawns: [R('stalkB', 1, { tagged: true, target: 'survivors', aggro: 0.1 })] },
             { id: 'c', after: 'b', delay: 1, spawns: [R('stalkC', 1, { tagged: true, target: 'survivors', aggro: 0.2 })] },
           ] },
+        { objective: { type: 'kill', species: 'raptor', tagged: true, count: 4, label: 'Second pack', timeLimit: 150 },
+          protect: 'survivors', hint: 'scope', weapon: 'marksman', banner: ['SECOND PACK', 'They are coming in together'],
+          note: 'Four at once from three sides. Take the closest to the jeep first.',
+          waves: [
+            { id: 'a', at: 4, spawns: [R('stalkB', 1, { tagged: true, target: 'survivors', aggro: 0.25 }), R('stalkC', 1, { tagged: true, target: 'survivors', aggro: 0.25, stagger: 3 })] },
+            { id: 'b', after: 'a', delay: 0, spawns: [R('stalkA', 2, { tagged: true, target: 'survivors', aggro: 0.3, stagger: 4 })] },
+          ] },
+        { objective: { type: 'kill', species: 'dilo', tagged: true, count: 2, label: 'Spitters', timeLimit: 120 },
+          protect: 'survivors', hint: 'scope', weapon: 'marksman', banner: ['SPITTERS', 'Heading for the jeep'],
+          note: 'Two spitters across the valley floor, through the herd. Careful with your background.',
+          waves: [{ id: 's', at: 3, spawns: [{ species: 'dilo', from: 'stalkB', tagged: true, target: 'survivors', aggro: 0.2 }, { species: 'dilo', from: 'stalkC', tagged: true, target: 'survivors', aggro: 0.2, stagger: 5 }] }] },
       ] }],
     },
     pens: {
-      par: 200, stars: [2400, 3800],
+      par: 220, stars: [2800, 4400],
       brief: 'Drive through the raptor paddocks to the feeding station. Three stops, ambushes from both sides, pterosaurs over the river.',
       objectiveText: 'Clear each stop. Keep the jeep moving.',
       controls: ['fire', 'reload', 'align'],
       plan: [
         { stand: 'pens1', phases: [{ objective: { type: 'clear', label: 'Paddock raptors' }, hint: 'reload', weapon: 'carbine', note: 'They come through the broken fences. Follow the red arrows.',
           waves: [{ id: 'f', at: 1.5, spawns: [R('pens1Front', 2, { stagger: 1.5, aggro: 0.5 })] }, { id: 'l', after: 'f', delay: 1, spawns: [R('pens1Left', 2, { stagger: 1.4, aggro: 0.6 })] },
-            { id: 'r', after: 'l', delay: 1, spawns: [R('pens1Right', 2, { stagger: 1.2, aggro: 0.7 })] }] }] },
+            { id: 'r', after: 'l', delay: 1, spawns: [R('pens1Right', 2, { stagger: 1.2, aggro: 0.7 })] },
+            { id: 'sp', after: 'r', delay: 1.5, spawns: [{ species: 'dilo', from: 'pens1Front', aggro: 0.7 }] }] }] },
         { ride: 'drive1', to: 'pens2', ambush: [{ at: 0.5, spawns: [R(null, 1, { side: 'left', aggro: 0.6 }), R(null, 1, { side: 'right', stagger: 1.5, aggro: 0.6 })] }] },
         { stand: 'pens2', phases: [{ objective: { type: 'clear', label: 'Bridge hostiles' }, hint: 'fire', weapon: 'carbine', note: 'Pterosaurs over the water. Shoot them as they dive.',
           waves: [{ id: 'p1', at: 2, spawns: [{ species: 'ptero', from: 'river', n: 1 }] },
             { id: 'p2', after: 'p1', delay: 1, spawns: [{ species: 'ptero', from: 'river', n: 2, stagger: 2.5 }] },
             { id: 'b', after: 'p2', delay: 1, spawns: [R('pens2Banks', 2, { stagger: 1.5 })] }] }] },
-        { ride: 'drive2', to: 'pens3', ambush: [{ at: 0.55, spawns: [R(null, 2, { side: 'right', stagger: 1.2, aggro: 0.6 })] }] },
+        { ride: 'drive2', to: 'pens3', ambush: [{ at: 0.55, spawns: [R(null, 2, { side: 'right', stagger: 1.2, aggro: 0.6 }), R(null, 1, { side: 'left', stagger: 3, aggro: 0.7 })] }] },
         { stand: 'pens3', phases: [{ objective: { type: 'clear', label: 'Feeding station' }, hint: 'fire', weapon: 'carbine', note: 'Last stop. Watch the roof: stop each rush before it lands.',
           waves: [{ id: 'l', at: 1.5, spawns: [R('pens3Left', 2, { stagger: 1.2 })] }, { id: 'r', at: 5, spawns: [R('pens3Right', 2, { stagger: 1.2 })] },
             { id: 'roof', afterKills: 4, spawns: [R('pens3Roof', 1, { aggro: 1 })] },
@@ -190,32 +210,43 @@
       ],
     },
     horn: {
-      par: 90, stars: [2600, 4200],
-      brief: 'A triceratops stampede across open ground. The front plate is armour: hit the flank or the eye, and stop each charge before it reaches you.',
-      objectiveText: 'Hold the line for 75 seconds.',
-      controls: ['fire', 'reload', 'align'],
+      par: 200, stars: [4800, 7400],
+      brief: 'A triceratops stampede across open ground, and you have the rifle. The front plate is armour: hit the flank or the eye, and stop each charge before it reaches you. Then the scrub wakes up.',
+      objectiveText: 'Hold the line, clear the scrub, survive the stampede.',
+      controls: ['fire', 'scope', 'align'],
       plan: [{ stand: 'field', phases: [
-        { objective: { type: 'survive', time: 75, label: 'Hold the line' }, hint: 'fire', weapon: 'carbine', note: 'Shoot the flanks or the eye. Enough hits stop a charge.',
+        { objective: { type: 'survive', time: 60, label: 'Hold the line' }, hint: 'scope', weapon: 'marksman', note: 'The rifle: hold steady and the scope comes up. One flank or eye shot stops a charge.',
           waves: [
             { id: 'a1', at: 2, spawns: [{ species: 'trike', from: 'laneA', aggro: 0.8 }] },
             { id: 'b1', at: 13, spawns: [{ species: 'trike', from: 'laneB', aggro: 0.9 }] },
             { id: 'c1', at: 22, spawns: [{ species: 'trike', from: 'laneC', aggro: 0.9 }] },
             { id: 'ac', at: 32, spawns: [{ species: 'trike', from: 'laneA', aggro: 1 }, { species: 'trike', from: 'laneC', aggro: 1, stagger: 2.5 }] },
-            { id: 'fl', at: 42, spawns: [R('flankLeft', 1), R('flankRight', 1, { stagger: 2 })] },
-            { id: 'b2', at: 50, spawns: [{ species: 'trike', from: 'laneB', aggro: 1 }] },
-            { id: 'a2', at: 58, spawns: [{ species: 'trike', from: 'laneA', aggro: 1 }, { species: 'trike', from: 'laneB', aggro: 1, stagger: 1.5 }, { species: 'trike', from: 'laneC', aggro: 1, stagger: 3 }] },
+            { id: 'b2', at: 46, spawns: [{ species: 'trike', from: 'laneB', aggro: 1 }] },
           ] },
+        { objective: { type: 'clear', label: 'The scrub' }, hint: 'scope', weapon: 'marksman', banner: ['THE SCRUB', 'Raptors on both flanks'],
+          note: 'Raptors use the stampede for cover. Watch both flanks.',
+          waves: [{ id: 'l', at: 2, spawns: [R('flankLeft', 2, { stagger: 1.5, aggro: 0.7 })] }, { id: 'r', at: 5, spawns: [R('flankRight', 2, { stagger: 1.5, aggro: 0.7 })] },
+            { id: 'sp', after: 'l', delay: 2, spawns: [{ species: 'dilo', from: 'laneB', aggro: 0.6 }, { species: 'dilo', from: 'laneC', aggro: 0.6, stagger: 2 }] }] },
+        { objective: { type: 'survive', time: 40, label: 'Stampede' }, hint: 'scope', weapon: 'marksman', banner: ['STAMPEDE', 'Everything is coming'],
+          note: 'Three lanes at once. Eyes and flanks.',
+          waves: [{ id: 'a', at: 1.5, spawns: [{ species: 'trike', from: 'laneA', aggro: 1 }, { species: 'trike', from: 'laneB', aggro: 1, stagger: 1.5 }, { species: 'trike', from: 'laneC', aggro: 1, stagger: 3 }] },
+            { id: 'b', at: 20, spawns: [{ species: 'trike', from: 'laneB', aggro: 1 }, { species: 'trike', from: 'laneC', aggro: 1, stagger: 2 }, R('flankLeft', 1, { aggro: 1, stagger: 4 })] }] },
       ] }],
     },
     apex: {
-      par: 180, stars: [3200, 5200],
-      brief: 'The apex predator owns the visitor centre plaza. Its eye and open mouth are the weak spots. Pour fire into a charge to drop it. Extraction comes when it falls.',
-      objectiveText: 'Bring down the apex.',
-      controls: ['fire', 'reload', 'align'],
+      par: 260, stars: [4200, 6600],
+      brief: 'The visitor centre plaza is crawling, and the apex predator is close. You have the rifle. Clear the plaza first. Its eye and open mouth are the weak spots; a few hits drop a charge. Extraction comes when it falls.',
+      objectiveText: 'Clear the plaza, then bring down the apex.',
+      controls: ['fire', 'scope', 'align'],
       outro: 'Extraction inbound',
       plan: [{ stand: 'plaza', phases: [
-        { objective: { type: 'boss', species: 'rex', label: 'Bring down the apex' }, hint: 'fire', weapon: 'carbine', note: 'Aim for the eye, or the mouth when it roars. Pour fire into a charge to drop it.',
-          waves: [{ id: 'rex', at: 1.5, spawns: [{ species: 'rex', from: 'rexEntry', aggro: 1 }] },
+        { objective: { type: 'clear', label: 'The plaza' }, hint: 'scope', weapon: 'marksman', note: 'Raptors off the balcony, spitters through the gate.',
+          waves: [{ id: 'g', at: 2, spawns: [{ species: 'dilo', from: 'rexEntry', n: 2, stagger: 3, aggro: 0.6 }] },
+            { id: 'b', at: 6, spawns: [R('balcony', 2, { stagger: 2, aggro: 0.7 })] },
+            { id: 'g2', after: 'g', delay: 1, spawns: [R('rexEntry', 2, { stagger: 1.5, aggro: 0.8 })] }] },
+        { objective: { type: 'boss', species: 'rex', label: 'Bring down the apex' }, hint: 'scope', weapon: 'marksman', banner: ['APEX', 'It heard the shots'],
+          note: 'Hold steady for the scope. The eye, or the mouth when it roars. A few hits drop a charge.',
+          waves: [{ id: 'rex', at: 3, spawns: [{ species: 'rex', from: 'rexEntry', aggro: 1 }] },
             { id: 'bal', at: 35, spawns: [R('balcony', 2, { stagger: 1.5, ambient: true })] },
             { id: 'bal2', after: 'bal', delay: 25, spawns: [R('balcony', 2, { stagger: 1.5, ambient: true })] }] },
       ] }],
@@ -320,7 +351,8 @@
       if (e.target === 'survivors') target = point('survivors') || standGround(standName);
       else if (e.target === 'self') target = at.clone();
       else target = e.side ? ctx.view.pos.clone() : standGround(standName);
-      const opts = { at, path, target, tagged: !!e.tagged, aggro: e.aggro == null ? 0.7 : e.aggro, delay: (e.stagger || 0) * i };
+      // a grazing herd is scenery that is already there; everything else walks in from out of sight
+      const opts = { at, path, target, tagged: !!e.tagged, aggro: e.aggro == null ? 0.7 : e.aggro, delay: (e.stagger || 0) * i, hide: e.target !== 'self' };
       if (e.species === 'rex') {
         const c = spawnPoints('rexCircle'), ch = spawnPoints('rexCharge');
         opts.circle = (c.path || c.pts).map(p => p.clone()); opts.charge = (ch.path || ch.pts).map(p => p.clone());
@@ -443,6 +475,7 @@
     if (DH.Weapons && DH.Weapons.refill) safe(() => DH.Weapons.refill());
     giveWeapon(ph.weapon);
     emit('mission:phase', { id: S.id, step: S.step, phase: k, stand: st.stand, def: ph });
+    if (ph.banner) banner(ph.banner[0], ph.banner[1] || '', 'warn', 2);   // a set-piece announces itself
   }
   function giveWeapon(id) {
     const W = DH.Weapons, ord = DH.WeaponLogic && DH.WeaponLogic.ORDER;

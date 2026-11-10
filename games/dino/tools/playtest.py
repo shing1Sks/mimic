@@ -1,6 +1,6 @@
 # IRONFERN scripted playtest: plays each mission like a person with the phone in Grip mode (see
 # playtest-bot.js) on the real GPU and writes per-phase stats, fps and player's-eye screenshots.
-# Usage: python games/dino/tools/playtest.py <missions,comma> <outdir> [arrows=1] [timeout_s=420]
+# Usage: python games/dino/tools/playtest.py <missions,comma> <outdir> [arrows=1] [timeout_s=420] [legacy]
 # Needs the game server (tools/serve.py) on 127.0.0.1:8765.
 import sys, json, time, os
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -9,6 +9,8 @@ missions = sys.argv[1].split(',')
 out = sys.argv[2]; os.makedirs(out, exist_ok=True)
 arrows = (sys.argv[3] if len(sys.argv) > 3 else '1') == '1'
 TMO = float(sys.argv[4]) if len(sys.argv) > 4 else 420
+# legacy=1: measure the old behaviour (no obstacle avoidance, spawns where they are placed) for a before/after
+LEGACY = len(sys.argv) > 5 and sys.argv[5] == 'legacy'
 INIT = open(os.path.join(HERE, 'playtest-init.js')).read()
 BOT = open(os.path.join(HERE, 'playtest-bot.js')).read()
 summary = {}
@@ -26,6 +28,7 @@ with sync_playwright() as p:
         pg.wait_for_function("window.__dh && window.__dh.state==='briefing'", timeout=180000)
         pg.screenshot(path=f'{out}/{m}_briefing.png')
         pg.add_script_tag(content=BOT)
+        if LEGACY: pg.evaluate("(() => { window.__navAudit = __dh.world.nav; __dh.world.nav = null; const s0 = DH.Dinos.spawn; DH.Dinos.spawn = (sp, o) => s0(sp, Object.assign({}, o, { hide: false })); })()")
         pg.evaluate(f"__bot.useArrows = {str(arrows).lower()}")
         pg.mouse.click(800, 450)  # "Click to begin"
         t0 = time.time(); n = 0
@@ -41,12 +44,14 @@ with sync_playwright() as p:
         r = pg.evaluate("""(() => { const b = __bot, f = b.fpsS.slice(2).sort((a,c)=>a-c);
           return { state: __dh.state, wall: 0, phases: b.phases, result: b.result ? {total: b.result.total, stars: b.result.stars, time: +b.result.time.toFixed(1), deaths: b.result.deaths, acc: +b.result.accuracy.toFixed(2), dmg: b.result.damageTaken} : null,
             fps: f.length ? { med: +f[Math.floor(f.length/2)].toFixed(1), p10: +f[Math.floor(f.length*0.1)].toFixed(1), min: +f[0].toFixed(1) } : null,
+            audit: { frames: b.audit.frames, pop: b.audit.pop.length, clip: b.audit.clip.length, float: b.audit.float.length, slide: b.audit.slide.length },
             hurts: b.hurts, offscreenHurts: b.offscreenHurts, dodges: b.dodges, dodgeOk: b.dodgeOk,
             mission: DH.Missions.state.mode, seen: Array.from(b.seen.values()).map(r => r.kind + ':' + r.maxPx + 'px@' + r.dist + 'm' + (r.firstSeen == null ? '(NEVER)' : '')), attacks: b.log.filter(e => e.k==='attack').map(e => e.kind + (e.onscreen?'':'(off)') + (e.duck?'(duck)':'')) } })()""")
         r['wall'] = round(time.time() - t0, 1); r['errors'] = errs[:5]
         summary[m] = r
         print(m, json.dumps(r))
         json.dump(pg.evaluate("__bot.log"), open(f'{out}/{m}_log.json', 'w'))
+        json.dump(pg.evaluate("__bot.audit"), open(f'{out}/{m}_audit.json', 'w'))
         pg.close()
     b.close()
 json.dump(summary, open(f'{out}/summary.json', 'w'), indent=1)

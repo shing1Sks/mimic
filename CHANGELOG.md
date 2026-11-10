@@ -40,6 +40,13 @@ Updated just before each approved release, not on every change.
   it and Aim Normal at 0.25 (was 0.4), the same recorded swings knock twice the pins (98 vs 50 over
   18 balls, gutters 2 vs 10); a test replays that session so a later change cannot undo it. Why: recorded sessions showed
   balls drifting into the gutter from a reference error and a late key, not the player.
+- **Emberlane sound:** the pins clipped (true peak 1.66, over a thousand clipped samples per strike) and
+  the knock clips were 90% mid-range ringing: now a limiter and soft clip on the master, knocks
+  re-pitched and shortened with a synthesised maple body, a voice cap, warm EQ and a hall reverb. A
+  heavy ball rumble with doppler, gutter tone, landing and pit thuds and the ball return; strike,
+  spare, split and gutter moments with stings and room reactions that build through double and
+  turkey; a procedural lounge band that ducks under the roll; looping alley ambience with distant
+  lanes. New MUSIC slider (default 50%); VOLUME is now EFFECTS.
 - **Every game fits the window:** all screens checked at six laptop sizes (browser bars included),
   equal-width buttons, short how-to panels with a "More" toggle.
 - **Release settings:** volume and graphics quality with an automatic fallback in every game;

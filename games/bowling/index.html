@@ -40,7 +40,8 @@
       <div class="mi opt" data-opt="hand"><span>BOWLING HAND</span><span class="ov"><i class="arr">&#9664;</i><b>RIGHT</b><i class="arr">&#9654;</i></span></div>
       <div class="mi opt" data-opt="aim" title="Normal keeps a quarter of your aim error, Pro is 1:1"><span>AIM <small>Normal forgives</small></span><span class="ov"><i class="arr">&#9664;</i><b>NORMAL</b><i class="arr">&#9654;</i></span></div>
       <div class="mi opt" data-opt="bumpers" title="Rails over the gutters for this game"><span>BUMPERS <small>no gutters</small></span><span class="ov"><i class="arr">&#9664;</i><b>OFF</b><i class="arr">&#9654;</i></span></div>
-      <div class="mi opt vol"><span>VOLUME</span><span class="ov"><input class="vol-in" type="range" min="0" max="100" step="5" value="80" aria-label="Volume"><b class="vol-v">80%</b></span></div>
+      <div class="mi opt vol"><span>EFFECTS</span><span class="ov"><input class="vol-in" type="range" min="0" max="100" step="5" value="80" aria-label="Effects volume"><b class="vol-v">80%</b></span></div>
+      <div class="mi opt vol"><span>MUSIC</span><span class="ov"><input class="vol-in mus-in" type="range" min="0" max="100" step="5" value="50" aria-label="Music volume"><b class="mus-v">50%</b></span></div>
       <div class="mi opt" data-opt="quality" title="Auto lowers the render resolution if the frame rate drops"><span>QUALITY</span><span class="ov"><i class="arr">&#9664;</i><b>AUTO</b><i class="arr">&#9654;</i></span></div>
     </div>
     <div class="t-connect">
@@ -98,7 +99,8 @@
       <button class="mi" data-act="lineup">LINE UP <small>fit aim to your grip</small></button>
       <button class="mi" data-act="restart">RESTART</button>
       <button class="mi" data-act="quit">MAIN MENU</button>
-      <div class="mi opt vol"><span>VOLUME</span><span class="ov"><input class="vol-in" type="range" min="0" max="100" step="5" value="80" aria-label="Volume"><b class="vol-v">80%</b></span></div>
+      <div class="mi opt vol"><span>EFFECTS</span><span class="ov"><input class="vol-in" type="range" min="0" max="100" step="5" value="80" aria-label="Effects volume"><b class="vol-v">80%</b></span></div>
+      <div class="mi opt vol"><span>MUSIC</span><span class="ov"><input class="vol-in mus-in" type="range" min="0" max="100" step="5" value="50" aria-label="Music volume"><b class="mus-v">50%</b></span></div>
       <div class="mi opt" data-opt="quality"><span>QUALITY</span><span class="ov"><i class="arr">&#9664;</i><b>AUTO</b><i class="arr">&#9654;</i></span></div>
     </div>
     <p class="hint-s">Balls pulling one way? LINE UP again, or point your forearm at the pins and <span class="k-alignv">hold</span> <b class="k-align">Vol Up</b>.</p>
@@ -128,6 +130,7 @@
 <script src="kin.js"></script>
 <script src="scoring.js"></script>
 <script src="input.js"></script>
+<script src="music.js"></script>
 <script src="audio.js"></script>
 <script src="post.js"></script>
 <script src="world.js"></script>

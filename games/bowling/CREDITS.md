@@ -31,7 +31,7 @@ Original game: setting, hall, masking-panel art and the ember emblem are made fo
 | assets/snd/ambience.ogg | Bowling Alley Ambience 01b (60 s excerpt) | dagray | https://freesound.org/s/667757/ |
 | assets/snd/machine.ogg | Bowling room machine with pins falling (6 s excerpt) | felix.blume | https://freesound.org/s/684422/ |
 
-The thud of a dropped ball, the gutter rush and the UI chimes are synthesised with WebAudio (audio.js).
+The recordings are re-voiced in audio.js (knocks pitched and shortened, filtered, placed and sent into a synthetic hall). Synthesised with WebAudio, no recordings: the pins' wooden body, the ball's rumble and landing thud, the pit, the ball return, the room tone, the crowd's claps and cheers, the UI sounds (audio.js), and all music: the lounge band and the strike / spare / split / gutter stings (music.js, original, written in code for this game).
 
 ## Code
 

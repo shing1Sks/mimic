@@ -29,10 +29,10 @@
   const PLAYER_CSS = ['#ff7a3d', '#2fc3b8', '#b07cff', '#ffcc4d'];
 
   // ------------------------------------------------------------------ settings
-  const settings = { players: 1, hand: 'right', sound: true, ball: 15, aim: 'normal', bumpers: false, volume: 80, quality: 'auto', hold: null };
+  const settings = { players: 1, hand: 'right', sound: true, ball: 15, aim: 'normal', bumpers: false, volume: 80, music: 50, quality: 'auto', hold: null };
   try { Object.assign(settings, JSON.parse(localStorage.getItem('emberlane2') || '{}')); } catch (e) { /* storage blocked */ }
   const saveSettings = () => { try { localStorage.setItem('emberlane2', JSON.stringify(settings)); } catch (e) { /* ignore */ } };
-  SFX.setMuted(!settings.sound); SFX.setVolume(settings.volume / 100);
+  SFX.setMuted(!settings.sound); SFX.setVolume(settings.volume / 100); SFX.setMusic(settings.music / 100);
   const applyAim = () => { K.AIM.GAIN = AIM_Q != null ? AIM_Q : settings.aim === 'pro' ? K.AIM.PRO : K.AIM.NORMAL; };
   applyAim();
 
@@ -240,7 +240,7 @@
     refreshOptions();
   }
   function toReady(first) {
-    G.mode = 'ready'; G.roll = null; G.pendingRel = null; G.firstHit = false; G.crashPlayed = false; G.gutterSaid = false; G.atArrows = null; G.result = null;
+    G.mode = 'ready'; G.roll = null; G.pendingRel = null; G.firstHit = false; G.crashPlayed = false; G.gutterSaid = false; G.pitSaid = false; G.atArrows = null; G.result = null;
     G.sim.ball = null; G.timeScale = 1; G.slowUntil = 0; G.ff = 1; G.skipFF = false; G.endT = null; G.gutterT = null;
     K.bodyStop(IN.body);
     if (G.cyc && G.cyc.result && !G.cyc.ready) { G.cyc.ready = performance.now(); G.lastCycle = G.cyc;
@@ -396,7 +396,7 @@
       label = run >= 4 ? run + '-BAGGER' : ['STRIKE', 'STRIKE', 'DOUBLE', 'TURKEY'][run];
       sub = run >= 2 ? run + ' strikes in a row' : ''; cls = 'strike';
       G.stats.strikes++;
-      SFX.strike(); mc.rumble(0.9, 160, 3);
+      SFX.strike(run); mc.rumble(0.9, 160, 3);
       post.uniforms.flash.value = 0.9;
       sparks.burst(0, 0.5, -18.6, 120); sparks.burst(0, 1.5, -17.3, 80);
       panelMoment('STRIKE', run);
@@ -408,12 +408,12 @@
       panelMoment('SPARE');
       setCam('celebrate', 1.1); G.celebT = 0;
     } else if (kind === 'gutter' && knocked === 0) {
-      label = 'GUTTER'; sub = 'it happens';
+      label = 'GUTTER'; sub = 'it happens'; SFX.moment('gutter');
     } else {
       label = knocked === 0 ? 'MISS' : String(knocked);
       sub = knocked === 1 ? 'pin' : knocked > 1 ? 'pins' : '';
       if (!nx.fresh || nx.frame === 9) { /* nothing */ }
-      if (up.length && nx.fresh && isSplit(up)) sub = 'SPLIT';
+      if (up.length && nx.fresh && isSplit(up)) { sub = 'SPLIT'; SFX.moment('split'); }
     }
     banner(label, sub, cls, cls === 'strike' ? 2.0 : cls === 'spare' ? 1.8 : 1.3);
     if (window.MimicRec) MimicRec.event('result', { knocked, up: up.map(q => q.n), label });
@@ -577,16 +577,19 @@
     document.querySelectorAll('[data-opt="quality"] b').forEach(b => { b.textContent = settings.quality === 'auto' ? (qual.low ? 'AUTO · LOW' : 'AUTO') : settings.quality.toUpperCase(); });
     document.querySelectorAll('.vol-in').forEach(i => { i.value = settings.volume; i.style.setProperty('--v', settings.volume + '%'); });
     document.querySelectorAll('.vol-v').forEach(b => { b.textContent = settings.sound ? settings.volume + '%' : 'MUTED'; });
+    document.querySelectorAll('.mus-in').forEach(i => { i.value = settings.music; i.style.setProperty('--v', settings.music + '%'); });
+    document.querySelectorAll('.mus-v').forEach(b => { b.textContent = !settings.sound ? 'MUTED' : settings.music ? settings.music + '%' : 'OFF'; });
     document.querySelector('[data-opt="aim"] b').textContent = AIM_Q != null ? 'x' + AIM_Q : settings.aim === 'pro' ? 'PRO 1:1' : 'NORMAL';
     document.querySelector('[data-opt="bumpers"] b').textContent = settings.bumpers ? 'ON' : 'OFF';
   }
   // volume sliders (title and pause share the setting)
   document.addEventListener('input', e => {
+    if (e.target.classList && e.target.classList.contains('mus-in')) { settings.music = +e.target.value; SFX.setMusic(settings.music / 100); saveSettings(); refreshOptions(); return; }
     if (!e.target.classList || !e.target.classList.contains('vol-in')) return;
     settings.volume = +e.target.value; settings.sound = settings.volume > 0 || settings.sound;
     SFX.setVolume(settings.volume / 100); SFX.setMuted(!settings.sound); saveSettings(); refreshOptions();
   });
-  document.addEventListener('change', e => { if (e.target.classList && e.target.classList.contains('vol-in')) SFX.ui('move'); });
+  document.addEventListener('change', e => { if (e.target.classList && (e.target.classList.contains('vol-in') || e.target.classList.contains('mus-in'))) SFX.ui('move'); });
   document.addEventListener('click', e => {
     BW.Audio.unlock();
     if (!e.target.closest('[data-act="connect"]')) mc.enableRumble && mc.enableRumble();
@@ -936,6 +939,7 @@
     // the shot is over when the ball is in the pit, has stopped, or is a gutter ball that can no
     // longer touch a pin; then the pins get at most 1.2 s (real time) to show their fate
     const inPit = b.gone === 'pit' || b.x[2] < L.PIT_Z - 0.05;
+    if (inPit && !G.pitSaid) { G.pitSaid = true; SFX.pit(b.x[0], b.x[1], b.x[2]); }
     const stopped = !b.gone && b.x[2] < 0 && (b.asleep || Math.hypot(...b.v) < 0.05);
     const deadGutter = b.gutter && !b.hitPins && (b.x[2] < L.HEAD_Z + 1.5 || G.t - G.gutterT > 1.2);
     if (G.endT === null && (inPit || stopped || deadGutter)) { G.endT = G.t; if (C) C.end = performance.now(); }

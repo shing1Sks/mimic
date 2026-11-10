@@ -328,6 +328,72 @@
     }
     tick() { if (!this.live) return; const t = this.ctx.currentTime; this._tone(this._out(0, 0.15), t, 'sine', 1400, 1400, 0.3, 0.05); }
 
+    // ---- gulls (gull.js): all synthesized
+    /** A herring gull's "kee-ow" call, two or three notes; dist 0 = the player's own gull. */
+    gullCry(dist = 0, pan = 0, notes = 0) {
+      if (!this.live) return;
+      const c = this.ctx, t0 = c.currentTime, n = notes || 2 + Math.floor(Math.random() * 2);
+      const dest = dist < 1 ? this._out(pan, 0.2) : this._spatial(dist, pan, false, 0.5);
+      const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2100; bp.Q.value = 1.4; bp.connect(dest);
+      const base = 1650 + Math.random() * 250;
+      for (let i = 0; i < n; i++) {
+        const t = t0 + i * (0.2 + Math.random() * 0.05), len = i === 0 ? 0.24 : 0.17;
+        const o = c.createOscillator(), g = c.createGain(), vib = c.createOscillator(), vg = c.createGain();
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(base * (i === 0 ? 0.82 : 1.05), t);
+        o.frequency.linearRampToValueAtTime(base * 1.2, t + len * 0.25);
+        o.frequency.exponentialRampToValueAtTime(base * 0.62, t + len);
+        vib.frequency.value = 38; vg.gain.value = 70; vib.connect(vg); vg.connect(o.frequency);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.5, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+        o.connect(g); g.connect(bp);
+        o.start(t); vib.start(t); o.stop(t + len + 0.03); vib.stop(t + len + 0.03);
+      }
+    }
+    /** One wing beat (own gull only: soft, close). */
+    flap() { if (!this.live) return; const t = this.ctx.currentTime; this._noise(this._out(0, 0.12), t, 0.12, 'lowpass', 520, 0.7, 0.7, 0.1, this.brown); }
+    /** The dive: air tearing past, rising over `secs`. */
+    diveWhoosh(secs = 1) {
+      if (!this.live) return;
+      const c = this.ctx, t = c.currentTime, s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+      s.buffer = this.noise; f.type = 'bandpass'; f.Q.value = 1.2;
+      f.frequency.setValueAtTime(500, t); f.frequency.exponentialRampToValueAtTime(2600, t + secs);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.35, t + secs * 0.8); g.gain.exponentialRampToValueAtTime(0.0001, t + secs + 0.15);
+      s.connect(f); f.connect(g); g.connect(this._out(0, 1));
+      s.start(t, Math.random()); s.stop(t + secs + 0.2);
+    }
+    /** A gull hits someone in the face: wet thump, feathers, an indignant squawk. */
+    gullHit(dist = 0, pan = 0) {
+      if (!this.live) return;
+      const t = this.ctx.currentTime, d = dist < 1 ? this._out(pan, 0.7) : this._spatial(dist, pan, false, 0.8);
+      this._tone(d, t, 'sine', 140, 55, 0.9, 0.16);
+      this._noise(d, t, 0.25, 'lowpass', 1100, 0.8, 0.8, 0.22);
+      this._noise(d, t + 0.03, 0.3, 'bandpass', 3200, 1.5, 0.35, 0.25);
+      this.gullCry(dist, pan, 1);
+    }
+    /** A gull shot out of the sky: a puff of feathers and a short squawk. */
+    gullDown(dist = 0, pan = 0) {
+      if (!this.live) return;
+      const t = this.ctx.currentTime, d = dist < 1 ? this._out(pan, 0.5) : this._spatial(dist, pan, false, 0.6);
+      this._noise(d, t, 0.3, 'bandpass', 1800, 0.9, 0.6, 0.28);
+      this.gullCry(dist, pan, 1);
+    }
+    /** The round-winning kill: a deep drop under the slow-motion. */
+    finalBlow() {
+      if (!this.live) return;
+      const t = this.ctx.currentTime, o = this._out(0, 0.55);
+      this._tone(o, t, 'sine', 70, 28, 1, 1.3, 0.01);
+      this._noise(o, t, 1.2, 'lowpass', 260, 0.7, 0.5, 1.1, this.brown);
+    }
+    /** Low health: a heartbeat (lub-dub) for the player who is in trouble. */
+    heartbeat(pan = 0) {
+      if (!this.live) return;
+      const t = this.ctx.currentTime, o = this._out(pan, 0.35);
+      this._tone(o, t, 'sine', 62, 40, 0.9, 0.12, 0.005);
+      this._tone(o, t + 0.17, 'sine', 55, 36, 0.6, 0.1, 0.005);
+    }
+
     _waterLoop() {
       if (this.waterSrc || !this.buf.water_loop) return;
       const c = this.ctx, src = c.createBufferSource(); src.buffer = this.buf.water_loop; src.loop = true;

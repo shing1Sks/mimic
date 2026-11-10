@@ -28,7 +28,7 @@
     });
 
   function boot(ASSETS) {
-    const T = THREE, I = ArenaInput, R = ArenaRules, M = ArenaMap, A = ArenaActors, FX = ArenaFx, SP = ArenaSplit;
+    const T = THREE, I = ArenaInput, R = ArenaRules, M = ArenaMap, A = ArenaActors, FX = ArenaFx, SP = ArenaSplit, GL = ArenaGull, GU = GL.GULL;
     const $ = id => document.getElementById(id);
     const DEG = Math.PI / 180;
     const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -148,8 +148,9 @@
         slot, dev, a: actor, cam, input, vm: vmFor(slot), hud: makeHud(slot),
         rect: { x: 0, y: 0, w: innerWidth, h: innerHeight }, scale: 1, vpan: 0, curZoom: 1,
         buyOpen: false, buyIndex: 0, scoped: false, aiming: false, crouchToggle: false, fireQueue: 0,
-        punch: { pitch: 0, yaw: 0 }, shake: 0, hurtT: 0, spectate: null, deathT: 0, look: { yaw: 0, pitch: 0 },
+        punch: { pitch: 0, yaw: 0 }, shake: 0, hurtT: 0, deathT: 0, look: { yaw: 0, pitch: 0 },
         guideHidden: false, guideKey: '', guideSince: 0, bannerT: 0, hitT: 0, radarT: 0, sbT: 0, feedV: -1,
+        gull: null, blindT: 0, toastT: 0, heartT: 0, lastStand: false,
       };
       actor.ph = ph;
       return ph;
@@ -247,14 +248,30 @@
 
     // ------------------------------------------------------------ rumble
 
-    let lastRumble = 0;
-    /** Phone rumble goes to the phone paired for it; with several players only P1's events use it. */
+    /**
+     * Rumble goes to each player's own controller: a browser phone through MimicLink (with the
+     * pattern), any pad Chrome can vibrate through its vibrationActuator, and the Mimic app's Pad
+     * (Bluetooth, WebHID) through MimicController, which can only be told apart from other app
+     * phones by its tag, so that one is kept for P1 (or the only player).
+     * pattern: 0 impact, 1 buzz, 2 rise, 3 double.
+     */
     function rumble(ph, strength, ms, pattern = 0, force = false) {
-      if (!mc.rumbleReady || !ph || ph.slot !== 0) return;
+      if (!ph) return;
       const now = performance.now();
-      if (!force && now - lastRumble < 70) return;
-      lastRumble = now;
-      mc.rumble(strength, ms, pattern);
+      if (!force && now - (ph.rumbleAt || 0) < 70) return;
+      ph.rumbleAt = now;
+      const gp = ph.input.pad;
+      try {
+        if (gp && gp.__mimicWeb && window.MimicLink) { MimicLink.rumble(gp.index, strength, ms, pattern); return; }
+        const va = gp && gp.vibrationActuator;
+        if (va && va.playEffect && I.classifyPad(gp) !== 'mimic') {
+          // a real pad has no patterns: a double is two short kicks
+          const fx = d => va.playEffect('dual-rumble', { duration: d, strongMagnitude: strength, weakMagnitude: Math.min(1, strength * 0.7 + 0.1) });
+          if (pattern === 3) { fx(Math.min(ms, 60)); setTimeout(() => fx(Math.min(ms, 60)), 110); } else fx(ms);
+          return;
+        }
+      } catch (e) { /* a pad that went away mid-call */ }
+      if (mc.rumbleReady && (ph.slot === 0 || H.length === 1)) mc.rumble(strength, ms, pattern);
     }
 
     // ------------------------------------------------------------ sound placement
@@ -330,13 +347,269 @@
       }
     }
 
+    // ------------------------------------------------------------ gulls: the afterlife (gull.js)
+
+    /*
+     * A dead player rises as a gull after a short death cam and flies until the round ends. What
+     * the gull looks at is marked for its team (a diamond through walls, the radar, and bot
+     * teammates hear about it). R2 / click dives at the enemy nearest the crosshair and blinds
+     * them; a gull blind followed by a kill pays the gull an assist. Enemies can shoot gulls down.
+     */
+    const gullCache = []; // per player slot: the bird, its ground shadow, its P tag
+    function gullBody(slot, team) {
+      let c = gullCache[slot];
+      if (!c || c.team !== team) {
+        if (c) { scene.remove(c.model.root); scene.remove(c.shadow); scene.remove(c.tag); }
+        c = gullCache[slot] = { team, model: GL.makeGull(team), shadow: GL.makeShadow(), tag: playerTag(slot) };
+        scene.add(c.model.root); scene.add(c.shadow); scene.add(c.tag);
+        setLayer(c.tag, BODY(slot)); // everyone else sees whose gull it is; its own player does not need the label
+      }
+      return c;
+    }
+    function showGullBody(slot, on) {
+      const c = gullCache[slot];
+      if (c) { c.model.root.visible = c.shadow.visible = on; c.tag.visible = on && H.length > 1; }
+    }
+    function feathers(x, y, z, n, spread = 2.4) {
+      for (let i = 0; i < n; i++) {
+        const w = Math.random() < 0.7 ? 0.95 : 0.62;
+        fx.dust.emit(x, y, z, (Math.random() - 0.5) * spread, Math.random() * spread * 0.7, (Math.random() - 0.5) * spread, w, w, w * 0.97, 1.2 + Math.random() * 1.2, 0.7, 2.2);
+      }
+    }
+    function spawnGull(ph) {
+      const p = ph.a;
+      gullBody(ph.slot, p.team);
+      const g = ph.gull = GL.create(p.team, p.pos.x, p.pos.y + 1.3, p.pos.z, p.yaw);
+      g.look = { yaw: p.yaw, pitch: -0.3 };
+      g.lock = null; g.lockT = 0; g.cryT = 0; g.flapN = 0;
+      showGullBody(ph.slot, true);
+      feathers(g.x, g.y, g.z, 16);
+      showBanner(ph, 'Gull', padOf(ph) ? 'Spot for your team · R2 to dive' : 'Spot for your team · click to dive', null, 3);
+      asView(ph, () => sfx.gullCry(0, 0, 3));
+      rumble(ph, 0.45, 160, 2, true);
+      ph.guideKey = '';
+    }
+    function foesOf(team) { return G.actors.filter(e => e.alive && e.team !== team); }
+
+    function updateGull(ph, dt) {
+      const g = ph.gull, f = ph.input.frame, c = gullCache[ph.slot];
+      g.t += dt; g.cd = Math.max(0, g.cd - dt); g.cryT -= dt;
+      const prevY = g.look.yaw;
+      g.look.yaw = wrap(g.look.yaw + f.lookYaw + f.padYaw);
+      g.look.pitch = clamp(g.look.pitch + f.lookPitch + f.padPitch, -1.25, 0.55);
+      ph.look = { yaw: g.look.yaw - prevY, pitch: 0 };
+      const inp = { mx: f.moveX, my: f.moveY, yaw: g.look.yaw, climb: (f.held.jump ? 1 : 0) - (f.held.crouch ? 1 : 0) };
+      const live = game.phase === 'live';
+      if (g.mode === 'down') {
+        // tumbling out of the sky, then back in the air above our own side
+        g.vy -= 14 * dt; g.vx *= Math.exp(-dt); g.vz *= Math.exp(-dt);
+        g.look.pitch += (-0.6 - g.look.pitch) * Math.min(1, dt * 3); // watch it fall from above
+        g.x += g.vx * dt; g.y += g.vy * dt; g.z += g.vz * dt;
+        const floor = g.z < -30.5 ? -1.2 : M.groundHeight(map, g.x, g.z, g.y);
+        if (g.y < floor + 0.15) { g.y = floor + 0.15; g.vx = g.vy = g.vz = 0; }
+        if (g.t > GU.downTime) {
+          Object.assign(g, { mode: 'fly', t: 0, x: g.team ? 30 : -30, y: 13, z: (Math.random() - 0.5) * 20, vx: 0, vy: 0, vz: 0 });
+          showBanner(ph, 'Back in the air', '', null, 1.4);
+          asView(ph, () => sfx.gullCry(0, 0, 2));
+        }
+      } else if (g.mode === 'rise') {
+        // (under the shed roof it cannot reach cruise height: it flies on and finds the way out)
+        if (GL.rise(g, inp, dt, map, M) || g.t > 2.5) { g.mode = 'fly'; g.t = 0; }
+      } else if (g.mode === 'dive') {
+        const tg = g.target;
+        if (!tg || !tg.alive || g.t > GU.diveMax || !live) endDive(g);
+        else {
+          // the camera swings onto the target with the bird
+          const dx = tg.pos.x - g.x, dz = tg.pos.z - g.z;
+          g.look.yaw = wrap(g.look.yaw + wrap(Math.atan2(-dx, -dz) - g.look.yaw) * Math.min(1, dt * 5));
+          g.look.pitch += (clamp(Math.atan2(tg.eyeY() - g.y, Math.hypot(dx, dz)), -1.25, 0.55) - g.look.pitch) * Math.min(1, dt * 5);
+          const r = GL.diveStep(g, tg.pos.x, tg.eyeY() - 0.05, tg.pos.z, dt, map, M);
+          if (r === 'hit') gullStrike(ph, tg);
+          else if (r === 'bonk' && Math.hypot(tg.pos.x - g.x, tg.eyeY() - g.y, tg.pos.z - g.z) > 3) {
+            // flew into a roof or a crane leg on the way down
+            feathers(g.x, g.y, g.z, 8); endDive(g); g.vy = 3;
+            const sp = spatial(g.x, g.y, g.z); sfx.impact('metal', sp.dist, sp.pan);
+            rumble(ph, 0.7, 90, 0, true);
+          } else if (g.botShotAt && G.time >= g.botShotAt) botShootsGull(ph, tg);
+        }
+      } else {
+        if (g.mode === 'swoop') { GL.move(g, dt, map, M); if (g.t > GU.swoopTime) { g.mode = 'fly'; g.t = 0; } }
+        else GL.fly(g, g.mode === 'recover' ? Object.assign(inp, { climb: 1 }) : inp, dt, map, M);
+        if (g.mode === 'recover' && g.t > 0.6) { g.mode = 'fly'; g.t = 0; }
+        // dive target, ten times a second
+        g.lockT -= dt;
+        if (g.lockT <= 0) {
+          g.lockT = 0.1;
+          const foes = live ? foesOf(g.team) : [];
+          const pts = foes.map(e => ({ x: e.pos.x, y: e.eyeY() - 0.1, z: e.pos.z }));
+          const i = GL.pickDiveTarget(g, aimDir(g.look.yaw, g.look.pitch, _gd), pts, k => M.lineOfSight(map, g.x, g.y, g.z, pts[k].x, pts[k].y, pts[k].z));
+          g.lock = i >= 0 ? foes[i] : null;
+        }
+        if (f.pressed.fire && live && g.mode !== 'recover') {
+          if (g.cd <= 0) startDive(ph);
+          else asView(ph, () => sfx.ui('deny'));
+        }
+      }
+      // spotting, five times a second: everything the gull can see is marked for its team
+      if (live && g.mode !== 'down' && Math.floor(g.t * 5) !== Math.floor((g.t - dt) * 5)) {
+        aimDir(g.look.yaw, g.look.pitch, _gd);
+        let fresh = false;
+        for (const e of foesOf(g.team)) {
+          const pt = { x: e.pos.x, y: e.pos.y + 1.2, z: e.pos.z };
+          if (!GL.canSpot(g, _gd, pt) || !M.lineOfSight(map, g.x, g.y, g.z, pt.x, pt.y, pt.z)) continue;
+          if (G.time - (e.gullSpot || -9) > 3) fresh = true;
+          e.gullSpot = Math.max(e.gullSpot || -9, G.time); e.spotted = G.time;
+          // the callout reaches bot teammates near the enemy
+          for (const b of G.actors) {
+            if (!b.bot || !b.alive || b.team !== g.team || b.bot.visible) continue;
+            if (Math.hypot(b.pos.x - e.pos.x, b.pos.z - e.pos.z) < 35) b.bot.lastKnown = { x: e.pos.x, y: e.pos.y, z: e.pos.z, t: G.time };
+          }
+        }
+        // a cry when it finds someone: the gull's player hears they did something, the enemy hears it overhead
+        if (fresh && g.cryT <= 0) { g.cryT = 2.5; const sp = spatial(g.x, g.y, g.z); sfx.gullCry(sp.dist, sp.pan, 1); }
+      }
+      // field of view: wider in the dive for speed
+      const zoom = g.mode === 'dive' ? 0.78 : 1;
+      if (Math.abs(ph.curZoom - zoom) > 1e-3) updateFov(ph, ph.curZoom + (zoom - ph.curZoom) * Math.min(1, dt * 6));
+      // the bird, its shadow, its tag; a wing beat you can hear (and feel, lightly) while it works
+      c.model.update(g, dt);
+      const fl = g.z < -30.5 ? -1.15 : M.groundHeight(map, g.x, g.z, g.y);
+      const hgt = Math.max(0, g.y - fl);
+      c.shadow.position.set(g.x, fl + 0.04, g.z);
+      c.shadow.scale.setScalar(1.4 + hgt * 0.08);
+      c.shadow.material.opacity = clamp(1.1 - hgt / 18, 0.2, 0.9);
+      c.shadow.visible = g.mode !== 'down' || hgt > 0.3;
+      c.tag.position.set(g.x, g.y + 0.85, g.z);
+      const n = Math.floor(c.model.phase / (Math.PI * 2));
+      if (n !== g.flapN) { g.flapN = n; if (g.mode === 'rise' || g.mode === 'recover' || g.vy > 1.5) asView(ph, () => sfx.flap()); }
+    }
+    const _gd = new T.Vector3(), _gp = new T.Vector3();
+
+    function startDive(ph) {
+      const g = ph.gull, tg = g.lock;
+      if (tg && tg.alive) {
+        g.mode = 'dive'; g.t = 0; g.target = tg; g.cd = g.cdMax = GU.cooldown; g.botShotAt = null;
+        const d = Math.hypot(tg.pos.x - g.x, tg.eyeY() - g.y, tg.pos.z - g.z);
+        asView(ph, () => { sfx.diveWhoosh(Math.min(1.3, d / GU.diveSpeed + 0.15)); sfx.gullCry(0, 0, 1); });
+        rumble(ph, 0.35, 80, 2, true);
+        // a bot that is looking may shoot the gull out of the air before it lands
+        if (tg.bot) {
+          const chance = { recruit: 0.1, regular: 0.2, veteran: 0.32 }[S.diff] || 0.2;
+          const facing = Math.abs(wrap(Math.atan2(-(g.x - tg.pos.x), -(g.z - tg.pos.z)) - tg.yaw)) < 1.4;
+          if (Math.random() < chance * (facing ? 1.3 : 0.5)) g.botShotAt = G.time + Math.min(d / GU.diveSpeed * 0.7, 0.35 + Math.random() * 0.35);
+        }
+      } else {
+        // nothing to dive at: a short dash where the camera looks
+        aimDir(g.look.yaw, Math.min(0.2, g.look.pitch), _gd);
+        g.mode = 'swoop'; g.t = 0; g.cd = g.cdMax = GU.swoopCooldown;
+        g.vx = _gd.x * GU.swoopSpeed; g.vy = _gd.y * GU.swoopSpeed; g.vz = _gd.z * GU.swoopSpeed;
+        asView(ph, () => sfx.flap());
+      }
+    }
+    function endDive(g) { g.mode = 'recover'; g.t = 0; g.target = null; g.botShotAt = null; g.vx *= 0.3; g.vz *= 0.3; g.vy = Math.max(g.vy, 2); }
+
+    function gullStrike(ph, v) {
+      const g = ph.gull;
+      endDive(g); g.vy = 8; g.vx = -g.vx; g.vz = -g.vz;
+      g.blinds++; ph.a.gullBlinds = (ph.a.gullBlinds || 0) + 1;
+      v.blindedAt = G.time; v.blindedBy = ph.a; v.gullSpot = G.time + 2;
+      feathers(v.pos.x, v.eyeY(), v.pos.z, 26, 3.2);
+      const sp = spatial(v.pos.x, v.eyeY(), v.pos.z);
+      if (!v.ph) sfx.gullHit(sp.dist, sp.pan);
+      rumble(ph, 0.9, 140, 3, true);
+      hitMarker(ph, false, false);
+      addFeed({ kind: 'gull', att: ph.a, v });
+      if (v.ph) blindPlayer(v.ph, ph.a);
+      else if (v.bot) {
+        v.blindT = GU.blind;
+        v.bot.aimYaw = wrap(v.bot.aimYaw + (Math.random() < 0.5 ? -1 : 1) * (0.5 + Math.random() * 0.6));
+        v.bot.aimPitch += 0.35;
+        if (v.model && v.model.onHit) v.model.onHit(true);
+      }
+    }
+    function blindPlayer(vph, by) {
+      vph.blindT = GU.blind; vph.shake = 1; vph.scoped = false;
+      vph.punch.pitch += 5 * DEG; vph.punch.yaw += (Math.random() - 0.5) * 9 * DEG;
+      const el = vph.hud.e.gulled;
+      el.classList.remove('on'); void el.offsetWidth; el.classList.add('on');
+      asView(vph, () => sfx.gullHit(0, 0));
+      rumble(vph, 1, 220, 1, true);
+      toast(vph, `Gulled by ${by.name}`);
+    }
+    function botShootsGull(ph, bot) {
+      const g = ph.gull;
+      g.botShotAt = null;
+      if (!bot.alive || !M.lineOfSight(map, bot.pos.x, bot.eyeY(), bot.pos.z, g.x, g.y, g.z)) return;
+      bot.yaw = Math.atan2(-(g.x - bot.pos.x), -(g.z - bot.pos.z));
+      if (bot.bot) bot.bot.aimYaw = bot.yaw;
+      bot.muzzleWorld(_mz); fx.muzzle(_mz);
+      _gp.set(g.x, g.y, g.z); fx.tracer(_mz, _gp, bot.weapon.tracer);
+      if (bot.model) { bot.model.kick += 0.1; if (bot.model.onFire) bot.model.onFire(G.time); }
+      const sp = spatial(bot.pos.x, bot.eyeY(), bot.pos.z);
+      sfx.shot(bot.weapon.sound, Math.max(1.5, sp.dist), sp.pan, sp.occluded);
+      downGull(ph, bot);
+    }
+    function downGull(ph, att) {
+      const g = ph.gull;
+      if (!g || g.mode === 'down') return;
+      g.mode = 'down'; g.t = 0; g.vy = 2; g.target = null; g.botShotAt = null; g.lock = null;
+      feathers(g.x, g.y, g.z, 24, 3);
+      const sp = spatial(g.x, g.y, g.z); sfx.gullDown(sp.dist, sp.pan);
+      rumble(ph, 1, 240, 2, true);
+      showBanner(ph, 'Shot down', `by ${att.name} · flying again in ${GU.downTime}s`, 1, 2.2);
+      addFeed({ kind: 'gulldown', att, v: ph.a });
+      if (att.ph) { hitMarker(att.ph, false, true); asView(att.ph, () => sfx.hitmarker(false, true)); rumble(att.ph, 0.5, 70, 3, true); }
+    }
+    /** Spot markers over enemies a gull has seen, and bots shaking off a blinding. */
+    function tickSpotted(dt) {
+      for (const a of G.actors) {
+        if (a.blindT > 0 && a.bot) {
+          a.blindT -= dt;
+          a.bot.errMag = Math.max(a.bot.errMag, 10); a.bot.pauseT = Math.max(a.bot.pauseT, 0.12);
+        }
+        const m = a.spotMark;
+        if (!m) continue;
+        const on = a.alive && G.time - (a.gullSpot || -9) < GU.spotHold;
+        m.visible = on;
+        if (on) {
+          m.position.set(a.pos.x, a.pos.y + a.height() + 0.75, a.pos.z);
+          const s = 0.04 + 0.006 * Math.sin(G.time * 9);
+          m.scale.set(s, s, 1);
+        }
+      }
+    }
+    // a few gulls wheel over the harbour behind the menus: the depot's locals, and a hint of what is coming
+    const ambient = [];
+    function menuGulls(t, dt, on) {
+      if (on && !ambient.length) {
+        for (let i = 0; i < 4; i++) {
+          const m = GL.makeGull(0, 0x2a2d31), r = 12 + i * 6;
+          m.root.scale.setScalar(1.5); // a touch large: at menu-camera range they are specks
+          scene.add(m.root);
+          ambient.push({ m, r, w: (6.5 + i) / r * (i % 2 ? 1 : -1), h: 10 + i * 2.6, ph: i * 1.9, st: { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, mode: 'fly', t: 0 } });
+        }
+      }
+      for (const a of ambient) {
+        a.m.root.visible = on;
+        if (!on || dt <= 0) continue;
+        const ang = a.ph + t * a.w, st = a.st;
+        const x = Math.cos(ang) * a.r, z = Math.sin(ang) * a.r * 0.75 - 8, y = a.h + Math.sin(t * 0.4 + a.ph) * 1.6;
+        st.vx = (x - st.x) / dt; st.vy = (y - st.y) / dt; st.vz = (z - st.z) / dt;
+        st.x = x; st.y = y; st.z = z;
+        a.m.update(st, dt);
+      }
+    }
+    function toast(ph, text, secs = 2) { const el = ph.hud.e.toast; el.textContent = text; el.classList.add('show'); ph.toastT = secs; }
+
     // ------------------------------------------------------------ match / round flow
 
     function clearActors() {
       G.actors.forEach(a => {
         if (a.model) { scene.remove(a.model.root); scene.remove(a.model.blob); scene.remove(a.model.marker); }
         if (a.tag) scene.remove(a.tag);
+        if (a.spotMark) scene.remove(a.spotMark);
       });
+      gullCache.forEach((c, i) => showGullBody(i, false));
       G.actors = [];
       dropViews();
     }
@@ -358,10 +631,14 @@
       game.player = H[0].a;
       [0, 1].forEach(t => { for (let i = 0; i < plan.bots[t]; i++) G.actors.push(new A.Actor(A.TEAMS[t].names[i % 5], t, false)); });
       G.actors.forEach(a => {
+        // gull markers: seen only by the other team's cameras
+        a.spotMark = GL.makeSpotMark(); setLayer(a.spotMark, MARK(1 - a.team)); scene.add(a.spotMark);
         if (a.isPlayer) { if (game.split) addBody(a); return; }
         a.bot = new A.Bot(a, S.diff);
         addBody(a);
       });
+      // every player's gull exists (hidden) from the start, so its shaders compile with the rest
+      H.forEach(ph => { gullBody(ph.slot, ph.a.team); showGullBody(ph.slot, false); });
       H.forEach(ph => {
         ph.vm.prepare(ph.a.team);
         setupCameraLayers(ph);
@@ -402,6 +679,7 @@
         a.alive = true; a.hp = 100; a.refill(); a.reloadT = 0; a.drawT = 0; a.shotsInBurst = 0;
         a.slot = a.primary ? 'primary' : 'sidearm';
         a.damagers = {}; a.roundKills = 0; a.crouch = 0; a.crouching = false; a.vel = { x: 0, y: 0, z: 0 }; a.onGround = true;
+        a.gullSpot = -9; a.blindT = 0; a.blindedAt = null; a.blindedBy = null;
         const team = a.team, k = counters[team]++;
         a.pos = { x: 0, y: 0, z: 0 }; a.yaw = map.spawns[team][0].yaw; a.pitch = 0;
         if (a.bot) {
@@ -420,8 +698,12 @@
       fx.clear();
       sfx.stopReload();
       const first = game.score[0] + game.score[1] === 0;
+      game.slowmo = 0;
       H.forEach(ph => {
-        Object.assign(ph, { spectate: null, punch: { pitch: 0, yaw: 0 }, scoped: false, crouchToggle: false, deathT: 0 });
+        Object.assign(ph, { punch: { pitch: 0, yaw: 0 }, scoped: false, crouchToggle: false, deathT: 0, gull: null, blindT: 0, lastStand: false, heartT: 0 });
+        showGullBody(ph.slot, false);
+        ph.hud.e.gulled.classList.remove('on');
+        updateFov(ph, 1);
         closeBuy(ph);
         ph.vm.setWeapon(ph.a.weaponId, ph.a.team); ph.vm.cancel();
         const where = ph.a.team === 0 ? 'Wardens hold the west gate' : 'Corsairs hold the east gate';
@@ -481,7 +763,7 @@
         const acc = p.shots ? Math.round(p.hits / p.shots * 100) : 0;
         const hs = p.kills ? Math.round(p.hs / p.kills * 100) : 0;
         const who = H.length > 1 ? `<b style="color:${PCOL[ph.slot]}">P${ph.slot + 1}</b> ` : 'Your ';
-        return `<div class="small">${who}accuracy ${acc}% · headshot kills ${hs}% · damage dealt ${Math.round(p.dmg)}</div>`;
+        return `<div class="small">${who}accuracy ${acc}% · headshot kills ${hs}% · damage dealt ${Math.round(p.dmg)} · gull blinds ${p.gullBlinds || 0}, gull assists ${p.gullAssists || 0}</div>`;
       };
       $('resTable').innerHTML = `<div style="margin-bottom:12px">${H.map(line).join('')}</div>` + scoreboardHtml(true, null);
       unlockPointer();
@@ -573,8 +855,17 @@
         const h = e.rayHit(o.x, o.y, o.z, d.x, d.y, d.z, maxT);
         if (h && h.t < maxT) { maxT = h.t; victim = e; vh = h; }
       }
+      // enemy gulls are targets too
+      let gull = null;
+      for (const ph of H) {
+        const g = ph.gull;
+        if (!g || g.mode === 'down' || g.team === a.team) continue;
+        const t = GL.rayHitsGull(g, o.x, o.y, o.z, d.x, d.y, d.z, maxT);
+        if (t >= 0) { maxT = t; gull = ph; victim = null; }
+      }
       _end.copy(o).addScaledVector(d, maxT);
-      if (victim) {
+      if (gull) downGull(gull, a);
+      else if (victim) {
         fx.bodyHit(_end, d, vh.zone === 'head');
         applyDamage(victim, a, w, vh.zone, vh.t, d);
       } else if (wh) {
@@ -623,15 +914,40 @@
       if (head) att.hs++;
       att.money = R.clampMoney(att.money + R.killReward(w.id));
       Object.keys(v.damagers).forEach(id => { if (+id !== att.id && v.damagers[id] >= 40) { const as = G.actors.find(x => x.id === +id); if (as) as.assists++; } });
-      addFeed(att, v, w, head);
+      addFeed({ att, v, w, head });
+      // a gull blinded this victim moments ago: its player shares the kill
+      const gb = v.blindedBy;
+      if (gb && gb !== att && gb.team === att.team && GL.earnsAssist(v.blindedAt, G.time)) {
+        gb.assists++; gb.gullAssists = (gb.gullAssists || 0) + 1;
+        gb.money = R.clampMoney(gb.money + GU.assistCash);
+        if (gb.ph) { toast(gb.ph, `Gull assist  +$${GU.assistCash}`); rumble(gb.ph, 0.6, 90, 3, true); asView(gb.ph, () => sfx.hitmarker(false, true)); }
+      }
+      v.blindT = 0; v.blindedBy = null;
       if (v.tag) v.tag.visible = false;
       if (v.ph) {
         const ph = v.ph;
-        ph.deathT = 0; ph.scoped = false; closeBuy(ph); sfx.stopReload(ph.slot);
+        ph.deathT = 0; ph.scoped = false; ph.blindT = 0; closeBuy(ph); sfx.stopReload(ph.slot);
         rumble(ph, 1, 255, 2, true);
         showBanner(ph, 'Eliminated', `by ${att.name} · ${w.name}${head ? ' · headshot' : ''}`, 1, 2);
       }
       if (att.ph) rumble(att.ph, 0.45, 70, 3, true);
+      if (game.phase !== 'live') return;
+      // the round-winning kill: every screen drops into slow motion for a beat
+      if (G.aliveCount(v.team) === 0) {
+        game.slowmo = 1.3;
+        sfx.finalBlow();
+        H.forEach(ph => { if (ph !== v.ph) rumble(ph, 0.7, 200, 2, true); });
+        return;
+      }
+      // the last player standing on a side gets told, and feels their heart
+      const left = G.actors.filter(a => a.alive && a.team === v.team);
+      const n = G.aliveCount(1 - v.team);
+      if (left.length === 1 && left[0].ph && !left[0].ph.lastStand && n >= 2) {
+        const ph = left[0].ph;
+        ph.lastStand = true;
+        showBanner(ph, `1 v ${n}`, 'Last one standing', null, 2.2);
+        rumble(ph, 0.8, 220, 2, true);
+      }
     }
 
     function startReload(a) {
@@ -827,7 +1143,16 @@
         const p = ph.a;
         if (p.alive && !ph.buyOpen) updatePlayer(ph, dt);
         else if (p.alive) { p.vel.x *= 0.8; p.vel.z *= 0.8; ph.aiming = false; ph.scoped = false; }
+        else if (ph.gull) updateGull(ph, dt);
+        else if (ph.deathT > GU.riseAfter) spawnGull(ph);
+        ph.blindT = Math.max(0, ph.blindT - dt);
+        // low health: a heartbeat in the ears and in the hands, quicker the closer to death
+        if (p.alive && p.hp <= 30 && game.phase === 'live') {
+          ph.heartT -= dt;
+          if (ph.heartT <= 0) { ph.heartT = 0.62 + p.hp / 30 * 0.38; rumble(ph, 0.3, 45, 3, true); asView(ph, () => sfx.heartbeat()); }
+        }
       }
+      tickSpotted(dt);
       // bots
       for (const a of G.actors) if (a.bot && a.alive) {
         if (game.phase === 'live') a.bot.update(G, dt);
@@ -841,16 +1166,8 @@
       }
 
       for (const ph of H) {
-        const p = ph.a, f = ph.input.frame;
-        // spectating a teammate (bot or player) once dead
-        if (!p.alive) {
-          ph.deathT += dt;
-          const mates = G.actors.filter(a => a.team === p.team && a.alive && a !== p);
-          if (ph.deathT > 1.6 && mates.length) {
-            if (!ph.spectate || !ph.spectate.alive) ph.spectate = mates[0];
-            if (f.pressed.jump || f.pressed.fire) { const i = mates.indexOf(ph.spectate); ph.spectate = mates[(i + 1) % mates.length]; }
-          }
-        }
+        const p = ph.a;
+        if (!p.alive) ph.deathT += dt;
         // spotting for the radar
         if (p.alive && Math.floor(G.time * 5) !== Math.floor((G.time - dt) * 5)) {
           aimDir(p.yaw, p.pitch, _dir);
@@ -874,18 +1191,27 @@
         camera.position.set(p.pos.x, p.eyeY(), p.pos.z);
         const sh = ph.shake * ph.shake;
         camera.rotation.set(p.pitch + ph.punch.pitch + (Math.random() - 0.5) * sh * 0.01, p.yaw + ph.punch.yaw + (Math.random() - 0.5) * sh * 0.01, (Math.random() - 0.5) * sh * 0.012);
-      } else if (ph.spectate && ph.spectate.alive) {
-        const s = ph.spectate;
-        aimDir(s.yaw, s.pitch * 0.5, _dir);
-        camera.position.set(s.pos.x - _dir.x * 2.6 + Math.cos(s.yaw) * 0.6, s.eyeY() + 0.55, s.pos.z - _dir.z * 2.6 - Math.sin(s.yaw) * 0.6);
-        camera.rotation.set(s.pitch * 0.5 - 0.12, s.yaw, 0);
+      } else if (ph.gull) {
+        // behind and above the gull along the view's own up, so the bird always sits under the
+        // reticle instead of on top of what it aims at; pulled in when a wall is in the way
+        const g = ph.gull;
+        aimDir(g.look.yaw, g.look.pitch, _dir);
+        _right.set(Math.cos(g.look.yaw), 0, -Math.sin(g.look.yaw)); _up.crossVectors(_right, _dir);
+        // lift keeps the bird a fixed share of the way down the view: wide, short split views have little height
+        const back = g.mode === 'dive' ? 2.6 : 3.4, lift = back * Math.tan(camera.fov * DEG / 2 * (g.mode === 'dive' ? 0.4 : 0.55));
+        let dx = -_dir.x * back + _up.x * lift, dy = -_dir.y * back + _up.y * lift, dz = -_dir.z * back + _up.z * lift;
+        const L = Math.hypot(dx, dy, dz);
+        const hit = M.raycast(map, g.x, g.y, g.z, dx / L, dy / L, dz / L, L);
+        if (hit) { const k = Math.max(0.25, hit.t - 0.3) / L; dx *= k; dy *= k; dz *= k; }
+        camera.position.set(g.x + dx, Math.max(0.4, g.y + dy), g.z + dz);
+        const sh = ph.shake * ph.shake;
+        camera.rotation.set(g.look.pitch + (Math.random() - 0.5) * sh * 0.01, g.look.yaw, (g.mode === 'dive' ? 0 : -gullCache[ph.slot].model.bank * 0.25) + (Math.random() - 0.5) * sh * 0.012);
       } else {
         // death cam: sink and tilt where you fell
         const k = Math.min(1, ph.deathT / 1.2);
         camera.position.set(p.pos.x, p.pos.y + 1.62 - 1.2 * k, p.pos.z);
         camera.rotation.set(p.pitch * (1 - k) - 0.3 * k, p.yaw, 0.5 * k);
       }
-      // a spectated player's own body is hidden from their camera, not from ours: nothing to do
     }
     function updateMenuCamera(t) {
       const a = t * 0.045;
@@ -920,18 +1246,24 @@
       h.style.opacity = 1; ph.hitT = killed ? 0.35 : 0.16;
     }
     function showDamageDir(ph, att) { const hd = ph.hud, d = hd.dds[hd.ddi]; hd.ddi = (hd.ddi + 1) % hd.dds.length; d.t = 1.4; d.att = att; }
-    function addFeed(att, v, w, head) {
-      game.feed.unshift({ att, v, w, head, t: G.time });
+    /** e: { att, v, w, head } for a kill, or { kind: 'gull' | 'gulldown', att, v } for the gulls. */
+    function addFeed(e) {
+      e.t = G.time;
+      game.feed.unshift(e);
       game.feed = game.feed.slice(0, 5);
       game.feedV++;
     }
+    const WING = '<svg class="wing" viewBox="0 0 22 10" aria-hidden="true"><path d="M1 8 Q5.5 1 11 6.5 Q16.5 1 21 8" /></svg>';
     function renderFeed(ph) {
       if (ph.feedV === game.feedV) return;
       ph.feedV = game.feedV;
       const n = H.length > 2 ? 3 : 5;
       ph.hud.e.feed.innerHTML = game.feed.slice(0, n).map(e => {
         const me = e.att === ph.a || e.v === ph.a;
-        return `<div class="kf${me ? ' me' : ''}"><span class="t${e.att.team}">${e.att.name}</span><i>${e.w.name}</i>${e.head ? '<span class="hs">◎</span>' : ''}<span class="t${e.v.team}">${e.v.name}</span></div>`;
+        const who = a => `<span class="t${a.team}">${a.name}</span>`;
+        if (e.kind === 'gull') return `<div class="kf gull${me ? ' me' : ''}">${who(e.att)}${WING}<i>blinded</i>${who(e.v)}</div>`;
+        if (e.kind === 'gulldown') return `<div class="kf gull${me ? ' me' : ''}">${who(e.att)}<i>shot down</i>${who(e.v)}${WING}</div>`;
+        return `<div class="kf${me ? ' me' : ''}">${who(e.att)}<i>${e.w.name}</i>${e.head ? '<span class="hs">◎</span>' : ''}${who(e.v)}</div>`;
       }).join('');
     }
     /** viewerTeam: whose cash shows (null = everyone's, the results screen). */
@@ -940,10 +1272,10 @@
       return [0, 1].map(team => {
         const cash = full || viewerTeam === null || team === viewerTeam;
         const rows = G.actors.filter(a => a.team === team).sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
-        return `<table class="sb t${team}"><caption>${A.TEAMS[team].name} — ${game.score[team]}</caption><tr><th>Name</th><th>K</th><th>D</th><th>A</th><th>HS</th><th>Dmg</th>${cash ? '<th>Cash</th>' : ''}</tr>` +
+        return `<table class="sb t${team}"><caption>${A.TEAMS[team].name} — ${game.score[team]}</caption><tr><th>Name</th><th>K</th><th>D</th><th>A</th><th>HS</th><th title="Enemies blinded as a gull">Gull</th><th>Dmg</th>${cash ? '<th>Cash</th>' : ''}</tr>` +
           rows.map(a => {
             const name = a.ph && H.length > 1 ? `<b style="color:${PCOL[a.ph.slot]}">${a.name}</b>` : a.name;
-            return `<tr class="${a === viewer || (!viewer && a.isPlayer) ? 'me' : ''} ${a.alive || full ? '' : 'dead'}"><td>${name}</td><td>${a.kills}</td><td>${a.deaths}</td><td>${a.assists}</td><td>${a.hs}</td><td>${Math.round(a.dmg)}</td>${cash ? `<td>$${a.money}</td>` : ''}</tr>`;
+            return `<tr class="${a === viewer || (!viewer && a.isPlayer) ? 'me' : ''} ${a.alive || full ? '' : 'dead'}"><td>${name}</td><td>${a.kills}</td><td>${a.deaths}</td><td>${a.assists}</td><td>${a.hs}</td><td>${a.gullBlinds || 0}</td><td>${Math.round(a.dmg)}</td>${cash ? `<td>$${a.money}</td>` : ''}</tr>`;
           }).join('') + '</table>';
       }).join('');
     }
@@ -963,10 +1295,13 @@
     })();
     function drawRadar(ph) {
       const p = ph.a, rctx = ph.hud.e.rctx, W = ph.hud.e.radar.width, c = W / 2, sc = 2.6;
-      const L = p.alive || !ph.spectate ? p : ph.spectate;
+      // a gull's radar turns with where the gull looks
+      const L = p.alive || !ph.gull ? p : { pos: ph.gull, yaw: ph.gull.look.yaw };
+      const gulls = H.filter(o => o !== ph && o.gull && o.a.team === p.team && o.gull.mode !== 'down');
       // nothing moved (buy time, holding an angle): keep the last picture instead of repainting it
       let sig = Math.round(L.yaw * 200) + ',' + Math.round(L.pos.x * 20) + ',' + Math.round(L.pos.z * 20);
       for (const a of G.actors) if (a !== L && (a.team === p.team || G.time - a.spotted < 1.5)) sig += ',' + Math.round(a.pos.x * 10) + ',' + Math.round(a.pos.z * 10) + (a.alive ? '' : 'd');
+      for (const o of gulls) sig += ',g' + Math.round(o.gull.x * 10) + ',' + Math.round(o.gull.z * 10);
       if (sig === ph.radarSig) return;
       ph.radarSig = sig;
       rctx.clearRect(0, 0, W, W);
@@ -982,6 +1317,13 @@
         rctx.fillStyle = !a.alive ? 'rgba(160,160,160,0.6)' : a.team === 0 ? '#58c7d8' : '#ff6a3a';
         rctx.beginPath(); rctx.arc(x, y, r, 0, Math.PI * 2); rctx.fill();
         if (a.ph && a.alive && H.length > 1) { rctx.strokeStyle = PCOL[a.ph.slot]; rctx.lineWidth = RS * 0.9; rctx.beginPath(); rctx.arc(x, y, r * 1.7, 0, Math.PI * 2); rctx.stroke(); }
+      }
+      // teammates' gulls: a little wing in their colour
+      rctx.lineWidth = RS * 0.8; rctx.lineCap = 'round';
+      for (const o of gulls) {
+        const x = (o.gull.x + 48) * RS, y = (o.gull.z + 33) * RS, k = RS * 1.6;
+        rctx.strokeStyle = H.length > 1 ? PCOL[o.slot] : '#fff';
+        rctx.beginPath(); rctx.moveTo(x - k, y); rctx.quadraticCurveTo(x - k * 0.5, y - k * 0.8, x, y); rctx.quadraticCurveTo(x + k * 0.5, y - k * 0.8, x + k, y); rctx.stroke();
       }
       rctx.restore();
       rctx.fillStyle = H.length > 1 ? PCOL[ph.slot] : '#fff';
@@ -1013,7 +1355,7 @@
 
     function updateHud(ph, dt) {
       const p = ph.a, e = ph.hud.e, w = p.weapon;
-      const shown = p.alive ? p : (ph.spectate || p);
+      const shown = p;
       setText(e.hp, String(Math.max(0, Math.ceil(shown.hp))));
       setStyle(e.hpbar, 'width', shown.hp + '%');
       e.hp.parentNode.classList.toggle('low', shown.hp <= 30);
@@ -1043,15 +1385,18 @@
       }
       setStyle(e.hurt, 'opacity', (Math.round(Math.max(ph.hurtT * 0.8, p.alive && p.hp < 30 ? 0.35 + 0.15 * Math.sin(G.time * 5) : 0) * 40) / 40).toFixed(3));
       if (ph.bannerT > 0) { ph.bannerT -= dt; if (ph.bannerT <= 0) e.banner.classList.remove('show'); }
+      if (ph.toastT > 0) { ph.toastT -= dt; if (ph.toastT <= 0) e.toast.classList.remove('show'); }
+      // gull mode: no gun or vitals; a dive reticle, the target bracketed, a status line
+      const gm = !p.alive && !!ph.gull;
+      if (ph.gullMode !== gm) { ph.gullMode = gm; ph.hud.root.classList.toggle('gullmode', gm); }
+      if (gm) updateGullHud(ph);
       renderFeed(ph);
-      // spectate label and hints
-      setText(e.spectate, !p.alive && ph.spectate && ph.spectate.alive ? `Watching ${ph.spectate.name}` : '');
+      // hints
       const pad = padOf(ph);
       let hint = '';
       if (ph.dev.startsWith('pad:') && !ph.input.pad) hint = `P${ph.slot + 1}: controller lost — wake the phone and press a button`;
       else if (game.phase === 'buy' && p.alive) hint = ph.buyOpen ? '' : (pad ? 'SELECT  open requisition' : 'B  open requisition');
-      else if (!p.alive && ph.spectate) hint = pad ? 'A  next teammate' : 'SPACE  next teammate';
-      else if (usesMouse(ph) && !ph.input.locked && p.alive) hint = 'Click to capture the mouse';
+      else if (usesMouse(ph) && !ph.input.locked && (p.alive || ph.gull)) hint = 'Click to capture the mouse';
       setText(e.hint, hint);
       renderGuide(ph, pad);
       ph.radarT -= dt;
@@ -1064,10 +1409,36 @@
       if (ph.buyOpen) renderBuy(ph, false);
     }
 
+    const _pv = new T.Vector3();
+    function updateGullHud(ph) {
+      const g = ph.gull, e = ph.hud.e, live = game.phase === 'live';
+      const ready = g.cd <= 0 && live && g.mode !== 'down' && g.mode !== 'recover';
+      const lock = g.mode === 'dive' ? g.target : ready ? g.lock : null;
+      const cdMax = g.cdMax || GU.cooldown;
+      setStyle(e.greticle, '--cd', (g.cd > 0 ? 1 - g.cd / cdMax : 1).toFixed(2));
+      setText(e.gcd, g.cd > 0.05 && g.mode !== 'down' ? String(Math.ceil(g.cd)) : '');
+      e.greticle.classList.toggle('lock', !!lock);
+      e.greticle.classList.toggle('ready', ready);
+      let shown = false;
+      if (lock) {
+        _pv.set(lock.pos.x, lock.eyeY() - 0.25, lock.pos.z).project(ph.cam);
+        if (_pv.z < 1 && Math.abs(_pv.x) < 1.1 && Math.abs(_pv.y) < 1.1) {
+          const x = (_pv.x * 0.5 + 0.5) * ph.rect.w / ph.scale, y = (-_pv.y * 0.5 + 0.5) * ph.rect.h / ph.scale;
+          setStyle(e.glock, 'transform', `translate(${Math.round(x)}px, ${Math.round(y)}px)`);
+          shown = true;
+        }
+      }
+      setStyle(e.glock, 'opacity', shown ? '1' : '0');
+      const marked = G.actors.filter(a => a.alive && a.team !== g.team && G.time - (a.gullSpot || -9) < GU.spotHold).length;
+      const fire = padOf(ph) ? 'R2' : 'Click';
+      setText(e.gstat, !live ? 'Round over' : g.mode === 'down' ? 'Shot down' : g.mode === 'dive' ? 'Diving' : g.cd > 0.05 ? `Dive in ${Math.ceil(g.cd)}` : lock ? `${fire}: dive!` : 'Aim at an enemy to dive');
+      setText(e.gmark, marked === 1 ? '1 enemy marked for your team' : marked ? `${marked} enemies marked for your team` : 'Look for enemies to mark them');
+    }
+
     // ---------------------------------------------------------------- key guide (top left of each view)
     function renderGuide(ph, pad) {
       const p = ph.a;
-      const phase = !p.alive ? 'dead' : game.phase;
+      const phase = !p.alive ? (ph.gull ? 'gull' : 'dead') : game.phase;
       const key = (pad ? 'pad' : 'kbm') + phase + (ph.guideHidden ? 'h' : '');
       const el = ph.hud.e.keys;
       if (key !== ph.guideKey) {
@@ -1081,7 +1452,7 @@
       if (H.length > 1) {
         // split screen has no room for a guide that stays: it shows while buying and for the
         // first seconds of the round; HOME / H flips that
-        const auto = phase === 'buy' || (phase === 'live' && G.time - ph.guideSince < 8);
+        const auto = phase === 'buy' || ((phase === 'live' || phase === 'gull') && G.time - ph.guideSince < 8);
         el.classList.toggle('off', ph.guideHidden ? auto : !auto);
         el.classList.remove('quiet');
         return;
@@ -1089,7 +1460,7 @@
       // full strength when something changes, then it folds to its goal line so the depot shows
       el.classList.toggle('off', !!ph.guideHidden);
       el.dataset.hint = pad ? 'HOME · show all keys' : 'H · show all keys';
-      el.classList.toggle('quiet', !ph.guideHidden && phase === 'live' && G.time - ph.guideSince > 12);
+      el.classList.toggle('quiet', !ph.guideHidden && (phase === 'live' || phase === 'gull') && G.time - ph.guideSince > 12);
     }
 
     // ------------------------------------------------------------ buy menu (per player)
@@ -1278,6 +1649,7 @@
       ['Buy (buy phase)', 'Select', '<kbd>B</kbd>'],
       ['Scoreboard', 'Select (hold, live) · R3', '<kbd>Tab</kbd>'],
       ['Pause (everyone)', 'Start', '<kbd>Esc</kbd>'],
+      ['As a gull (after death)', 'R2 dive · A climb · B sink', 'Click dive · <kbd>Space</kbd> climb · <kbd>Ctrl</kbd> sink'],
       ['Hide key guide', 'Home', '<kbd>H</kbd>'],
       ['Menus', 'D-pad / stick · A ok · B back', 'Mouse, arrows · <kbd>Enter</kbd> · <kbd>Esc</kbd>'],
       ['Split lobby', 'A join · Start ready · ◂▸ team · B leave', '<kbd>Enter</kbd> join/ready · <kbd>←</kbd><kbd>→</kbd> team · <kbd>Esc</kbd> leave'],
@@ -1569,6 +1941,9 @@
       last = now;
       menuT += dt;
       updateInputs(dt);
+      // the round-winning kill plays out in slow motion; look input stays at full speed
+      let sdt = dt;
+      if (game.slowmo > 0 && game.state === 'playing') { game.slowmo -= dt; sdt = dt * (game.slowmo > 0.35 ? 0.25 : 1 - game.slowmo / 0.35 * 0.75); }
       const mf = menuIn.frame;
 
       // splash: any pad button continues too
@@ -1589,7 +1964,7 @@
           else if (f.pressed.buy && game.phase === 'buy') openBuy(ph);
           if (f.pressed.guide) { ph.guideHidden = !ph.guideHidden; ph.guideKey = ''; }
         }
-        if (!paused) update(dt);
+        if (!paused) update(sdt);
       }
 
       if (game.state === 'menu' && Math.floor(now / 500) !== Math.floor((now - dt * 1000) / 500)) $('padStatus').innerHTML = padStatusLine();
@@ -1597,17 +1972,19 @@
       if (!$('options').classList.contains('hidden')) { readoutT -= dt; if (readoutT <= 0) { readoutT = 0.06; renderReadout(); } }
 
       const inGame = (game.state === 'playing' || game.state === 'paused') && H.length;
-      fx.update(dt);
+      fx.update(inGame ? sdt : dt);
       if (inGame) {
+        if (ambient.length && ambient[0].m.root.visible) menuGulls(0, 0, false);
         H.forEach(updateCamera);
         refreshOnScreen();
         world.update(menuT, H[0].cam.position);
         updateTopbar();
         updateSpare(dt);
         H.forEach(ph => updateHud(ph, dt));
-        renderViews(dt);
+        renderViews(sdt);
         adaptQuality(dt);
       } else {
+        menuGulls(menuT, dt, true);
         updateMenuCamera(menuT);
         world.update(menuT, menuCam.position);
         renderer.clear();
@@ -1639,6 +2016,10 @@
       give(id, slot = 0) { const ph = H[slot], p = ph.a; p.giveWeapon(id); p.drawT = 0; ph.vm.setWeapon(p.weaponId, p.team); },
       fire: (slot = 0) => { const ph = H[slot]; return tryFire(ph.a, ph.a.yaw + ph.punch.yaw, ph.a.pitch + ph.punch.pitch); },
       reload: (slot = 0) => startReload(H[slot].a),
+      // gull checks: end a player's life by an enemy bot, read the gull, dive at its lock
+      killPlayer(slot = 0) { const p = H[slot].a, e = G.actors.find(a => a.alive && a.team !== p.team) || p; applyDamage(p, e, R.WEAPONS.breaker, 'head', 5, _dir.set(0, 0, -1)); },
+      gull: (slot = 0) => H[slot] && H[slot].gull,
+      gullDive: (slot = 0) => { const g = H[slot].gull; if (g) { g.lockT = 0; updateGull(H[slot], 0); startDive(H[slot]); } return g && g.mode; },
       fastForward(seconds, stepDt = 1 / 30) {
         let t = 0;
         while (t < seconds && game.state === 'playing') { updateInputs(stepDt); update(stepDt); t += stepDt; }

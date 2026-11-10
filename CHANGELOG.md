@@ -19,6 +19,12 @@ Updated just before each approved release, not on every change.
   without a signaling relay show no QR that could not connect.
 - **Every local play is recorded:** on this machine's server each play saves the game video and every
   input (no prompt), so feedback can point at a real session; `?rec=0` turns it off.
+- **Duskwater: The Gulls.** Fall in the fight, rise as a gull: a dead player flies over the depot for
+  the rest of the round, marks every enemy it sees for its team (through walls, on the radar, to bot
+  teammates) and dives (R2 / click) to blind an enemy for 1.7 s; a kill within 5 s pays a gull assist
+  (+$200). Gulls can be shot down and return after 4 s. Why: a death meant up to 100 s of watching, the
+  worst part of couch play. Also rumble on every player's own phone or pad, a low-health heartbeat,
+  slow motion on the round-winning kill and a 1 v N last-stand callout. The spectator camera is gone.
 - **Point CENTRE:** Point mode gets a CENTRE button that taps F9; the Windows tray turns it into
   "cursor to the middle of the screen".
 - **Emberlane (new):** bowling with the phone as the ball. The release uses the hand's measured

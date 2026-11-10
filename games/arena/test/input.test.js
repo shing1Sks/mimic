@@ -250,6 +250,16 @@ const tests = {
     assert.ok(!live.rows.some(r => r[2] === 'hot'), 'nothing flashing once the round is live');
     assert.ok(live.rows.find(r => r[0].includes('SELECT'))[1].toLowerCase().includes('score'));
   },
+  guideForTheGullAfterlife() {
+    // the gull reads fire (dive), jump (climb) and crouch (sink): the guide must name those buttons
+    const pad = I.guide('pad', 'gull'), kbm = I.guide('kbm', 'gull');
+    const row = (g, k) => g.rows.find(r => r[0] === k);
+    assert.ok(I.ACTIONS.fire.pad.includes('rt') && /dive/i.test(row(pad, 'R2')[1]) && row(pad, 'R2')[2] === 'hot');
+    assert.ok(I.ACTIONS.jump.pad.includes('a') && /climb/i.test(row(pad, 'A')[1]));
+    assert.ok(I.ACTIONS.crouch.pad.includes('b') && /sink/i.test(row(pad, 'B')[1]));
+    assert.ok(/dive/i.test(row(kbm, 'Left click')[1]) && /climb/i.test(row(kbm, 'Space')[1]));
+    assert.ok(/gull/i.test(pad.goal));
+  },
   guideCanBeHidden() {
     assert.ok(I.ACTIONS.guide.pad.includes('home') && I.ACTIONS.guide.keys.includes('KeyH'));
     assert.ok(I.guide('pad', 'live').rows.some(r => r[0] === 'HOME' && /hide/i.test(r[1])));

@@ -41,7 +41,32 @@
     </div>
     <div class="banner" data-h="banner"><b></b><span></span></div>
     <div class="hint" data-h="hint"></div>
-    <div class="spectate" data-h="spectate"></div>
+    <div class="toast" data-h="toast"></div>
+    <!-- after death: the gull's dive reticle, the target bracket and a status line (gull.js) -->
+    <div class="gullhud">
+      <div class="greticle" data-h="greticle"><b data-h="gcd"></b></div>
+      <div class="glock" data-h="glock"><i></i><i></i><i></i><i></i></div>
+      <div class="gstatus"><span class="gname">Gull</span><b data-h="gstat"></b><em data-h="gmark"></em></div>
+    </div>
+    <!-- an enemy gull in the face: a wing sweeps past, feathers everywhere -->
+    <div class="gulled" data-h="gulled">
+      <div class="gwash"></div>
+      <svg class="gwing" viewBox="0 0 400 160" aria-hidden="true"><path d="M0 120 C60 40 140 10 210 40 C240 52 262 80 276 106 C300 70 340 50 400 52 C352 76 318 104 300 140 C268 126 238 122 206 128 C150 138 70 150 0 120 Z" /><path class="tip" d="M0 120 C30 96 60 78 92 66 C70 92 60 116 62 138 C40 138 18 132 0 120 Z" /></svg>
+      <svg class="gfeathers" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <defs>
+          <g id="fth"><path fill="currentColor" stroke="rgba(60,62,68,0.45)" stroke-width="1.2" d="M1 -52 C9 -46 15 -26 15 -8 L7 -2 L15 3 C15 18 10 32 3 44 L-1 44 C-9 30 -13 14 -12 -4 L-5 -10 L-12 -15 C-11 -32 -6 -46 1 -52 Z" />
+            <path fill="none" stroke="#8d939b" stroke-width="1.8" stroke-linecap="round" d="M1 -50 C2 -20 2 20 0 58" /></g>
+        </defs>
+        <g class="f1"><use href="#fth" transform="translate(300 220) rotate(-35) scale(1.1)" /></g>
+        <g class="f2"><use href="#fth" transform="translate(640 180) rotate(50) scale(1.4)" /></g>
+        <g class="f3"><use href="#fth" transform="translate(520 390) rotate(-80) scale(0.9)" /></g>
+        <g class="f4"><use href="#fth" transform="translate(410 330) rotate(20) scale(1.7)" /></g>
+        <g class="f5"><use href="#fth" transform="translate(720 360) rotate(-15) scale(0.9)" /></g>
+        <g class="f6"><use href="#fth" transform="translate(220 400) rotate(70) scale(0.8)" /></g>
+        <g class="f7"><use href="#fth" transform="translate(560 250) rotate(-120) scale(1.2)" /></g>
+        <g class="f8"><use href="#fth" transform="translate(800 240) rotate(100) scale(1.0)" /></g>
+      </svg>
+    </div>
     <div class="scope" data-h="scope"><div class="reticle"></div></div>
     <div class="hurt" data-h="hurt"></div>
     <div class="ptag" data-h="ptag"></div>
@@ -59,12 +84,12 @@
 <section id="splash" class="screen">
   <div class="brand big">
     <div class="logo">DUSKWATER</div>
-    <div class="tag">Depot Nine &middot; a harbour skirmish for the Mimic Pad</div>
+    <div class="tag">Depot Nine &middot; fall in the fight, rise as a gull</div>
   </div>
   <div id="loadbar"><i></i><span></span></div>
   <div class="press">Click or press any key</div>
   <div class="small">Sound starts on your first click or key press.</div>
-  <div class="mimic-scan" data-mimic-join="pad" data-compact data-label="No app? Scan to play" style="margin-top:14px"></div>
+  <div class="mimic-scan" data-mimic-join="pad" data-compact data-players="4" data-label="No app? Scan to play" style="margin-top:14px"></div>
 </section>
 
 <section id="menu" class="screen hidden">
@@ -163,6 +188,7 @@
 <script src="world.js"></script>
 <script src="actors.js"></script>
 <script src="fx.js"></script>
+<script src="gull.js"></script>
 <script src="game.js"></script>
 </body>
 </html>

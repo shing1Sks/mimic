@@ -267,6 +267,19 @@
    */
   function guide(device, phase) {
     const pad = device === 'pad', buy = phase === 'buy';
+    if (phase === 'gull') {
+      // after death the player flies as a gull (gull.js): same sticks, new verbs
+      return {
+        goal: 'You are a gull: spot enemies for your team',
+        rows: pad ? [
+          ['R2', 'Dive at an enemy to blind them', 'hot'], ['Left stick', 'Fly'], ['Right stick', 'Look'],
+          ['A', 'Climb'], ['B', 'Sink'], ['SELECT', 'Hold for scores'], ['START', 'Pause'], ['HOME', 'Hide this guide'],
+        ] : [
+          ['Left click', 'Dive at an enemy to blind them', 'hot'], ['WASD', 'Fly'], ['Mouse', 'Look'],
+          ['Space', 'Climb'], ['Ctrl / C', 'Sink'], ['Tab', 'Hold for scores'], ['Esc', 'Pause'], ['H', 'Hide this guide'],
+        ],
+      };
+    }
     const shop = pad ? 'SELECT' : 'B';
     const rows = pad ? [
       ['Left stick', 'Move (tilt part-way to walk quietly)'], ['Right stick', 'Look and aim'],
@@ -283,7 +296,7 @@
       rows.unshift([shop, 'Open the shop: buy a gun and armour', 'hot']);
     }
     const goal = buy ? 'Buy time: open the shop and gear up'
-      : phase === 'dead' ? 'You are out: watching your team'
+      : phase === 'dead' ? 'You are out: your gull rises in a moment'
       : phase === 'post' ? 'Round over' : 'Take out the other team';
     return { goal, rows };
   }

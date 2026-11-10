@@ -53,8 +53,8 @@
       o = Object.assign({ peakW: 20, yaw: 0, rho0: 0, twist: 0, upOffset: 0, aimElev: -15, aimHead: 0, runMs: 1100 }, o);
       const A = 2.4, tau = A / o.peakW, t0 = performance.now();
       const tAim = t0 + 700, tPress = tAim, tVert = tPress + o.runMs;
-      const phiIdeal = 8 * Math.PI / 180;
-      const tUp = tVert + tau * Math.atanh(phiIdeal / A) * 1000 + 30 + o.upOffset;
+      // a person lets go a little before the whip peaks (the arm passing straight up at tVert)
+      const tUp = tVert - 30 + o.upOffset;
       P.busy = true;
       P.log.push({ k: 'bowl', o });
       return new Promise(res => {

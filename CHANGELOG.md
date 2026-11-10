@@ -32,6 +32,13 @@ Updated just before each approved release, not on every change.
   bat). Edges, bowled, LBW, catches by AI fielders, auto-run singles, fours and sixes; broadcast HUD
   with speed gun, pitch map and wicket / six replays; two-seat lobby with role swap; solo match and
   nets against the computer. Dropped for now: reverse swing, run-outs, byes, DRS.
+  Round 2, from the player's session: the ball now leaves at the arm's whip, not the key-up (the
+  key came up 92 ms before to 25 ms after the whip, so reading the arm at key-up gave 40-57 deg
+  wides; the 4 real throws now go within 7 deg and pitch within 1 m of the aim); stray taps are
+  ignored; spin and swing judged against the player's own grip; a card after every ball shows aim
+  vs pitch, timing, line and movement. Players in front of the camera fade out and the field sits
+  clear of the view. Broadcast cuts, short skippable replays, fireworks and LED boards on sixes, a
+  roaring crowd, horns, drums, celebrations and commentary captions.
 - **IRONFERN: ADRENALINE.** Weak-spot hits, kills and dodges fill a meter; when it is full and an animal
   lunges at you the world slows to 0.28x for up to 3 s (aim stays 1:1, the phone beats like a heart)
   and a kill inside it is a CLUTCH. Rumble on every shot, kill, hurt, roar, charge and big footstep

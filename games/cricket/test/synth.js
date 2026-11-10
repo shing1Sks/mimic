@@ -8,15 +8,15 @@ const B = require(path.join(__dirname, '..', 'bowl.js'));
  * Overarm action. The arm angle from vertical goes phi(t) = A tanh((t - tv) / tau), fastest
  * (peakW rad/s) as it passes straight up at tv. o: { peakW, yaw (plane heading, + right),
  * rho0 (wrist roll at release, + clockwise), twist (rad/s at release), upOffset (ms: HOLD comes up
- * this much after the ideal moment + the lag), lean (phone rolled in the fist, rad), hz }.
+ * this much after the natural moment, DT_IDEAL before the whip's peak), lean (phone rolled in the fist, rad), hz }.
  * Returns { samples [{t, q, a}], tUp, tIdeal }.
  */
 function overarm(o) {
   o = Object.assign({ peakW: 20, yaw: 0, rho0: 0, twist: 0, upOffset: 0, lean: 0, hz: 125 }, o);
   const A = 2.4, tau = A / o.peakW, tv = 1000;
-  const phiIdeal = -B.BOWL.IDEAL_ELEV;
-  const tIdeal = tv + tau * Math.atanh(phiIdeal / A) * 1000;
-  const tUp = tIdeal + B.BOWL.LAG + o.upOffset;
+  // the hand is fastest as the arm passes straight up (tv); an on-time key-up is DT_IDEAL from it
+  const tIdeal = tv + B.BOWL.DT_IDEAL;
+  const tUp = tIdeal + o.upOffset;
   const out = [], dt = 1000 / o.hz;
   for (let t = tv - 700; t <= tv + 400; t += dt) {
     const k = (t - tv) / 1000 / tau;

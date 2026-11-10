@@ -27,7 +27,7 @@
   const SETS = {
     pace: [['Keeper', 180, 13], ['Slip', 163, 15], ['Gully', 128, 17], ['Point', 92, 23], ['Cover', 52, 27], ['Mid-off', 14, 28],
       ['Mid-on', -14, 28], ['Midwicket', -56, 28], ['Deep square', -98, 55], ['Fine leg', -158, 52]],
-    spin: [['Keeper', 180, 1.4], ['Slip', 170, 3.4], ['Short leg', -115, 5], ['Point', 95, 22], ['Cover', 54, 26], ['Mid-off', 14, 27],
+    spin: [['Keeper', 180, 1.4], ['Slip', 148, 4.6], ['Short leg', -115, 5], ['Point', 95, 22], ['Cover', 54, 26], ['Mid-off', 14, 27],
       ['Mid-on', -14, 27], ['Midwicket', -55, 27], ['Deep square', -96, 55], ['Long-off', 24, 57]],
   };
 

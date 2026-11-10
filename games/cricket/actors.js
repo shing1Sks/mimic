@@ -187,6 +187,18 @@
     if (kit.gloves) {
       ['left', 'right'].forEach(s => { const gl = new T.Mesh(new T.BoxGeometry(0.09, 0.11, 0.1), std({ color: kit.gloves, roughness: 0.6 })); addTo(B.arms[s].palm, gl, new T.Vector3(0, 0.05, 0)); });
     }
+    // fading (the camera sees through anyone standing in front of the play)
+    A.allMats = [];
+    root.traverse(o => { if (o.isMesh) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { if (!A.allMats.includes(m)) A.allMats.push(m); }); });
+    A.opacity = 1;
+    A.setOpacity = v => {
+      if (Math.abs(v - A.opacity) < 0.005) return;
+      A.opacity = v;
+      const see = v < 0.99;
+      // three.js compiles an opaque material with alpha forced to 1: switching needs a recompile
+      A.allMats.forEach(m => { if (m.transparent !== see) { m.transparent = see; m.depthWrite = !see; m.needsUpdate = true; } m.opacity = v; });
+      root.traverse(o => { if (o.isMesh) o.castShadow = v > 0.5; });
+    };
     A.rest = [B.torso, B.hips, ...['left', 'right'].flatMap(s => [B.arms[s].upper, B.arms[s].lower, B.arms[s].palm]), ...B.legs.flat()].filter(Boolean).map(b => [b, b.quaternion.clone()]);
     return A;
   }

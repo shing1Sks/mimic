@@ -116,6 +116,29 @@
         tone(t + i * 0.11, 0.3, { freq: f / 2, gain: 0.08, type: 'triangle' });
       });
     },
+    /** Stadium air horns: a brassy chord with a wobble, twice. */
+    horn() {
+      if (!ok()) return;
+      const t = A.ctx.currentTime;
+      [0, 0.42].forEach(d => [233, 294, 349].forEach(f => tone(t + d, 0.36, { freq: f, freqEnd: f * 0.98, gain: 0.06, type: 'sawtooth', attack: 0.02, bus: A.crowdBus })));
+    },
+    /** A dhol / drum roll: n beats, low and bright skins alternating. */
+    drums(n) {
+      if (!ok()) return;
+      const t = A.ctx.currentTime;
+      for (let i = 0; i < (n || 8); i++) {
+        const d = i * 0.14 + (i % 2) * 0.02;
+        tone(t + d, 0.16, { freq: i % 2 ? 190 : 95, freqEnd: i % 2 ? 120 : 55, gain: 0.32, bus: A.crowdBus });
+        noise(t + d, 0.06, { freq: i % 2 ? 2400 : 900, q: 1.5, gain: 0.12, bus: A.crowdBus });
+      }
+    },
+    /** Stump mic: a bowler's foot landing on the run-up. */
+    step(k) {
+      if (!ok()) return;
+      const t = A.ctx.currentTime;
+      tone(t, 0.06, { freq: 95, freqEnd: 60, gain: 0.12 * (k || 1) });
+      noise(t, 0.04, { freq: 600, q: 0.8, gain: 0.06 * (k || 1) });
+    },
     sting() {   // the broadcast replay sting
       if (!ok()) return;
       const t = A.ctx.currentTime;
@@ -170,6 +193,7 @@
     react(kind, intensity) {
       if (kind === 'ooh') { cheer(0.45, 'ooh'); return; }
       if (kind === 'polite') { applause(0.3 * (intensity || 1), 1.6); return; }
+      if (kind === 'roar') { cheer(1, 'ahh'); cheer(0.8, 'ahh'); applause(1, 4.2); return; }
       cheer(intensity, 'ahh');
       applause(intensity, 1.8 + intensity * 2);
     },

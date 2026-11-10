@@ -245,6 +245,54 @@
     return { group: g, towers };
   }
 
+  // ------------------------------------------------------------------ fireworks (sixes)
+  function fireworks(scene) {
+    const N = 90, bursts = [];
+    const dot = canvasTex(32, 32, (c, w, h) => {
+      const g = c.createRadialGradient(16, 16, 0, 16, 16, 16); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.4, 'rgba(255,255,255,0.6)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = g; c.fillRect(0, 0, w, h);
+    });
+    for (let b = 0; b < 8; b++) {
+      const geo = new T.BufferGeometry();
+      geo.setAttribute('position', new T.BufferAttribute(new Float32Array(N * 3), 3));
+      const mat = new T.PointsMaterial({ size: 2.2, map: dot, color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, blending: T.AdditiveBlending, toneMapped: false });
+      const pts = new T.Points(geo, mat); pts.frustumCulled = false; pts.visible = false;
+      scene.add(pts);
+      bursts.push({ pts, vel: new Float32Array(N * 3), t: 0, life: 0, delay: 0 });
+    }
+    const COLS = [0xffc24d, 0xff6b7e, 0x2fd3c3, 0xffffff, 0xc9a8ff, 0x7fe6ff];
+    let next = 0;
+    return {
+      /** A shell bursting at p (after delay s). */
+      burst(p, delay) {
+        const B = bursts[next++ % bursts.length], pos = B.pts.geometry.attributes.position.array;
+        for (let i = 0; i < N; i++) {
+          const u = Math.random() * 2 - 1, a = Math.random() * Math.PI * 2, r = Math.sqrt(1 - u * u), sp = 14 + Math.random() * 6;
+          B.vel[i * 3] = Math.cos(a) * r * sp; B.vel[i * 3 + 1] = u * sp + 4; B.vel[i * 3 + 2] = Math.sin(a) * r * sp;
+          pos[i * 3] = p.x; pos[i * 3 + 1] = p.y; pos[i * 3 + 2] = p.z;
+        }
+        B.pts.geometry.attributes.position.needsUpdate = true;
+        B.pts.material.color.setHex(COLS[(Math.random() * COLS.length) | 0]);
+        B.t = 0; B.life = 1.8; B.delay = delay || 0; B.pts.visible = false;
+      },
+      update(dt) {
+        for (const B of bursts) {
+          if (B.life <= 0) continue;
+          if (B.delay > 0) { B.delay -= dt; continue; }
+          B.pts.visible = true; B.t += dt;
+          const pos = B.pts.geometry.attributes.position.array, k = Math.exp(-dt * 1.6);
+          for (let i = 0; i < N; i++) {
+            B.vel[i * 3] *= k; B.vel[i * 3 + 1] = B.vel[i * 3 + 1] * k - 6 * dt; B.vel[i * 3 + 2] *= k;
+            pos[i * 3] += B.vel[i * 3] * dt; pos[i * 3 + 1] += B.vel[i * 3 + 1] * dt; pos[i * 3 + 2] += B.vel[i * 3 + 2] * dt;
+          }
+          B.pts.geometry.attributes.position.needsUpdate = true;
+          B.pts.material.opacity = Math.max(0, 1 - B.t / B.life);
+          if (B.t >= B.life) { B.life = 0; B.pts.visible = false; }
+        }
+      },
+    };
+  }
+
   function buildWorld(scene) {
     scene.background = new T.Color(0x151a33);
     scene.fog = new T.Fog(0x2a2440, 160, 700);
@@ -269,7 +317,17 @@
     const batEnd = stumpSet(0), bowlEnd = stumpSet(-PH.PITCH.L);
     scene.add(batEnd.group, bowlEnd.group);
     crowd.update = function (dt) { crowd.t += dt; crowd.excite = Math.max(0, crowd.excite - dt * 0.18); if (crowd.impUpdate) crowd.impUpdate(); };
-    return { lights: { key, hemi, fill, rim }, crowd, stands: st, boards: bd, floods: fl, stumps: { bat: batEnd, bowl: bowlEnd } };
+    const fx = fireworks(scene);
+    // LED boards: flash through the team colours on a big moment
+    const flash = { t: 0 };
+    bd.flash = s => { flash.t = s || 2.4; };
+    const tick = dt => {
+      fx.update(dt);
+      const m = bd.boards.material;
+      if (flash.t > 0) { flash.t -= dt; const h = (crowd.t * 3) % 1; m.color.setHSL(h, 0.9, 0.62 + 0.25 * Math.sin(crowd.t * 30)); bd.tex.offset.x += dt * 0.8; }
+      else m.color.setRGB(1, 1, 1);
+    };
+    return { lights: { key, hemi, fill, rim }, crowd, stands: st, boards: bd, floods: fl, stumps: { bat: batEnd, bowl: bowlEnd }, fx, tick };
   }
 
   CK.buildWorld = buildWorld;

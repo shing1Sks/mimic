@@ -19,9 +19,9 @@ function duel(name, o, rnd) {
   let hp = 100, next = t, burst = 0, shots = 0, pauseUntil = 0, lastShot = -9;
   const angVel = o.strafe ? o.strafe / o.dist / B.DEG : 0;
   // the error has been settling while it reacted
-  for (let s = 0; s < t; s += dt) err = B.errorStep(err, d, dt, { angVel });
+  for (let s = 0; s < t; s += dt) err = B.errorStep(err, d, dt, { angVel, dist: o.dist });
   for (; t < 10 && hp > 0; t += dt) {
-    err = B.errorStep(err, d, dt, { angVel });
+    err = B.errorStep(err, d, dt, { angVel, dist: o.dist });
     errAng += dt * (0.5 + 2 * rnd());
     if (t - lastShot > 0.3) shots = Math.max(0, shots - dt * 14);
     if (t < next || t < pauseUntil || err * B.DEG > B.fireTolerance(d, o.dist)) continue;
@@ -117,6 +117,17 @@ const tests = {
     console.log(`     regular: strafing ${strafe.toFixed(2)} s vs standing ${still.toFixed(2)} s; Breaker at 40 m ${far.toFixed(2)} s vs 15 m ${near.toFixed(2)} s`);
     assert.ok(strafe > still * 1.2, 'strafing makes them miss');
     assert.ok(far > near * 1.3, 'long range is not a free kill');
+  },
+  veteranStaysDangerousAtRange() {
+    // lead's call: Veteran's rifle at 40 m sits between the old curve (about 1.8 s) and the first rework (about 2.5 s)
+    const v = medianTTK('veteran', { dist: 40, weapon: 'breaker' }), g = medianTTK('regular', { dist: 40, weapon: 'breaker' });
+    console.log(`     Breaker at 40 m: veteran ${v.toFixed(2)} s, regular ${g.toFixed(2)} s`);
+    assert.ok(v > 1.9 && v < 2.4, `veteran ${v}`);
+    assert.ok(g > v * 1.6, 'regular stays clearly easier at range');
+    const f = (n, dist) => B.errorFloor(B.get(n), { dist });
+    assert.ok(f('veteran', 40) < f('veteran', 15) * 0.7, 'a veteran holds steadier on a far target');
+    assert.strictEqual(f('recruit', 40), f('recruit', 15), 'recruits get no such help');
+    assert.strictEqual(f('regular', 40), f('regular', 15));
   },
   noticesOnlyWhatItCouldSee() {
     const d = B.DIFF.recruit;

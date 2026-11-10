@@ -267,6 +267,8 @@
    */
   function guide(device, phase) {
     const pad = device === 'pad', buy = phase === 'buy';
+    // the second or two between death and the gull: nothing to press, so no key list
+    if (phase === 'dead') return { goal: 'You are out: your gull rises in a moment', rows: [] };
     if (phase === 'gull') {
       // after death the player flies as a gull (gull.js): same sticks, new verbs
       return {

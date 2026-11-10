@@ -758,7 +758,7 @@
           // tracking: how fast the target crosses this bot's view, which its aim lags behind
           const lat = (tg.vel.x * -dz + tg.vel.z * dx) / Math.max(0.5, Math.hypot(dx, dz));
           const angVel = lat / Math.max(1, dist) / DEG;
-          this.errMag = BA.errorStep(this.errMag, d, dt, { angVel, moving: !!move });
+          this.errMag = BA.errorStep(this.errMag, d, dt, { angVel, moving: !!move, dist });
           this.errAng += dt * rand(0.5, 2.5); // the error wanders around the target
           const err = this.errMag * DEG;
           faceYaw = trueYaw + Math.cos(this.errAng) * err;

@@ -29,23 +29,24 @@
    * spreadMult: weapon spread vs a player's; dmgMult: damage dealt to players (bots vs bots: 1);
    * spot: sight range (m); fov: half-angle of the view cone (rad); near: all-round awareness (m);
    * hear: hearing range for gunfire (m); headAim: chance to go for the head; hunt: seconds left
-   * in the round when it starts hunting.
+   * in the round when it starts hunting; longHold: share of the aim floor left at 40 m and beyond
+   * (a marksman holds steadier on a far target; 1 = no better at range).
    */
   const DIFF = {
     recruit: {
       label: 'Recruit', blurb: 'easy', reaction: 0.85, edge: 0.35, initErr: 10, errFloor: 1.15, errDecay: 1.5, lag: 0.12, moveErr: 1.5, kick: 0.45,
       turn: 2.6, turnAccel: 5, fireTol: 2.4, spreadMult: 1.15, dmgMult: 0.8, burst: [2, 4], pause: [0.6, 1.1], strafe: 0.15, crouch: 0.1,
-      spot: 42, fov: 0.95, near: 2.5, hear: 18, headAim: 0.04, hunt: 30, rifleBuy: 0.5, longline: 0,
+      spot: 42, fov: 0.95, near: 2.5, hear: 18, headAim: 0.04, hunt: 30, rifleBuy: 0.5, longline: 0, longHold: 1,
     },
     regular: {
       label: 'Regular', blurb: 'fair', reaction: 0.6, edge: 0.25, initErr: 7.5, errFloor: 0.75, errDecay: 2.0, lag: 0.09, moveErr: 0.9, kick: 0.3,
       turn: 4.0, turnAccel: 8, fireTol: 2.0, spreadMult: 1.1, dmgMult: 0.85, burst: [2, 5], pause: [0.4, 0.75], strafe: 0.4, crouch: 0.2,
-      spot: 56, fov: 1.1, near: 3, hear: 26, headAim: 0.12, hunt: 40, rifleBuy: 0.85, longline: 0.1,
+      spot: 56, fov: 1.1, near: 3, hear: 26, headAim: 0.12, hunt: 40, rifleBuy: 0.85, longline: 0.1, longHold: 1,
     },
     veteran: {
       label: 'Veteran', blurb: 'hard', reaction: 0.4, edge: 0.18, initErr: 6, errFloor: 0.4, errDecay: 2.7, lag: 0.055, moveErr: 0.5, kick: 0.2,
       turn: 6.0, turnAccel: 12, fireTol: 1.8, spreadMult: 1.0, dmgMult: 1, burst: [2, 4], pause: [0.22, 0.45], strafe: 0.75, crouch: 0.3,
-      spot: 72, fov: 1.25, near: 3.5, hear: 34, headAim: 0.3, hunt: 50, rifleBuy: 1, longline: 0.25,
+      spot: 72, fov: 1.25, near: 3.5, hear: 34, headAim: 0.3, hunt: 50, rifleBuy: 1, longline: 0.25, longHold: 0.6,
     },
   };
   const ORDER = ['recruit', 'regular', 'veteran'];
@@ -65,9 +66,10 @@
     return d.initErr * (0.75 + 0.5 * rnd()) * (o.dist > 30 ? 1.2 : 1);
   }
 
-  /** The best the bot can do right now (degrees). o: { angVel (target across their view, deg/s), moving (bot) }. */
+  /** The best the bot can do right now (degrees). o: { angVel (target across their view, deg/s), moving (bot), dist }. */
   function errorFloor(d, o) {
-    return d.errFloor + Math.abs(o.angVel || 0) * d.lag + (o.moving ? d.moveErr : 0);
+    const far = Math.min(1, Math.max(0, ((o.dist || 0) - 20) / 20)), hold = 1 - (1 - (d.longHold || 1)) * far;
+    return d.errFloor * hold + Math.abs(o.angVel || 0) * d.lag + (o.moving ? d.moveErr : 0);
   }
 
   /** Error settles toward the floor from above, creeps back up to it from below. */

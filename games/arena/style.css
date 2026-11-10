@@ -264,6 +264,7 @@ kbd { display: inline-block; padding: 1px 7px; border: 1px solid rgba(255,255,25
 .vhud .gullhud { position: absolute; inset: 0; display: none; }
 .vhud.gullmode .gullhud { display: block; }
 .vhud.gullmode .vitals, .vhud.gullmode .weapon, .vhud.gullmode .dmgdirs { display: none; }
+.vhud.dead .vitals, .vhud.dead .weapon { display: none; }
 .greticle { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; --cd: 1; transition: transform .12s; }
 .greticle::before { content: ''; position: absolute; inset: 0; border-radius: 50%;
   background: conic-gradient(rgba(246, 243, 236, 0.95) calc(var(--cd) * 360deg), rgba(246, 243, 236, 0.2) 0);

@@ -717,6 +717,7 @@
       sfx.stopReload();
       const first = game.score[0] + game.score[1] === 0;
       game.slowmo = 0;
+      game.feed = []; game.feedV++; // last round's kills do not carry into this one
       H.forEach(ph => {
         Object.assign(ph, { punch: { pitch: 0, yaw: 0 }, scoped: false, crouchToggle: false, deathT: 0, gull: null, blindT: 0, lastStand: false, heartT: 0 });
         showGullBody(ph.slot, false);
@@ -782,7 +783,7 @@
       $('resSub').textContent = `Wardens ${game.score[0]} – ${game.score[1]} Corsairs · ${A.DIFF[S.diff].label} bots · ${modeLabel()}`;
       const line = ph => {
         const p = ph.a;
-        const acc = p.shots ? Math.round(p.hits / p.shots * 100) : 0;
+        const acc = p.shots ? Math.min(100, Math.round(p.hits / p.shots * 100)) : 0;
         const hs = p.kills ? Math.round(p.hs / p.kills * 100) : 0;
         const who = H.length > 1 ? `<b style="color:${PCOL[ph.slot]}">P${ph.slot + 1}</b> ` : 'Your ';
         return `<div class="small">${who}accuracy ${acc}% · headshot kills ${hs}% · damage dealt ${Math.round(p.dmg)} · gull blinds ${p.gullBlinds || 0}, gull assists ${p.gullAssists || 0}</div>`;
@@ -906,6 +907,7 @@
     }
 
     function applyDamage(v, att, w, zone, dist, dir) {
+      if (!v.alive) return;
       const d = R.computeDamage(w, zone, dist, v.armor);
       // a bot's shots on a player hit softer at the easier levels (botaim.js dmgMult); bot on bot is plain
       if (att.bot && v.isPlayer) { const k = att.bot.d.dmgMult; d.health *= k; d.armor *= k; }
@@ -1415,6 +1417,7 @@
       // gull mode: no gun or vitals; a dive reticle, the target bracketed, a status line
       const gm = !p.alive && !!ph.gull;
       if (ph.gullMode !== gm) { ph.gullMode = gm; ph.hud.root.classList.toggle('gullmode', gm); }
+      if (ph.deadMode !== !p.alive) { ph.deadMode = !p.alive; ph.hud.root.classList.toggle('dead', !p.alive); }
       if (gm) updateGullHud(ph);
       renderFeed(ph);
       // hints
@@ -1458,7 +1461,7 @@
       const marked = G.actors.filter(a => a.alive && a.team !== g.team && G.time - (a.gullSpot || -9) < GU.spotHold).length;
       const fire = padOf(ph) ? 'R2' : 'Click';
       setText(e.gstat, !live ? 'Round over' : g.mode === 'down' ? 'Shot down' : g.mode === 'dive' ? 'Diving' : g.cd > 0.05 ? `Dive in ${Math.ceil(g.cd)}` : lock ? `${fire}: dive!` : 'Aim at an enemy to dive');
-      setText(e.gmark, marked === 1 ? '1 enemy marked for your team' : marked ? `${marked} enemies marked for your team` : 'Look for enemies to mark them');
+      setText(e.gmark, !live ? 'Next round starts soon' : marked === 1 ? '1 enemy marked for your team' : marked ? `${marked} enemies marked for your team` : 'Look for enemies to mark them');
     }
 
     // ---------------------------------------------------------------- key guide (top left of each view)
@@ -1474,7 +1477,7 @@
         el.querySelector('.kg-rows').innerHTML = g.rows.map(r =>
           '<div' + (r[2] ? ' class="' + r[2] + '"' : '') + '><b>' + r[0] + '</b><span>' + r[1] + '</span></div>').join('');
       }
-      if (ph.buyOpen && H.length > 1) { el.classList.add('off'); return; } // the shop covers it anyway
+      if (ph.buyOpen) { el.classList.add('off'); return; } // the shop covers it anyway
       if (H.length > 1) {
         // split screen has no room for a guide that stays: it shows while buying and for the
         // first seconds of the round; HOME / H flips that
@@ -2052,7 +2055,7 @@
       fire: (slot = 0) => { const ph = H[slot]; return tryFire(ph.a, ph.a.yaw + ph.punch.yaw, ph.a.pitch + ph.punch.pitch); },
       reload: (slot = 0) => startReload(H[slot].a),
       // gull checks: end a player's life by an enemy bot, read the gull, dive at its lock
-      killPlayer(slot = 0) { const p = H[slot].a, e = G.actors.find(a => a.alive && a.team !== p.team) || p; applyDamage(p, e, R.WEAPONS.breaker, 'head', 5, _dir.set(0, 0, -1)); },
+      killPlayer(slot = 0) { const p = H[slot].a, foes = G.actors.filter(a => a.alive && a.team !== p.team), e = foes.find(a => a.bot) || foes[0] || p; applyDamage(p, e, R.WEAPONS.breaker, 'head', 5, _dir.set(0, 0, -1)); },
       gull: (slot = 0) => H[slot] && H[slot].gull,
       gullDive: (slot = 0) => { const g = H[slot].gull; if (g) { g.lockT = 0; updateGull(H[slot], 0); startDive(H[slot]); } return g && g.mode; },
       fastForward(seconds, stepDt = 1 / 30) {

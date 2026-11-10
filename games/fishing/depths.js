@@ -77,13 +77,13 @@
       shape: 'squid', look: { back: '#a8c8e0', side: '#d0e4f0', belly: '#f4fbff', fin: '#c0d8ec', mark: 'speckle', h: 0.2, w: 0.2 } }),
     F({ id: 'gulper', name: 'Fangtooth Gulper', blurb: 'Mostly mouth. Will swallow a fish half its size, then your line.', cls: 3, dmin: 85, dmax: 230, kg: [2, 9], len: [40, 80], price: 26, eats: [1, 2],
       power: 0.72, speed: 2.8, stamina: 1.0, thrash: 0.6, nibbles: [0, 0], window: 1.2, curiosity: 0.8, senseR: 12, cruise: 0.7,
-      shape: 'gulper', look: { back: '#1a1420', side: '#3a2a3a', belly: '#5a4050', fin: '#2a1e2a', mark: 'speckle', h: 0.5, w: 0.36 } }),
+      shape: 'gulper', look: { back: '#24182c', side: '#4a3456', belly: '#7a5a78', fin: '#3a2a44', mark: 'speckle', h: 0.5, w: 0.36 } }),
     F({ id: 'grouper', name: 'Gilded Grouper', blurb: 'The legend of the drop-off. Swallows hooked fish whole.', cls: 5, dmin: 40, dmax: 160, kg: [25, 60], len: [120, 190], price: 18, eats: [1, 2, 3], legendary: true,
       power: 1.0, speed: 2.8, stamina: 1.8, thrash: 0.5, charge: 0.15, runLen: [1.8, 3.6], nibbles: [1, 2], window: 1.3, curiosity: 0.9, wary: 0.1, senseR: 18, cruise: 0.8,
       shape: 'grouper', look: { back: '#5a3b10', side: '#e2a640', belly: '#fff0c2', fin: '#c07a1c', mark: 'spots', h: 0.42, w: 0.28 } }),
     F({ id: 'angler', name: 'Lampjaw Angler', blurb: 'A lamp, a jaw, and nothing else. Only the abyss has these.', cls: 3, dmin: 200, dmax: 395, kg: [3, 14], len: [40, 90], price: 45, eats: [1, 2], glow: true,
       power: 0.8, speed: 2, stamina: 1.2, thrash: 0.7, nibbles: [0, 1], window: 1.3, curiosity: 0.9, senseR: 14, cruise: 0.5,
-      shape: 'angler', look: { back: '#140e14', side: '#2a1e26', belly: '#3a2a30', fin: '#1e161c', mark: 'speckle', h: 0.62, w: 0.5 } }),
+      shape: 'angler', look: { back: '#2a1a24', side: '#5a3a44', belly: '#8a6066', fin: '#3a2630', mark: 'speckle', h: 0.62, w: 0.5 } }),
   ];
   const byId = id => SPECIES.find(s => s.id === id);
 
@@ -122,65 +122,118 @@
     };
   }
 
-  // ------------------------------------------------------------------ steering the lure
+  // ------------------------------------------------------------------ the lure on its line
   /*
-   * The rod is a joystick on a line: the pose when the lure splashes in is neutral. Tilt the tip
-   * down and the lure dives, up and it climbs, turn left or right and it banks round; any tilt
-   * makes it swim forward, held level it hovers (sinking a little under its own weight). Velocity
-   * follows the hand through a short lag (a lure on a line has weight), never anything else.
+   * A weighted lure on a real line. It sinks on its own: weight against quadratic water drag sets
+   * its terminal sink speed (the tackle-box "lure weight"). The line pays out off an open spool as
+   * it falls, up to what is on the reel, and is simulated as a rope (a chain of nodes with water
+   * drag) that arcs and lags behind the lure and pulls it back toward the rod when it is taut or
+   * reeled. The rod is how you work it, the way anglers do: lift the tip and the lure climbs (let
+   * it fall back and it flutters down), turn the tip and it glides that way, sweep the rod sharply
+   * and it darts (a jig). Reeling takes line in. Neutral is the rod pose when the lure hits the
+   * water (re-centre any time). Everything is the phone's raw motion; nothing steers for you.
    */
-  const STEER = { DEAD: 0.05, FULL_P: 0.55, FULL_Y: 0.7, TURN: 1.8, CRUISE: 2.2, RISE: 1.6, SINK: 0.25, LAG: 0.35, REEL: 2.4, HOP: 1.6 };
+  const LURE = {
+    DRAG: 1.1,          // 1/m quadratic drag
+    LIN: 0.35,          // 1/s linear drag
+    LIFT: 7,            // m/s^2 at a full lift of the rod tip
+    GLIDE: 3.2,         // m/s^2 at a full turn of the tip
+    FULL_P: 0.5, FULL_Y: 0.6, DEAD: 0.04,
+    TURN: 1.6,          // rad/s the glide heading follows the tip
+    DART: 0.9,         // share of the rod tip's speed passed to the lure in a sweep
+    SPOOL: 0.12,        // the open spool's friction slows the fall a little
+    NODES: 14,          // rope nodes
+    ROPE_SINK: 0.25,    // m/s the line itself settles
+  };
   function createLure(x, z, gear) {
-    return { x, y: -0.4, z, vx: 0, vy: 0, vz: 0, heading: 0, np: null, ny: null, ox: x, oz: z, taut: false, depth: 0.4, maxDepth: 0.4,
-      dive: (gear && gear.dive) || 2.5, lineLen: (gear && gear.lineLen) || 30, plane: null };
+    const sink = (gear && gear.dive) || 1.4, len = (gear && gear.lineLen) || 30;
+    const l = { x, y: -0.3, z, vx: 0, vy: -0.5, vz: 0, heading: 0, np: null, ny: null, ox: x, oz: z, taut: false, depth: 0.3, maxDepth: 0.3,
+      sink, maxLine: len, lineOut: 0.4, plane: null, rope: [], phase: 0, flutter: 0, glide: 0 };
+    for (let i = 0; i <= LURE.NODES; i++) { const k = i / LURE.NODES; l.rope.push({ x, y: -0.3 * k, z, px: x, py: -0.3 * k, pz: z }); }
+    return l;
   }
-  /** Take the current rod pose as neutral (on the splash, and whenever the player re-centres). */
-  function setNeutral(lure, f) { lure.np = Math.asin(clamp(f.y, -1, 1)); lure.ny = Math.atan2(f.x, -f.z); lure.heading = lure.heading || lure.ny; }
+  function setNeutral(lure, f) { lure.np = Math.asin(clamp(f.y, -1, 1)); lure.ny = Math.atan2(f.x, -f.z); if (!lure.headSet) { lure.heading = lure.ny; lure.headSet = true; } }
   const dz = (v, d) => Math.abs(v) < d ? 0 : v - Math.sign(v) * d;
-  /** inp: { f (rod direction), reel (m/s, 0 = not reeling), twitch (bool) }. Returns { taut, surfaced }. */
+  /** Terminal sink speed of a lure of this weight setting, for the HUD and tests. */
+  function terminalSink(sink) { return sink; }
+  /**
+   * inp: { f: rod direction, tip: rod tip velocity (world m/s, optional), reel: m/s of line taken
+   * in (0 = spool open), lift: optional override }. Returns { taut, surfaced, payout }.
+   */
   function steerLure(lure, inp, dt) {
     if (lure.np === null) setNeutral(lure, inp.f);
     const pitch = Math.asin(clamp(inp.f.y, -1, 1)), yaw = Math.atan2(inp.f.x, -inp.f.z);
-    const dp = clamp(dz(pitch - lure.np, STEER.DEAD) / STEER.FULL_P, -1, 1);
-    const dy = clamp(dz(wrap(yaw - lure.ny), STEER.DEAD) / STEER.FULL_Y, -1, 1);
-    let tx, ty, tz;
-    if (lure.plane) {
-      // side-on aquarium (Dock Party): left/right moves across the glass, tilt dives and climbs
-      tx = dy * STEER.CRUISE * 1.2; tz = 0;
-      ty = dp < 0 ? dp * lure.dive : dp * STEER.RISE;
-      if (Math.abs(dp) < 0.01) ty = -STEER.SINK;
-    } else {
-      lure.heading += dy * STEER.TURN * dt;
-      const tilt = clamp(Math.abs(dp) + Math.abs(dy) * 0.7, 0, 1);
-      const cruise = STEER.CRUISE * tilt;
-      tx = Math.sin(lure.heading) * cruise; tz = -Math.cos(lure.heading) * cruise;
-      ty = dp < 0 ? dp * lure.dive : dp * STEER.RISE;
-      if (tilt < 0.01) ty = -STEER.SINK;
+    const dp = clamp(dz(pitch - lure.np, LURE.DEAD) / LURE.FULL_P, -1, 1);
+    const dy = clamp(dz(wrap(yaw - lure.ny), LURE.DEAD) / LURE.FULL_Y, -1, 1);
+    const sp = Math.hypot(lure.vx, lure.vy, lure.vz);
+    // weight: g_eff balances quadratic drag at the terminal sink speed
+    let ax = 0, ay = -(LURE.DRAG * lure.sink + LURE.LIN) * lure.sink, az = 0;
+    // the rod: lifting the tip pulls it up, dipping it lets it fall faster
+    ay += dp > 0 ? dp * LURE.LIFT : dp * LURE.LIFT * 0.35;
+    if (lure.plane) ax += dy * LURE.GLIDE;
+    else {
+      lure.heading += dy * LURE.TURN * dt;
+      const g = Math.abs(dy) * LURE.GLIDE + Math.max(0, dp) * LURE.GLIDE * 0.4;   // a lifted lure swims forward too
+      ax += Math.sin(lure.heading) * g; az -= Math.cos(lure.heading) * g;
     }
-    if (inp.reel > 0.15) {
-      // reeling draws the lure up and back toward where the line enters the water
-      const hx = lure.ox - lure.x, hz = lure.oz - lure.z, hl = Math.hypot(hx, hz) || 1;
-      ty = Math.max(ty, inp.reel); tx = tx * 0.3 + hx / hl * inp.reel * 0.6; tz = tz * 0.3 + hz / hl * inp.reel * 0.6;
+    ax -= (LURE.DRAG * sp + LURE.LIN) * lure.vx; ay -= (LURE.DRAG * sp + LURE.LIN) * lure.vy; az -= (LURE.DRAG * sp + LURE.LIN) * lure.vz;
+    lure.vx += ax * dt; lure.vy += ay * dt; lure.vz += az * dt;
+    // a sharp sweep of the rod darts the lure along the tip's motion (the tip's raw velocity)
+    if (inp.tip) {
+      const ts = Math.hypot(inp.tip.x, inp.tip.y, inp.tip.z);
+      if (ts > 2.5) { const k = LURE.DART * dt * 12 * (1 - 2.5 / ts); lure.vx += inp.tip.x * k; lure.vy += inp.tip.y * k; if (!lure.plane) lure.vz += inp.tip.z * k; }
     }
-    const k = 1 - Math.exp(-dt / STEER.LAG);
-    lure.vx += (tx - lure.vx) * k; lure.vy += (ty - lure.vy) * k; lure.vz += (tz - lure.vz) * k;
-    if (inp.twitch) lure.vy += STEER.HOP;
     lure.x += lure.vx * dt; lure.y += lure.vy * dt; lure.z += lure.vz * dt;
-    if (lure.plane) lure.z = lure.plane;
-    // the line: a sphere of its length around where it enters the water
+    if (lure.plane) { lure.z = lure.plane; lure.vz = 0; }
+    // the line: pays out freely while the lure pulls on it (open spool), comes in when reeled
     const ex = lure.x - lure.ox, ez = lure.z - lure.oz, d = Math.hypot(ex, lure.y, ez);
-    lure.taut = d > lure.lineLen;
-    if (lure.taut) {
-      const s = lure.lineLen / d;
+    let payout = 0;
+    const reel = inp.reel > 0.15 ? inp.reel : 0;
+    if (reel) lure.lineOut = Math.max(0.6, lure.lineOut - reel * dt);
+    else if (d > lure.lineOut && lure.lineOut < lure.maxLine) { payout = Math.min(d, lure.maxLine) - lure.lineOut; lure.lineOut += payout; lure.vy *= 1 - LURE.SPOOL * dt * Math.min(1, payout * 10); }
+    lure.taut = d >= lure.lineOut - 0.02 && (reel > 0 || lure.lineOut >= lure.maxLine - 0.01);
+    if (d > lure.lineOut) {
+      // held by the line: back onto its reach, the outward part of the motion taken out
+      const s = lure.lineOut / d, nx = ex / d, ny = lure.y / d, nz = ez / d;
       lure.x = lure.ox + ex * s; lure.y *= s; lure.z = lure.oz + ez * s;
-      const nx = ex / d, ny = lure.y / lure.lineLen, nz = ez / d, out = lure.vx * nx + lure.vy * ny + lure.vz * nz;
+      const out = lure.vx * nx + lure.vy * ny + lure.vz * nz;
       if (out > 0) { lure.vx -= nx * out; lure.vy -= ny * out; lure.vz -= nz * out; }
+      if (reel) { lure.vx -= nx * reel * 0.5; lure.vy -= ny * reel * 0.5; lure.vz -= nz * reel * 0.5; }
     }
     if (lure.y < -FLOOR) { lure.y = -FLOOR; lure.vy = Math.max(0, lure.vy); }
-    const surfaced = lure.y > -0.25 && inp.reel > 0.15;
-    lure.y = Math.min(lure.y, -0.25);
+    const surfaced = lure.y > -0.3 && reel > 0 && lure.lineOut < 1.5;
+    if (lure.y > -0.2) { lure.y = -0.2; lure.vy = Math.min(0, lure.vy); }
     lure.depth = -lure.y; lure.maxDepth = Math.max(lure.maxDepth, lure.depth);
-    return { taut: lure.taut, surfaced };
+    // its action: a flutter on the drop, a glide when it swims, a wobble that speeds with it
+    const v = Math.hypot(lure.vx, lure.vy, lure.vz);
+    lure.phase += dt * (6 + v * 9);
+    lure.flutter += ((lure.vy < -0.3 ? 1 : 0) - lure.flutter) * Math.min(1, dt * 3);
+    lure.glide = Math.hypot(lure.vx, lure.vz);
+    stepRope(lure, dt);
+    return { taut: lure.taut, surfaced, payout };
+  }
+  /** The line as a rope in water: verlet nodes from where it enters the sea to the lure. */
+  function stepRope(lure, dt) {
+    const R = lure.rope, n = R.length - 1, seg = Math.max(0.05, lure.lineOut / n), damp = Math.exp(-dt * 2.5);
+    for (let i = 1; i < n; i++) {
+      const p = R[i], vx = (p.x - p.px) * damp, vy = (p.y - p.py) * damp, vz = (p.z - p.pz) * damp;
+      p.px = p.x; p.py = p.y; p.pz = p.z;
+      p.x += vx; p.y += vy - LURE.ROPE_SINK * dt * 0.1; p.z += vz;
+      if (p.y > -0.05) p.y = -0.05;
+    }
+    R[0].x = lure.ox; R[0].y = 0; R[0].z = lure.oz;
+    R[n].x = lure.x; R[n].y = lure.y; R[n].z = lure.z;
+    for (let it = 0; it < 6; it++) {
+      for (let i = 0; i < n; i++) {
+        const a = R[i], b = R[i + 1], dx = b.x - a.x, dy = b.y - a.y, dzz = b.z - a.z, d = Math.hypot(dx, dy, dzz) || 1e-6;
+        if (d <= seg) continue;   // a rope does not push, it only pulls
+        const k = (d - seg) / d, aFix = i === 0, bFix = i + 1 === n;
+        if (aFix && bFix) continue;
+        if (aFix) { b.x -= dx * k; b.y -= dy * k; b.z -= dzz * k; }
+        else if (bFix) { a.x += dx * k; a.y += dy * k; a.z += dzz * k; }
+        else { a.x += dx * k / 2; a.y += dy * k / 2; a.z += dzz * k / 2; b.x -= dx * k / 2; b.y -= dy * k / 2; b.z -= dzz * k / 2; }
+      }
+    }
   }
 
   // ------------------------------------------------------------------ fish life
@@ -224,7 +277,9 @@
           const appeal = baitAppeal(sp, l.bait);
           if (appeal <= 0) { if (d < 4 && rng() < dt * 2) { f.state = 'flee'; f.t = 2; f.h = Math.atan2(f.x - l.x, -(f.z - l.z)); } continue; }
           const lure = 0.35 + 0.8 * Math.exp(-l.twitch / 1.8) + sp.likesMotion * Math.min(1, l.moving) * 0.6;
-          if (rng() < sp.curiosity * appeal * lure * (1.3 - d / see) * 0.8 * dt) {
+          // the shallows are thin pickings; the bigger appetites are down where the light fades
+          const deepen = clamp(-l.y / 10, 0.12, 1);
+          if (rng() < sp.curiosity * appeal * lure * (1.3 - d / see) * 0.8 * deepen * dt) {
             l.claimed = f.id; f.lure = l.id; f.state = 'approach'; ev.push({ type: 'notice', fish: f, lure: l }); break;
           }
         }
@@ -239,6 +294,8 @@
           }
         }
       }
+    } else if ((f.state === 'approach' || f.state === 'nibble') && L && L.claimed !== f.id) {
+      f.state = 'swim'; f.lure = -1; f.cool = 4;   // another fish got there first
     } else if (f.state === 'approach' && L) {
       const d = Math.hypot(L.x - f.x, L.y - f.y, L.z - f.z);
       go(L.x, L.y, L.z, d > 3 ? Math.max(sp.cruise * 1.3 + 0.6, (L.moving || 0) + 1.2) : Math.max(0.9, (L.moving || 0) + 0.4));
@@ -332,7 +389,7 @@
     line: { name: 'Line length', unit: 'm', vals: [30, 60, 120, 220, 350], cost: [0, 60, 220, 650, 1600], blurb: 'How deep you can go.' },
     strength: { name: 'Line strength', unit: '', vals: [0, 0.08, 0.16, 0.26], cost: [0, 90, 280, 760], blurb: 'More drag before it screams.' },
     reel: { name: 'Reel', unit: 'x', vals: [1, 1.2, 1.45, 1.75], cost: [0, 80, 240, 640], blurb: 'Faster up from the deep.' },
-    weight: { name: 'Lure weight', unit: 'm/s', vals: [2.5, 3.6, 4.8, 6.2], cost: [0, 50, 190, 520], blurb: 'Dives faster.' },
+    weight: { name: 'Lure weight', unit: 'm/s', vals: [1.3, 1.9, 2.6, 3.5], cost: [0, 50, 190, 520], blurb: 'Sinks faster: deeper, sooner.' },
     light: { name: 'Lure lamp', unit: 'm', vals: [0, 8, 15, 24], cost: [0, 120, 420, 1100], blurb: 'Lights the dark. Deep fish come to light.' },
   };
   function newSave() {
@@ -400,7 +457,7 @@
 
   const api = {
     ZONES, FLOOR, zoneAt, zoneMix, SPECIES, byId, baitAppeal, pickSpecies, spawnFish, spawnSchool, directBite,
-    STEER, createLure, setNeutral, steerLure, stepFish, stepSnag, swallow,
+    LURE, createLure, setNeutral, steerLure, stepRope, terminalSink, stepFish, stepSnag, swallow,
     UPGRADES, newSave, gearStats, upgradeCost, buy, price, keepAsBait, currentBait, cycleBait, useBait, logCatch, bestBait, loadSave,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

@@ -15,7 +15,8 @@
       const c = this.ctx = new AC();
       this.out = c.createDynamicsCompressor();
       this.out.threshold.value = -16; this.out.ratio.value = 3;
-      this.master = c.createGain(); this.master.connect(this.out); this.out.connect(c.destination);
+      this.master = c.createGain(); this.muffle = c.createBiquadFilter(); this.muffle.type = 'lowpass'; this.muffle.frequency.value = 20000; this.muffle.Q.value = 0.5;
+      this.master.connect(this.muffle); this.muffle.connect(this.out); this.out.connect(c.destination);
       this.musicBus = c.createGain(); this.musicBus.connect(this.master);
       this.sfxBus = c.createGain(); this.sfxBus.connect(this.master);
       this.ambBus = c.createGain(); this.ambBus.connect(this.master);
@@ -43,6 +44,19 @@
       this.musicBus.gain.setTargetAtTime(this.vol.music * 0.5, t, 0.05);
       this.sfxBus.gain.setTargetAtTime(this.vol.sfx, t, 0.05);
       this.ambBus.gain.setTargetAtTime(this.vol.sfx * 0.55, t, 0.05);
+    }
+    /** Under water the world goes muffled and a low hum of the sea takes over. */
+    setUnder(on) {
+      if (!this.ctx || this.under === on) return;
+      this.under = on;
+      const t = this.ctx.currentTime;
+      this.muffle.frequency.setTargetAtTime(on ? 650 : 20000, t, on ? 0.08 : 0.25);
+      if (!this.deepHum) {
+        const s = this.noise(), lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 140;
+        this.deepHum = this.ctx.createGain(); this.deepHum.gain.value = 0;
+        s.connect(lp); lp.connect(this.deepHum); this.deepHum.connect(this.out);
+      }
+      this.deepHum.gain.setTargetAtTime(on ? 0.22 * this.vol.sfx * this.vol.master : 0, t, 0.3);
     }
     suspend() { if (this.ctx) this.ctx.suspend(); }
     resume() { if (this.ctx) this.ctx.resume(); }

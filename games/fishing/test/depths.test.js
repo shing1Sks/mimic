@@ -7,13 +7,14 @@ const D = require('../depths.js');
 const L = require('../logic.js');
 
 const dir = (pitch, yaw) => ({ x: Math.cos(pitch) * Math.sin(yaw), y: Math.sin(pitch), z: -Math.cos(pitch) * Math.cos(yaw) });
-/** Steer a fresh lure for secs with a fixed rod pose (neutral = level, straight out). */
+/** Work a fresh lure for secs with a fixed rod pose (neutral = level, straight out). */
 function steer(pitch, yaw, secs, o) {
   o = o || {};
-  const l = D.createLure(0, -20, { dive: o.dive || 2.5, lineLen: o.lineLen || 400 });
+  const l = D.createLure(0, -20, { dive: o.dive || 1.3, lineLen: o.lineLen || 400 });
+  if (o.plane) l.plane = -20;
   D.setNeutral(l, dir(0, 0));
   let r;
-  for (let t = 0; t < secs; t += 1 / 60) r = D.steerLure(l, { f: dir(pitch, yaw), reel: o.reel || 0, twitch: false }, 1 / 60);
+  for (let t = 0; t < secs; t += 1 / 60) r = D.steerLure(l, { f: dir(pitch, yaw), reel: o.reel || 0, tip: o.tip }, 1 / 60);
   return Object.assign(l, { r });
 }
 const lure = o => Object.assign({ id: 1, x: 0, y: -10, z: -20, active: true, bait: { kind: 'worm', cls: 0 }, light: 0, twitch: 99, moving: 0, claimed: -1 }, o);
@@ -24,47 +25,66 @@ const tests = {
     assert.strictEqual(D.zoneAt(120).id, 'twilight'); assert.strictEqual(D.zoneAt(300).id, 'abyss');
     assert(D.zoneMix(5).light > D.zoneMix(40).light && D.zoneMix(40).light > D.zoneMix(150).light && D.zoneMix(300).light < 0.01);
   },
-  levelRodHovers() {
-    const l = steer(0, 0, 3);
-    assert(Math.hypot(l.x, l.z + 20) < 0.05, 'drifted ' + Math.hypot(l.x, l.z + 20).toFixed(2));
-    assert(l.depth < 1.4, 'only a slow sink: ' + l.depth.toFixed(2));
+  theLureSinksOnItsOwnToItsTerminalSpeed() {
+    // a held rod lets it drop: the fall settles at the weight's terminal speed (spool friction aside)
+    const l = steer(0, 0, 8, { dive: 1.3 });
+    assert(-l.vy > 1.3 * 0.85 && -l.vy < 1.3 * 1.05, 'vy ' + l.vy.toFixed(2));
+    assert(l.depth > 7, 'depth ' + l.depth.toFixed(1));
+    assert(Math.hypot(l.x, l.z + 20) < 0.05, 'falls straight down');
   },
-  tipDownDivesTipUpClimbs() {
-    const down = steer(-0.6, 0, 3), up = steer(0.6, 0, 3);
-    assert(down.depth > 5, 'dived ' + down.depth.toFixed(1));
-    assert(up.depth < 0.5, 'climbs to the surface: ' + up.depth.toFixed(2));
+  aHeavierLureSinksFaster() {
+    assert(steer(0, 0, 6, { dive: 3.5 }).depth > steer(0, 0, 6, { dive: 1.3 }).depth + 8);
   },
-  aHeavierLureDivesFaster() {
-    assert(steer(-0.6, 0, 3, { dive: 6 }).depth > steer(-0.6, 0, 3, { dive: 2.5 }).depth + 4);
+  itTakesTimeToGetGoing() {
+    const l = steer(0, 0, 0.05, { dive: 3.5 });
+    assert(-l.vy < 2.2, 'water resists a fast start: ' + l.vy.toFixed(2));
   },
-  turningBanksTheLureRound() {
-    const r = steer(-0.3, 0.5, 2), l = steer(-0.3, -0.5, 2);
-    assert(r.heading > 0.5 && l.heading < -0.5, r.heading + ' ' + l.heading);
-    assert(r.x > 0.5 && l.x < -0.5, 'swims along its heading: ' + r.x.toFixed(2) + ' ' + l.x.toFixed(2));
-  },
-  theHandLeadsWithALag() {
-    const l = D.createLure(0, -20, { dive: 4, lineLen: 400 }); D.setNeutral(l, dir(0, 0));
-    D.steerLure(l, { f: dir(-0.6, 0), reel: 0 }, 1 / 60);
-    assert(l.vy > -0.4, 'not instant: ' + l.vy.toFixed(2));
-    for (let i = 0; i < 90; i++) D.steerLure(l, { f: dir(-0.6, 0), reel: 0 }, 1 / 60);
-    assert(l.vy < -3.4, 'but it gets there: ' + l.vy.toFixed(2));
-  },
-  theLineHasALength() {
-    const l = steer(-0.7, 0, 20, { dive: 6, lineLen: 30 });
-    const d = Math.hypot(l.x - l.ox, l.y, l.z - l.oz);
-    assert(l.r.taut && Math.abs(d - 30) < 0.05, 'line out ' + d.toFixed(2));
-  },
-  reelingBringsItUpAndHome() {
-    const l = steer(-0.6, 0, 4);
+  liftingTheRodClimbsLettingGoFallsBack() {
+    const l = steer(0, 0, 4, { dive: 1.3 });
     const d0 = l.depth;
+    for (let t = 0; t < 2; t += 1 / 60) D.steerLure(l, { f: dir(0.5, 0), reel: 0 }, 1 / 60);
+    assert(l.depth < d0 - 1, 'lift climbs: ' + d0.toFixed(1) + ' -> ' + l.depth.toFixed(1));
+    const d1 = l.depth;
+    for (let t = 0; t < 3; t += 1 / 60) D.steerLure(l, { f: dir(0, 0), reel: 0 }, 1 / 60);
+    assert(l.depth > d1 + 1, 'and it falls back when the tip drops');
+  },
+  turningTheTipGlidesThatWay() {
+    const r = steer(0, 0.5, 3), lf = steer(0, -0.5, 3);
+    assert(r.heading > 0.5 && lf.heading < -0.5, r.heading + ' ' + lf.heading);
+    assert(r.x > 1 && lf.x < -1, 'glides along its heading: ' + r.x.toFixed(2) + ' ' + lf.x.toFixed(2));
+  },
+  aSharpSweepDartsTheLure() {
+    const l = steer(0, 0, 2);
+    const vy0 = l.vy;
+    for (let k = 0; k < 4; k++) D.steerLure(l, { f: dir(0, 0), reel: 0, tip: { x: 0, y: 8, z: 0 } }, 1 / 60);
+    assert(l.vy > vy0 + 1.5, 'darted up: ' + vy0.toFixed(2) + ' -> ' + l.vy.toFixed(2));
+  },
+  theLinePaysOutAsItSinksUpToTheReel() {
+    const l = steer(0, 0, 30, { dive: 3.5, lineLen: 30 });
+    const d = Math.hypot(l.x - l.ox, l.y, l.z - l.oz);
+    assert(l.r.taut && Math.abs(d - 30) < 0.05 && Math.abs(l.lineOut - 30) < 0.01, 'line ' + d.toFixed(2));
+  },
+  reelingTakesLineInAndBringsItHome() {
+    const l = steer(0, 0, 5);
+    const out0 = l.lineOut;
     let r;
     for (let t = 0; t < 30 && !(r && r.surfaced); t += 1 / 60) r = D.steerLure(l, { f: dir(0, 0), reel: 2.4 }, 1 / 60);
-    assert(r.surfaced, 'surfaced from ' + d0.toFixed(1));
+    assert(r.surfaced && out0 > 5, 'surfaced from ' + out0.toFixed(1) + ' m of line');
+  },
+  theRopeArcsBehindAMovingLure() {
+    const l = steer(0, 0, 6);
+    for (let t = 0; t < 0.8; t += 1 / 60) D.steerLure(l, { f: dir(0, 0.6), reel: 0 }, 1 / 60);
+    const n = l.rope.length - 1, mid = l.rope[n >> 1];
+    const straightX = l.ox + (l.x - l.ox) * 0.5;
+    assert(Math.abs(mid.x - straightX) > 0.05, 'the line lags in the water, it is not a straight stick');
+    for (let i = 0; i < n; i++) {
+      const a = l.rope[i], b = l.rope[i + 1];
+      assert(Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) <= l.lineOut / n * 1.08, 'segments keep their length');
+    }
   },
   aquariumLuresStayOnTheGlass() {
-    const l = D.createLure(3, -25, { dive: 3, lineLen: 400 }); l.plane = -25; D.setNeutral(l, dir(0, 0));
-    for (let i = 0; i < 120; i++) D.steerLure(l, { f: dir(-0.4, 0.4), reel: 0 }, 1 / 60);
-    assert(l.z === -25 && l.x > 4 && l.depth > 2, JSON.stringify({ x: l.x, z: l.z, d: l.depth }));
+    const l = steer(0, 0.4, 3, { plane: true });
+    assert(l.z === -20 && l.x > 1 && l.depth > 2, JSON.stringify({ x: l.x, z: l.z, d: l.depth }));
   },
   speciesLiveAtTheirDepths() {
     const rng = L.rng32(4);

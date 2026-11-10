@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ironfern</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="hud.css">
+<link rel="stylesheet" href="weapons.css">
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<!-- In-game HUD: hud.js (Stage D) fills these; weapons.js (Stage C) drives #scope and #crosshair look -->
+<div id="hud" class="hidden">
+  <div id="crosshair"><i></i><i></i><i></i><i></i><b></b></div>
+  <div id="hitmarker"></div>
+  <div id="scope"></div>
+  <div id="hurt"></div>
+  <div id="objective"></div>
+  <div id="keys"></div>
+  <div id="prompt"></div>
+  <div id="vitals"></div>
+  <div id="ammo"></div>
+  <div id="feed"></div>
+</div>
+
+<!-- Screens -->
+<section id="loading" class="screen">
+  <div class="brand"><div class="logo">IRONFERN</div><div class="tag">Halcyon Biotech containment failure &middot; day 41</div></div>
+  <div class="bar"><i id="loadbar"></i></div>
+  <div class="small" id="loadtext">Loading&hellip;</div>
+</section>
+<section id="title" class="screen hidden"></section>
+<section id="select" class="screen hidden"></section>
+<section id="briefing" class="screen hidden"></section>
+<section id="results" class="screen hidden"></section>
+<section id="pause" class="screen hidden"></section>
+<section id="settings" class="screen hidden"></section>
+
+<script src="../lib/three.min.js"></script>
+<script type="module" src="../lib/vendor/loaders.js"></script>
+<script src="../lib/mimic.js"></script>
+<script src="../lib/mimic-link.js"></script>
+<script src="../lib/wandcursor.js"></script>
+<script src="../lib/recorder.js"></script>
+<script src="aim.js"></script>
+<script src="player.js"></script>
+<script src="layout.js"></script>
+<script src="signs.js"></script>
+<script src="assets.js"></script>
+<script src="audio.js"></script>
+<script src="world.js"></script>
+<script src="world-lib.js"></script>
+<script src="world-kit.js"></script>
+<script src="world-sets.js"></script>
+<script src="dinos.js"></script>
+<script src="dino-logic.js"></script>
+<script src="dino-look.js"></script>
+<script src="fx.js"></script>
+<script src="weapons.js"></script>
+<script src="missions.js"></script>
+<script src="hud.js"></script>
+<script src="core.js"></script>
+</body>
+</html>

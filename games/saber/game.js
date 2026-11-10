@@ -58,7 +58,8 @@
   function applySettings() {
     synth.setVolumes(cfg.music / 10, cfg.sfx / 10);
     setHand(cfg.hand ? 'left' : 'right');
-    dyn.t = dyn.n = dyn.sum = 0;
+    dyn.t = dyn.n = dyn.sum = 0; autoQ = 2; autoGood = 0;
+    W.setReduced(cfg.fx === 1);
     if (cfg.gfx === 1) setPR(PR_MAX); else if (cfg.gfx === 2) setPR(Math.min(dyn.pr, PR_LOW));
   }
   function renderSettings() {
@@ -67,8 +68,8 @@
     $('set-fx').textContent = FX_NAMES[cfg.fx];
     $('set-gfx').textContent = GFX_NAMES[cfg.gfx];
     $('set-hand').textContent = HAND_NAMES[cfg.hand];
-    $('set-note').textContent = cfg.gfx === 0 ? 'Auto lowers the render scale only while the frame rate stays low.' + (dyn.pr < PR_MAX - 1e-3 ? ' Now ' + Math.round(dyn.pr / PR_MAX * 100) + '%.' : '')
-      : cfg.gfx === 1 ? 'Always full resolution.' : 'Lighter render scale for slower PCs.';
+    $('set-note').textContent = cfg.gfx === 0 ? 'Every effect while the frame rate holds; sheds lasers, then render scale, only while it stays low.' + (dyn.pr < PR_MAX - 1e-3 || autoQ < 2 ? ' Now ' + Math.round(dyn.pr / PR_MAX * 100) + '%' + (autoQ < 2 ? ', lighter effects.' : '.') : '')
+      : cfg.gfx === 1 ? 'Full resolution and every effect: laser fans, spark streaks, hot debris.' : 'Lighter render scale and effects for slower PCs.';
   }
   function changeSetting(k, d) {
     cfg[k] = Math.max(0, Math.min(SET_N[k] - 1, cfg[k] + d));
@@ -81,14 +82,24 @@
   // ---------- render scale ----------
   const PR_MAX = Math.min(window.devicePixelRatio || 1, 1.25), PR_MIN = Math.min(PR_MAX, 0.6), PR_LOW = Math.min(PR_MAX, 0.85);
   const dyn = { pr: PR_MAX, t: 0, n: 0, sum: 0 };
+  // Auto effects tier: starts High, gives up the heavy effects before it gives up resolution
+  let autoQ = 2, autoGood = 0;
+  const effQuality = () => cfg.gfx === 1 ? 2 : cfg.gfx === 2 ? 0 : autoQ;
   function setPR(pr) { if (Math.abs(pr - dyn.pr) > 1e-3) { dyn.pr = pr; W.renderer.setPixelRatio(pr); } }
   function dynResolution(rdt) {
     dyn.t += rdt; dyn.n++; dyn.sum += rdt;
     if (dyn.t < 1) return;
     const fps = dyn.n / dyn.sum, top = cfg.gfx === 2 ? PR_LOW : PR_MAX;
     if (cfg.gfx === 1) setPR(PR_MAX);
-    else if (fps < 52) setPR(Math.max(PR_MIN, dyn.pr - (fps < 40 ? 0.15 : 0.07)));
-    else if (fps > 58.5) setPR(Math.min(top, dyn.pr + 0.05));
+    else if (fps < 52) {
+      autoGood = 0;
+      if (cfg.gfx === 0 && autoQ === 2) autoQ = 1;
+      else if (dyn.pr > PR_MIN + 1e-3) setPR(Math.max(PR_MIN, dyn.pr - (fps < 40 ? 0.15 : 0.07)));
+      else if (cfg.gfx === 0) autoQ = 0;
+    } else if (fps > 58.5) {
+      if (dyn.pr < top - 1e-3) setPR(Math.min(top, dyn.pr + 0.05));
+      else if (cfg.gfx === 0 && autoQ < 2 && ++autoGood >= 8) { autoQ++; autoGood = 0; }
+    }
     dyn.t = dyn.n = dyn.sum = 0;
   }
 
@@ -261,6 +272,7 @@
     $('hudSong').textContent = (P.stage ? P.stage.title + ' · ' : '') + song.title;
     $('hudDiff').textContent = chart.label;
     $('hudMods').textContent = mods.map(k => LG.MODS[k].label).join(' · ');
+    lastMult = 1; $('hudRight').dataset.tier = 0;
     setScreen('play');
     banner(P.stage ? P.stage.title : song.title, false);
     updateHud(true);
@@ -346,6 +358,9 @@
     if (g.mods.indexOf('vanish') >= 0) sc *= Math.min(1, Math.max(0, (ahead - 0.42) / 0.16));
     o.g.scale.setScalar(Math.max(0.001, sc));
     if (o.kind === 'heavy') o.g.userData.shell.rotation.set(t * 0.8, t * 1.1, 0);
+    // the halo swells as the block nears the cut zone, so timing reads from its glow
+    const near = Math.max(0, Math.min(1, 1 - ahead / 0.9));
+    o.g.userData.glow.scale.setScalar((o.kind === 'heavy' ? 1.7 : 1.15) * (1 + 0.45 * near * near));
   }
 
   function removeAt(i) { W.removeObj(game.objs[i].g); game.objs.splice(i, 1); }
@@ -385,6 +400,7 @@
         if (prev && !sec.rest && t > 2) {
           if (sec.intensity === 3 && prev.intensity < 3) { banner('Drop', false); W.shockwave(new T.Vector3(0, 1.4, -8), 9, g.song.accent); dropFlash = 1; }
           else if (sec.intensity === 0 && prev.intensity >= 2) banner('Breathe', false);
+          if (sec.intensity > prev.intensity) W.sectionBurst();
         }
       }
     }
@@ -491,7 +507,7 @@
     const centre = o.g.position.clone();
     const off = n.dot(_c.copy(centre).sub(hilt));
     const sliceOff = Math.max(-0.12, Math.min(0.12, off));
-    const blockVel = new T.Vector3(0, 0, g.speed * 0.55);
+    const blockVel = new T.Vector3(0, 0, g.speed * 0.18);
     o.g.updateMatrixWorld(true);
     W.sliceBlock(o.g, n, sliceOff, blockVel, push.clone().multiplyScalar(Math.min(12, speed2) * (heavy ? 0.6 : 0.4)));
 
@@ -509,7 +525,11 @@
         if (g.surge >= 1) startSurge();
       }
       const word = heavy ? 'SHATTER' : LG.cutWord(raw);
-      popAt(contact, '+' + pts, word, raw >= 92 || heavy ? 'top' : '');
+      popAt(contact, '+' + pts, word, raw >= 92 || heavy ? 'top' : raw >= 80 ? 'sharp' : raw >= 62 ? 'clean' : 'ok');
+      const slashCol = heavy ? 0xbff4ff : raw >= 92 ? 0xfff0c8 : raw >= 80 ? 0xffffff : 0xd8fff4;
+      W.slash(contact, Math.atan2(uy, ux), heavy ? 2.4 : 1.4 + raw / 100 * 0.8, g.surgeT > 0 ? 0xffe2a0 : slashCol);
+      W.hitPulse(0.35 + raw / 200);
+      if (raw >= 80 && !heavy) W.shockwave(contact, 1.1 + (raw - 80) / 20 * 0.9, raw >= 92 ? 0xffd27a : 0x9ffbe3);
       if (heavy) {
         g.st.heavyOk++;
         sparks(contact, push, 1, false, 0xbff4ff);
@@ -535,6 +555,7 @@
       g.score += 10;
       g.energy -= 0.1;
       popAt(contact, 'WRONG WAY', '', 'bad');
+      W.slash(contact, Math.atan2(uy, ux), 1.0, 0xff4a4a);
       sparks(contact, push, 0.3, true);
       synth.sfxBad();
       mc.rumble(0.3, 60, 1);
@@ -601,7 +622,7 @@
       if (inside) {
         if (!o.inside) { o.hit = true; breakCombo(); popAt(_w2.clone(), 'WALL', 'lean away', 'bad'); }
         g.energy -= 0.45 * dt;
-        redFlash = Math.max(redFlash, 0.45);
+        redFlash = Math.max(redFlash, 0.2);
         wallGlow = 1;
         if (nowS > g.buzzAt) { g.buzzAt = nowS + 0.15; mc.rumble(0.6, 120, 1); synth.sfxScrape(); }
         for (let k = 0; k < 2; k++) W.emit(_w2, _w3.set((Math.random() - 0.5) * 3, Math.random() * 3, 2), new T.Color('#ff8ac4'), 0.4, 2);
@@ -609,7 +630,7 @@
       }
       o.inside = inside;
       const mats = o.g.userData.mats;
-      mats[0].opacity = inside ? 0.32 : 0.16;
+      mats[0].opacity = (inside ? 0.32 : 0.16) * (o.z > 0.3 ? 0.45 : 1); // thinner once it is beside you
       mats[0].color.set(inside ? 0xff2d55 : 0xff4fa0);
       if (!o.done && t > o.t1 + 0.05) {
         o.done = true;
@@ -684,13 +705,17 @@
     breakCombo();
     g.energy -= g.diffKey === 'easy' ? 0.07 : 0.1;
     popAt(new T.Vector3(o.x, o.y, -0.2), 'MISS', '', 'miss');
+    W.shockwave(new T.Vector3(o.x, o.y, LAY.HIT_Z), 0.9, 0xff3b3b);
     synth.sfxMiss();
     redFlash = Math.max(redFlash, 0.35);
     checkFail();
     updateHud();
   }
 
-  function breakCombo() { game.combo = 0; game.mult = 1; game.multProg = 0; }
+  function breakCombo() {
+    if (game.combo >= 10) comboLost();
+    game.combo = 0; game.mult = 1; game.multProg = 0;
+  }
 
   function checkFail() {
     const g = game;
@@ -733,12 +758,14 @@
     saveStore();
     $('resGrade').textContent = grade;
     $('resGrade').classList.toggle('fail', g.failed);
+    $('resGrade').dataset.g = g.failed ? 'F' : grade;
     $('resTitle').textContent = g.stage ? g.stage.title : g.song.title;
     $('resSub').textContent = (g.stage ? g.song.title + ' · ' : '') + g.chart.label + ' · ' + Math.round(g.song.bpm) + ' bpm' +
       (g.mods.length ? ' · ' + g.mods.map(k => LG.MODS[k].label).join(' + ') : '') + (g.failed ? ' · not cleared' : '');
     $('resStars').innerHTML = [0, 1, 2].map(i => '<i class="' + (i < stars ? 'on' : '') + '" style="animation-delay:' + (0.25 + i * 0.22) + 's"></i>').join('');
-    $('resScore').textContent = g.score.toLocaleString('en-US');
+    countUp($('resScore'), g.score, 1300, 350);
     $('resBest').textContent = isBest ? (prev ? 'new best' : 'first clear') : (prev ? 'best ' + prev.score.toLocaleString('en-US') : '');
+    $('resBest').classList.toggle('isbest', isBest);
     $('resUnlock').innerHTML = unlocks.map(u => '<div>' + u + '</div>').join('');
     $('resAcc').textContent = (acc * 100).toFixed(1) + '%';
     $('resCombo').textContent = g.maxCombo;
@@ -759,12 +786,25 @@
     setScreen('results');
     if (stars) setTimeout(() => synth.sfxChime(true), 300);
   }
+  let countRaf = 0;
+  function countUp(el, to, ms, delay) {
+    cancelAnimationFrame(countRaf);
+    const t0 = performance.now() + delay;
+    el.textContent = '0';
+    const step = now => {
+      const k = Math.max(0, Math.min(1, (now - t0) / ms));
+      el.textContent = Math.round(to * (1 - Math.pow(1 - k, 3))).toLocaleString('en-US');
+      if (k < 1) countRaf = requestAnimationFrame(step);
+    };
+    countRaf = requestAnimationFrame(step);
+  }
 
   // ---------- feedback ----------
   let hitFlash = 0, redFlash = 0, shake = 0, wallGlow = 0, dropFlash = 0;
   const sparkCol = new T.Color('#ffd7a8'), sparkCol2 = new T.Color('#ff6a3d'), mintCol = new T.Color('#9ffbe3'), badCol = new T.Color('#ff3b3b');
   const goldCol = new T.Color('#ffd27a'), tmpCol = new T.Color();
   function sparks(pos, push, q, bad, tint) {
+    const Q = W.quality;
     const n = bad ? 22 : 34 + Math.round(q * 26);
     const pv = new T.Vector3(), vv = new T.Vector3();
     if (tint) tmpCol.set(tint);
@@ -776,14 +816,33 @@
       const c = tint && i % 2 ? tmpCol : bad ? badCol : surge && i % 2 ? goldCol : (i % 4 === 0 ? mintCol : i % 3 === 0 ? sparkCol2 : sparkCol);
       W.emit(pv, vv, c, 0.35 + Math.random() * 0.5, 2.2);
     }
+    // streaks: fast sparks flung along the swing, fanning off both sides of the cut line
+    if (Q > 0) {
+      const m = bad ? 10 : Math.round((Q === 2 ? 26 : 14) * (0.5 + q));
+      for (let i = 0; i < m; i++) {
+        const sgn = i % 2 ? 1 : -1;
+        vv.set(-push.y * sgn, push.x * sgn, 0).multiplyScalar(1.5 + Math.random() * 3)
+          .addScaledVector(push, 4 + Math.random() * 7)
+          .add(_d.set(Math.random() - 0.5, Math.random() - 0.5, Math.random()).multiplyScalar(2.5));
+        const c = tint && i % 3 === 0 ? tmpCol : bad ? badCol : surge && i % 2 ? goldCol : i % 3 === 0 ? sparkCol2 : sparkCol;
+        W.streak(pos, vv, c, 0.25 + Math.random() * 0.35, 3.2);
+      }
+    }
     W.flash(pos, bad ? 1.0 : 1.4 + q * 0.8, bad ? 0xff5050 : 0xffe3c4);
   }
 
   const popsEl = $('pops');
   const _p = new T.Vector3();
+  const recentPops = [];
   function popAt(pos, big, small, cls) {
     _p.copy(pos).project(W.camera);
-    const x = (_p.x + 1) / 2 * innerWidth, y = (1 - _p.y) / 2 * innerHeight;
+    const x = (_p.x + 1) / 2 * innerWidth;
+    let y = (1 - _p.y) / 2 * innerHeight;
+    // stack pops that would land on top of a recent one
+    const now = performance.now();
+    while (recentPops.length && now - recentPops[0].t > 450) recentPops.shift();
+    for (let k = 0; k < 4 && recentPops.some(r => Math.abs(r.x - x) < 90 && Math.abs(r.y - y) < 40); k++) y -= 42;
+    recentPops.push({ x, y, t: now });
     const el = document.createElement('div');
     el.className = 'pop ' + (cls || '');
     el.style.left = x + 'px'; el.style.top = y + 'px';
@@ -806,6 +865,10 @@
   function bumpCombo() {
     const el = $('combo'); el.classList.add('bump'); setTimeout(() => el.classList.remove('bump'), 90);
   }
+  /** Re-trigger a one-shot CSS animation class. */
+  function replay(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+  function comboLost() { replay($('hudRight'), 'broke'); }
+  let lastMult = 1;
   let hudCache = {};
   function updateHud(force) {
     const g = game; if (!g) return;
@@ -813,6 +876,11 @@
     set('score', g.score.toLocaleString('en-US'));
     set('combo', String(g.combo));
     set('mult', 'x' + g.mult * (g.surgeT > 0 ? 2 : 1));
+    if (g.mult > lastMult) replay($('multBox'), 'up');
+    lastMult = g.mult;
+    const tier = g.combo >= 50 ? 3 : g.combo >= 25 ? 2 : g.combo >= 10 ? 1 : 0;
+    const hr = $('hudRight');
+    if (+hr.dataset.tier !== tier) { hr.dataset.tier = tier; if (tier) replay(hr, 'tierup'); }
     $('multfill').style.width = (g.mult >= 4 ? 100 : 100 * g.multProg / LG.MULT_STEPS[g.mult - 1]) + '%';
     $('surgefill').style.width = (g.surgeT > 0 ? 100 * g.surgeT / LG.SURGE_TIME : 100 * g.surge) + '%';
     $('surge').classList.toggle('on', g.surgeT > 0);
@@ -822,13 +890,14 @@
 
   // ---------- screens & navigation ----------
   const screens = { splash: $('splash'), menu: $('menu'), calib: $('calib'), pause: $('pause'), settings: $('settings'), results: $('results') };
-  let focusIdx = 0;
+  let focusIdx = 0, enterTimer = 0;
   function setScreen(name) {
     state = name;
     Object.keys(screens).forEach(k => screens[k].classList.toggle('hidden', k !== name));
     $('hud').classList.toggle('hidden', !(name === 'play' || name === 'pause'));
     document.body.classList.toggle('playing', name === 'play');
     focusIdx = 0;
+    if (name === 'menu') { screens.menu.classList.add('enter'); clearTimeout(enterTimer); enterTimer = setTimeout(() => screens.menu.classList.remove('enter'), 700); }
     if (name === 'menu') renderMenu();
     if (name === 'calib') renderCalib();
     if (name === 'settings') renderSettings();
@@ -866,6 +935,7 @@
         el.className = 'song stage nav' + (i === sel.stage ? ' sel' : '') + (open ? '' : ' locked');
         el.dataset.stage = i;
         el.style.setProperty('--accent', song.accent);
+        el.style.setProperty('--i', i);
         el.innerHTML = '<div class="num">' + String(i + 1).padStart(2, '0') + '</div><div><div class="t">' + st.title + '</div><div class="m">' +
           song.title + ' &middot; ' + SG.DIFFS[st.diff].label + '</div></div>' +
           (open ? starsHtml(store.stars[st.id] | 0) : '<span class="lock">locked</span>');
@@ -876,7 +946,8 @@
       const prevF = sel.stage ? LG.CAMPAIGN[sel.stage - 1].features : {};
       const fresh = Object.keys(FEATURE_NAMES).filter(k => st.features[k] && !prevF[k]);
       const b = store.best[song.id + ':' + st.diff];
-      $('detail').innerHTML = '<div class="d-title">' + st.title + '</div>' +
+      screens.menu.style.setProperty('--accent', song.accent);
+      $('detail').innerHTML = '<div class="d-num">' + String(sel.stage + 1).padStart(2, '0') + '</div><div class="d-title">' + st.title + '</div>' +
         '<div class="d-song">' + song.title + (song.artist ? ' <span>by ' + song.artist + '</span>' : '') + '</div>' +
         '<div class="d-meta">' + SG.DIFFS[st.diff].label + ' &middot; ' + Math.round(song.bpm) + ' bpm &middot; ' + fmtDur(song.duration) + '</div>' +
         (fresh.length ? '<div class="d-new">New: ' + fresh.map(k => FEATURE_NAMES[k]).join(', ') + '</div>' : '') +
@@ -892,6 +963,7 @@
         el.className = 'song nav' + (i === sel.song ? ' sel' : '');
         el.dataset.song = i;
         el.style.setProperty('--accent', s.accent);
+        el.style.setProperty('--i', i);
         el.innerHTML = '<div class="num">' + String(i + 1).padStart(2, '0') + '</div><div><div class="t">' + s.title + '</div><div class="m">' +
           (s.artist || 'Original') + '<span class="mood"> &middot; ' + s.mood + '</span></div></div>' +
           '<div class="bpm"><b>' + Math.round(s.bpm) + '</b>bpm &middot; ' + fmtDur(s.duration) + '</div>';
@@ -899,6 +971,7 @@
         if (i === sel.song) selEl = el;
       });
       const song = SG.SONGS[sel.song];
+      screens.menu.style.setProperty('--accent', song.accent);
       $('detail').innerHTML = '<div class="label">Difficulty</div><div class="diffs">' +
         DIFF_KEYS.map(k => '<button class="diff nav' + (k === sel.diff ? ' sel' : '') + '" data-diff="' + k + '">' + SG.DIFFS[k].label + '</button>').join('') + '</div>' +
         '<div class="d-feat">' + featureList(LG.freeFeatures(sel.diff)).join(' &middot; ') + '</div>' +
@@ -935,6 +1008,7 @@
   };
   function renderCalib() {
     const P = play, song = P.song;
+    screens.calib.style.setProperty('--accent', song.accent);
     $('calibSong').textContent = (P.stage ? P.stage.title + ' · ' : '') + song.title + ' · ' + SG.DIFFS[P.diff].label;
     $('calibIntro').textContent = P.stage ? P.stage.intro : '';
     $('calibCredit').textContent = song.artist ? 'Music: ' + song.title + ' by ' + song.artist + ' (' + song.license + ', OpenGameArt)' : 'Music: original procedural song';
@@ -1196,7 +1270,7 @@
   const vignette = $('vignette'), flashLayer = $('flashlayer'), wallLayer = $('walllayer');
   const accentCol = new T.Color(), gold = new T.Color('#ffc46b');
   let last = performance.now();
-  let tint = 0;
+  let tint = 0, heatK = 0;
   function frame(now) {
     requestAnimationFrame(frame);
     const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000)); last = now;
@@ -1223,18 +1297,27 @@
       pulse = live ? beatPulse(song, t, sec) : 0;
       accentCol.set(song.accent);
       if (game.surgeT > 0) { accentCol.lerp(gold, 0.8); intensity = Math.max(intensity, 0.85); }
+      W.setTheme(song.id, game.diffKey === 'hard');
+      heatK += ((game.surgeT > 0 ? 1 : Math.min(1, game.combo / 40)) - heatK) * Math.min(1, dt * 2.5);
     } else {
-      beat = nowS * 92 / 60;
+      const P = state === 'calib' && play ? play : null;
+      const s = P ? P.song : sel.tab === 'campaign' ? SG.SONGS[songIndex(LG.CAMPAIGN[sel.stage].song)] : SG.SONGS[sel.song];
+      const bpm = s.bpm || 92;
+      beat = nowS * bpm / 60;
       const fr = beat - Math.floor(beat);
       pulse = 0.25 * Math.exp(-fr * 4);
       intensity = 0.15;
-      const s = sel.tab === 'campaign' ? SG.SONGS[songIndex(LG.CAMPAIGN[sel.stage].song)] : SG.SONGS[sel.song];
       accentCol.set(s.accent);
+      W.setTheme(s.id, P ? P.diff === 'hard' : sel.tab === 'campaign' ? LG.CAMPAIGN[sel.stage].diff === 'hard' : sel.diff === 'hard');
+      heatK += (0 - heatK) * Math.min(1, dt * 2);
     }
+    W.setHeat(heatK);
+    const q = effQuality();
+    if (q !== W.quality) W.setQuality(q);
     const envDt = frozen ? 0 : dt;
     if (cfg.fx) pulse *= 0.35;   // reduced effects: the world still breathes with the beat, gently
     W.updateEnv(envDt, beat, pulse, intensity, accentCol, nowS);
-    if (!frozen) { W.updateDebris(dt); W.updateParticles(dt); W.updateFlashes(dt); W.updateWaves(dt); W.updateTumbles(dt); }
+    if (!frozen) { W.updateDebris(dt); W.updateParticles(dt); W.updateStreaks(dt); W.updateFlashes(dt); W.updateSlashes(dt); W.updateWaves(dt); W.updateTumbles(dt); }
     W.updateTrail(nowS, 1);
     tint += ((game && game.surgeT > 0 ? 1 : 0) - tint) * Math.min(1, dt * 5);
     W.setBladeTint(tint);
@@ -1317,6 +1400,7 @@
     dirs: SG.DIRS,
     world: W,
     get renderScale() { return dyn.pr; },
+    get quality() { return W.quality; },
     settings: cfg,
   };
 })();

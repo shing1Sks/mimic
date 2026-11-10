@@ -310,13 +310,13 @@
     buildCards();
     setScreen('play');
     synth.start();
-    if (mode === 'calm') { sess.players.forEach(p => setSt(p, 'ready')); banner('Tidecast: Depths', 'cast, then steer the lure down with the rod'); }
+    if (mode === 'calm') { sess.players.forEach(p => setSt(p, 'ready')); banner('Tidecast: Depths', 'cast it out, let it sink, lift the rod to hold it'); }
     else banner('Get ready', mode === 'party' ? (sess.rule === 'big' ? 'heaviest fish wins' : 'biggest total catch wins') : 'your heaviest fish before sunset');
     rec('session', { mode, players: n, rule: sess.rule, dur: sess.dur, gear: Object.assign({}, store.gear), coins: store.coins });
   }
   function endSession() {
     if (!sess) return;
-    sess.players.forEach(p => { endDive(p, null); W.removeAngler(p.a); if (p.holder) W.scene.remove(p.holder); if (p.fish && p.fish.model) deep.removeObj(p.fish.model); });
+    sess.players.forEach(p => { endDive(p, null); W.removeAngler(p.a); if (p.holder) { W.scene.remove(p.holder); if (p.fishMesh) TideDeep.disposeFish(p.fishMesh); } if (p.fish && p.fish.model) deep.removeObj(p.fish.model); });
     sess.deepFish.slice().forEach(dropDeep);
     sess = null;
     deep.setActive(false); W.setDay(0.08, true);
@@ -697,7 +697,7 @@
       if (p.st === 'bite') p.lv.g.position.x += Math.sin(nowS * 45) * 0.04;
       p.lv.glow.material.opacity = (p.st === 'fight' ? 0.15 : 0.3) + p.halo * 0.5 + wink * 0.5; p.lv.glow.scale.setScalar(0.4 + p.halo * 1.0 + (sess.party ? 0.8 : 0));
       p.lv.tag.visible = !!sess.party;
-      deep.drawLine(p.ul, R, p.lv.tieWorld(), p.st === 'fight' && p.fight ? p.fight.T : p.st === 'bite' ? 0.7 : 0);
+      deep.drawLine(p.ul, R, p.lv.tieWorld(), p.st === 'fight' && p.fight ? (p.tug > 0 ? Math.max(p.fight.T, 0.86 + p.tug * 0.25) : p.fight.T) : p.st === 'bite' ? 0.7 : 0);
       if (Math.hypot(L0.vx, L0.vy, L0.vz) > 2.2 && Math.random() < dt * 8 && p.st === 'dive') deep.bubble(L0, 1, 0.1);
     }
   }
@@ -757,7 +757,13 @@
     // the line in your hand: a hum rising with the load, hammering pulses in the danger zone
     p.rumT = (p.rumT || 0) - dt;
     if (fs.slipping && p.rumT <= 0) { p.rumT = 0.09; rumble(p, 0.45, 25, 0, true); }   // the drag clicking off
-    else if (fs.phase === 'thrash' && p.rumT <= 0) { p.rumT = 0.22; rumble(p, 0.75, 45, 2, true); }
+    else if (fs.phase === 'thrash' && p.rumT <= 0) {
+      // each head-shake: a knock in the hand, a burst of bubbles and scales, the line snatched
+      p.rumT = 0.22; rumble(p, 0.75, 45, 2, true);
+      deep.bubble(p.fpos, 8, 0.5); if (Math.random() < 0.4) deep.puff(p.fpos, 0xe8f4ff, 0.6);
+      p.tug = 1; W.shake(0.12);
+    }
+    p.tug = Math.max(0, (p.tug || 0) - dt * 5);
     if (fs.danger) rumble(p, 1, 120, 3);
     else if (fs.T > 0.15) rumble(p, 0.1 + 0.75 * Math.pow(fs.T, 1.3), 140, 1);
     if (fs.danger) {
@@ -779,7 +785,7 @@
     float(p, (p.fpos || p.a.tip).clone().add(new T.Vector3(0, 1, 0)), text, sub, big ? 'big' : '');
   }
   function finishCatch(p) {
-    if (p.holder) { W.scene.remove(p.holder); p.holder = null; }
+    if (p.holder) { W.scene.remove(p.holder); if (p.fishMesh) TideDeep.disposeFish(p.fishMesh); p.holder = null; }
     p.fish = null;
     $('catch').classList.add('hidden'); document.body.classList.remove('catching');
     if (p.card) { const pc = p.card.querySelector('.pcatch'); if (pc) pc.remove(); }
@@ -1402,7 +1408,7 @@
       _F.copy(p.holder.position); _F.y -= len * 0.5;
       shot.pos.set(_F.x - d * 0.75, _F.y + d * 0.12, _F.z + d * 0.65);   // from the sea side, clear of the angler
       shot.look.set(_F.x + 0.65 * d * 0.38, _F.y, _F.z + 0.75 * d * 0.38);   // fish left of centre, clear of the catch card
-      shot.key = _k.set(_F.x - d * 0.5, _F.y + 0.3, _F.z + d * 0.5); shot.speed = 4;
+      shot.key = _k.set(_F.x - d * 0.5, _F.y + 0.3, _F.z + d * 0.5); shot.speed = p.stT < 1.5 ? 7 : 4;   // swing in fast from the water, then settle
     } else if (p.st === 'flight') {
       shot.look.lerp(_F.set(p.lure.x, p.lure.y, p.lure.z), 0.6); shot.pos.y += 0.5; shot.speed = 3;
     } else if (p.st === 'dive' && p.stT < 0.6 && p.lureD) {
@@ -1421,9 +1427,10 @@
       shot.pos.set(p.fpos.x + 1.6, p.fpos.y - 0.4, p.fpos.z + 2.4); shot.look.set(p.fpos.x, p.fpos.y + 0.2, p.fpos.z); shot.speed = 7;
     } else if (p.st === 'fight' && p.fpos) {
       // from your side of the line, looking out along it: its left is your left, so "lean it LEFT" reads on screen
-      const fp = p.fpos, dx = p.hk.ox - fp.x, dz = p.hk.oz - fp.z, dl = Math.hypot(dx, dz) || 1, far = 2.4 + p.fish.cm / 55;
-      shot.pos.set(fp.x + dx / dl * far * 0.9 + (-dz / dl) * far * 0.2, Math.min(-1.8, fp.y + 1.2), fp.z + dz / dl * far * 0.9 + (dx / dl) * far * 0.2);
-      shot.look.set(fp.x, fp.y + 0.3, fp.z); shot.speed = 2.6; shot.fov = base * 1.05;
+      // still on your side of the line but swung out to a three-quarter view of the fish, close enough to see it work
+      const fp = p.fpos, dx = p.hk.ox - fp.x, dz = p.hk.oz - fp.z, dl = Math.hypot(dx, dz) || 1, far = 1.5 + p.fish.cm / 70;
+      shot.pos.set(fp.x + dx / dl * far * 0.75 + (-dz / dl) * far * 0.65, Math.min(-1.6, fp.y + 0.7), fp.z + dz / dl * far * 0.75 + (dx / dl) * far * 0.65);
+      shot.look.set(fp.x + dx / dl * 0.3, fp.y + 0.1, fp.z + dz / dl * 0.3); shot.speed = 3.2; shot.fov = base * 1.0;
     } else return null;
     return shot;
   }

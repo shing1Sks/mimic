@@ -203,10 +203,16 @@
     return g;
   }
   /** A fin outline [(u, height)] standing on the back (or hanging from the belly) in body space. */
+  /** A fin as a thin bevelled slab (about 1% of body length): it catches the light edge-on. */
+  function finSlab(s) {
+    const g = new T.ExtrudeGeometry(s, { depth: 0.004, bevelEnabled: true, bevelThickness: 0.003, bevelSize: 0.002, bevelSegments: 1, curveSegments: 6 });
+    g.translate(0, 0, -0.002);
+    return g;
+  }
   function finGeo(d, pts, below) {
     const s = new T.Shape();
     pts.forEach(([u, hh], i) => { const base = below ? -lerpPts(d.bot, u) : lerpPts(d.top, u), y = base + hh * (below ? 1 : 1); const z = -0.5 + u; i ? s.lineTo(z, y) : s.moveTo(z, y); });
-    const g = new T.ShapeGeometry(s); g.rotateY(-Math.PI / 2);   // shape x -> body z
+    const g = finSlab(s); g.rotateY(-Math.PI / 2);   // shape x -> body z
     return normUV(g);
   }
   function tailGeo(d) {
@@ -217,7 +223,7 @@
       : d.tail === 'whip2' ? [[z0 - .01, .01], [z0 + .35, .008], [z0 + .35, -.008], [z0 - .01, -.01]] : null;
     if (!pts) return null;
     pts.forEach(([z, y], i) => { const q = p(z, y); i ? s.lineTo(q[0], q[1]) : s.moveTo(q[0], q[1]); });
-    const g = new T.ShapeGeometry(s); g.rotateY(Math.PI / 2);
+    const g = finSlab(s); g.rotateY(Math.PI / 2);
     return normUV(g);
   }
   const cache = {};
@@ -233,6 +239,8 @@
       if (d.ribbon) { out.dorsal = finGeo(d, [[0.15, 0], [0.2, 0.025], [0.97, 0.03], [1, 0]]); out.anal = finGeo(d, [[0.45, 0], [0.5, -0.02], [0.97, -0.025], [1, 0]], true); }
     }
     out.pect = (() => { const s = new T.Shape(); s.moveTo(0, 0); s.quadraticCurveTo(0.05, 0.05, 0.11, 0.035); s.quadraticCurveTo(0.12, -0.01, 0.1, -0.03); s.quadraticCurveTo(0.05, -0.02, 0, 0); return new T.ShapeGeometry(s); })();
+    for (const k of ['geo', 'dorsal', 'dorsal2', 'anal', 'tail', 'pect']) if (out[k]) out[k].userData.keep = true;
+    out.fin.userData.shared = true;   // shared by every fish of this kind
     return (cache[sp.id] = out);
   }
   function squidGeo() {
@@ -245,12 +253,25 @@
   const RIM = { value: new T.Color(0x9fe8ff) };   // shared by every fish; the world below dims it with the light
   const glint = new T.MeshBasicMaterial({ color: 0xffffff });
   const eyeGeo = new T.SphereGeometry(1, 20, 14), eyeMats = {};
-  const eyeMatFor = sp => { const c = (SKIN[sp.id] || {}).eye || '#d0a030'; return eyeMats[c] || (eyeMats[c] = new T.MeshStandardMaterial({ map: eyeTex(c), roughness: 0.08, metalness: 0.1 })); };
+  const eyeMatFor = sp => { const c = (SKIN[sp.id] || {}).eye || '#d0a030'; if (!eyeMats[c]) { eyeMats[c] = new T.MeshStandardMaterial({ map: eyeTex(c), roughness: 0.08, metalness: 0.1 }); eyeMats[c].userData.shared = true; } return eyeMats[c]; };
   const cyl = new T.CylinderGeometry(1, 1, 1, 8);
+  eyeGeo.userData.keep = cyl.userData.keep = true;
+  toothMat.userData.shared = glint.userData.shared = glowBulb.userData.shared = true;
+  /**
+   * Free what one fish model owns on the GPU (its own small geometries and its cloned materials);
+   * the shared body and fin geometries and cached textures stay. Without this every spawn leaked.
+   */
+  function disposeFish(o) {
+    o.traverse(m => {
+      if (m.geometry && !m.geometry.userData.keep) m.geometry.dispose();
+      const mats = m.material ? (Array.isArray(m.material) ? m.material : [m.material]) : [];
+      for (const mt of mats) if (!mt.userData.shared) mt.dispose();
+    });
+  }
 
   /** A body material that swims: a travelling wave sideways, stronger toward the tail; rays flap their wings. */
   function waveMat(base, u, fin) {
-    const m = base.clone();
+    const m = base.clone(); m.userData = {};
     m.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, u);
       sh.vertexShader = 'uniform float uT, uAmp, uFreq, uFlap;\n' + sh.vertexShader.replace('#include <begin_vertex>',
@@ -481,6 +502,7 @@
         g.stroke();
       }
     });
+    brainTex.wrapS = brainTex.wrapT = T.RepeatWrapping; brainTex.repeat.set(3, 2);   // fine grooves, even on a big head
     const coralMat = c => new T.MeshStandardMaterial({ color: c, roughness: 0.8, emissive: c, emissiveIntensity: 0.06 });
     const lighter = (c, k) => col(c).lerp(col(0xfff4e8), k);
     function branch(g, m, from, dir, len, rad, depthLeft) {
@@ -501,14 +523,14 @@
         const geo = new T.SphereGeometry(0.5 + rnd() * 0.6, 20, 14, 0, Math.PI * 2, 0, Math.PI * 0.6), pos = geo.attributes.position;
         for (let i = 0; i < pos.count; i++) { const v = new T.Vector3().fromBufferAttribute(pos, i); v.multiplyScalar(1 + Math.sin(v.x * 9) * Math.cos(v.z * 8) * 0.06); pos.setXYZ(i, v.x, v.y, v.z); }
         geo.computeVertexNormals();
-        const b = new T.Mesh(geo, new T.MeshStandardMaterial({ color: c, map: brainTex, bumpMap: brainTex, bumpScale: 2, roughness: 0.85 })); b.position.y = -0.15; g.add(b);
+        const b = new T.Mesh(geo, new T.MeshStandardMaterial({ color: c, map: brainTex, bumpMap: brainTex, bumpScale: 1.2, roughness: 0.85 })); b.position.y = -0.15; g.add(b);
       } else if (kind === 2) {
         const f = new T.Mesh(new T.CircleGeometry(0.8 + rnd() * 0.7, 20, 0, Math.PI), new T.MeshStandardMaterial({ color: c, map: fanTex, alphaTest: 0.4, transparent: false, side: T.DoubleSide, roughness: 0.9, emissive: c, emissiveIntensity: 0.15 }));
         g.add(f);
       } else if (kind === 3) {
         for (let k = 0; k < 4; k++) {
           const hgt = 0.6 + rnd() * 1, r = 0.1 + rnd() * 0.1;
-          const t = new T.Mesh(new T.CylinderGeometry(r, r * 0.85, hgt, 10, 1, true), new T.MeshStandardMaterial({ color: c, roughness: 0.9, side: T.DoubleSide }));
+          const t = new T.Mesh(new T.CylinderGeometry(r, r * 0.85, hgt, 10, 1, true), new T.MeshStandardMaterial({ color: [0xc85ad8, 0xf4c84a, 0x7a9aff, 0xff7a9a][Math.floor(rnd() * 4)], roughness: 0.9, side: T.DoubleSide }));   // tube sponges: vivid, never stump-brown
           t.position.set((rnd() - 0.5) * 0.5, hgt / 2, (rnd() - 0.5) * 0.5); t.rotation.set((rnd() - 0.5) * 0.3, 0, (rnd() - 0.5) * 0.3); g.add(t);
           const lip = new T.Mesh(new T.TorusGeometry(r, 0.02, 4, 10), m); lip.rotation.x = Math.PI / 2; lip.position.copy(t.position); lip.position.y += hgt / 2; g.add(lip);
         }
@@ -532,10 +554,23 @@
       reefTmp.add(g);
       return g;
     }
-    for (let i = 0; i < 140; i++) {
-      const near = i < 80, p = pol(near ? 13.5 : 18, near ? 20 : 29, 0), kind = i % 7; p.y = reefY(p.x, p.z) - 0.05;
-      coralAt(p, kind, coralCols[(i * 3) % coralCols.length]);
-      if (kind <= 3 && i % 2 === 0) covers.push({ x: p.x, y: p.y + 0.5, z: p.z, r: 1.2, kind: 'coral' });
+    // composed, not sprinkled: a dozen coral heads, each a cluster with one or two dominant kinds and a
+    // big centrepiece, sizes falling off toward its edge; open sand between them
+    const heads = [];
+    for (let h = 0; h < 13; h++) {
+      const a = h / 13 * TAU + rnd() * 0.3, r = 15 + rnd() * 12, cx = Math.cos(a) * r, cz = Math.sin(a) * r;
+      heads.push({ x: cx, z: cz });
+      const main = [0, 1, 2, 3, 6][h % 5], second = [4, 6, 0, 1, 3][(h * 3) % 5], n = 7 + Math.floor(rnd() * 8), hue = (h * 3) % coralCols.length;
+      for (let k = 0; k < n; k++) {
+        const rr = k === 0 ? 0 : 0.6 + Math.sqrt(rnd()) * 2.6, aa = rnd() * TAU;
+        const p = new T.Vector3(cx + Math.cos(aa) * rr, 0, cz + Math.sin(aa) * rr); p.y = reefY(p.x, p.z) - 0.05;
+        const kind = k === 0 ? main : rnd() < 0.55 ? main : rnd() < 0.7 ? second : 5;
+        const c = coralCols[(hue + (rnd() < 0.7 ? 0 : 1 + Math.floor(rnd() * 3))) % coralCols.length];
+        const g = coralAt(p, kind, c);
+        const big = [1.9, 1.2, 1.6, 1.25, 1.1, 1, 1.6][kind];   // how big a centrepiece of each kind may grow
+        g.scale.setScalar(k === 0 ? big * (0.9 + rnd() * 0.3) : Math.max(0.45, Math.min(big, 1.4 - rr * 0.3 + (rnd() - 0.5) * 0.4)));
+        if (k < 3) covers.push({ x: p.x, y: p.y + 0.5, z: p.z, r: 1.2 + (k === 0 ? 0.8 : 0), kind: 'coral' });
+      }
     }
     // and on the reef wall itself
     for (let i = 0; i < 50; i++) {
@@ -672,13 +707,18 @@
       for (let y = 4; y < h; y += 6) covers.push({ x: p.x, y: p.y + y, z: p.z, r: 1.4, kind: 'kelp' });
     }
     // rocks on both shelves: lumpy, cracked and speckled, with moss and algae on the faces that look up
-    const rockTex = canvasTex(256, 256, (g, w, h) => {
-      g.fillStyle = '#8a847a'; g.fillRect(0, 0, w, h);
-      for (let i = 0; i < 6000; i++) { const v = rnd(); g.fillStyle = v < 0.4 ? 'rgba(40,36,30,0.35)' : v < 0.75 ? 'rgba(210,205,190,0.3)' : 'rgba(80,110,60,0.3)'; g.fillRect(rnd() * w, rnd() * h, 1 + rnd() * 3, 1 + rnd() * 3); }
-      g.strokeStyle = 'rgba(30,26,22,0.55)'; g.lineWidth = 1.6;
+    const rockTex = canvasTex(512, 512, (g, w, h) => {
+      g.fillStyle = '#948e82'; g.fillRect(0, 0, w, h);
+      // soft weathered blotches (lichen, stain, pale salt) under a fine grain, then a few cracks
+      g.filter = 'blur(6px)';
+      for (let i = 0; i < 260; i++) { const v = rnd(); g.fillStyle = v < 0.4 ? 'rgba(60,54,46,0.22)' : v < 0.75 ? 'rgba(220,214,200,0.2)' : 'rgba(96,130,72,0.22)'; g.beginPath(); g.arc(rnd() * w, rnd() * h, 6 + rnd() * 22, 0, Math.PI * 2); g.fill(); }
+      g.filter = 'none';
+      for (let i = 0; i < 5000; i++) { g.fillStyle = rnd() < 0.5 ? 'rgba(40,36,30,0.12)' : 'rgba(240,236,224,0.12)'; g.fillRect(rnd() * w, rnd() * h, 1.5, 1.5); }
+      g.strokeStyle = 'rgba(40,34,28,0.4)'; g.lineWidth = 1.4;
       for (let i = 0; i < 16; i++) { g.beginPath(); let x = rnd() * w, y = rnd() * h; g.moveTo(x, y); for (let k = 0; k < 6; k++) { x += (rnd() - 0.5) * 50; y += (rnd() - 0.5) * 50; g.lineTo(x, y); } g.stroke(); }
     });
-    const rockMat = withCaustics(new T.MeshStandardMaterial({ map: rockTex, bumpMap: rockTex, bumpScale: 1.5, vertexColors: true, roughness: 0.95 }));
+    rockTex.wrapS = rockTex.wrapT = T.RepeatWrapping; rockTex.repeat.set(2, 2);
+    const rockMat = withCaustics(new T.MeshStandardMaterial({ map: rockTex, bumpMap: rockTex, bumpScale: 0.5, vertexColors: true, roughness: 0.95 }));
     const rockGeos = [0, 1, 2, 3].map(seed => {
       const g = new T.IcosahedronGeometry(1, 2), pos = g.attributes.position, v = new T.Vector3();
       for (let i = 0; i < pos.count; i++) {
@@ -691,17 +731,56 @@
       const nor = g.attributes.normal, cols = [], c = new T.Color(), moss = col('#5a8a3a');
       for (let i = 0; i < pos.count; i++) {
         c.setRGB(0.66, 0.62, 0.56).multiplyScalar(0.6 + 0.35 * (pos.getY(i) + 0.3));
-        const up = nor.getY(i); if (up > 0.5) c.lerp(moss, Math.min(0.85, (up - 0.5) * 2.4));
+        const up = nor.getY(i); if (up > 0.55) c.lerp(moss, Math.min(0.55, (up - 0.55) * 2));
         cols.push(c.r, c.g, c.b);
       }
       g.setAttribute('color', new T.Float32BufferAttribute(cols, 3));
       return g;
     });
-    for (let i = 0; i < 46; i++) {
-      const deepBed = i % 2 === 1, p = pol(deepBed ? 10 : 14, deepBed ? 25 : 29, 0), r = (i < 26 ? 0.8 + rnd() * 1.8 : 0.25 + rnd() * 0.4);
-      p.y = (deepBed ? kelpY : reefY)(p.x, p.z) + r * 0.15;
-      const m = new T.Mesh(rockGeos[i % 4], rockMat); m.position.copy(p); m.scale.set(r, r * (0.55 + rnd() * 0.3), r * (0.8 + rnd() * 0.4)); m.rotation.y = rnd() * TAU; env.add(m);
-      if (i < 26) covers.push({ x: p.x, y: p.y + r * 0.4, z: p.z, r: r + 0.5, kind: 'rock' });
+    const stone = (x, z, r, fy, k) => {
+      const m = new T.Mesh(rockGeos[k % 4], rockMat); m.position.set(x, fy(x, z) + r * 0.15, z);
+      m.scale.set(r, r * (0.55 + rnd() * 0.35), r * (0.8 + rnd() * 0.4)); m.rotation.set((rnd() - 0.5) * 0.3, rnd() * TAU, (rnd() - 0.5) * 0.3); env.add(m); return m;
+    };
+    // outcrops: a big stone with smaller ones leaning on it, some beside a coral head, some alone on the sand
+    for (let o = 0; o < 16; o++) {
+      const deepBed = o % 3 === 2, hd = heads[o % heads.length], fy = deepBed ? kelpY : reefY;
+      const c = deepBed ? pol(10, 25, 0) : (o < 8 ? new T.Vector3(hd.x + (rnd() - 0.5) * 7, 0, hd.z + (rnd() - 0.5) * 7) : pol(15, 28, 0));
+      const R0 = 1.2 + rnd() * 1.6;
+      stone(c.x, c.z, R0, fy, o);
+      for (let k = 0; k < 2 + Math.floor(rnd() * 4); k++) { const a = rnd() * TAU, d = R0 * (0.7 + rnd() * 0.6); stone(c.x + Math.cos(a) * d, c.z + Math.sin(a) * d, R0 * (0.3 + rnd() * 0.4), fy, o + k + 1); }
+      covers.push({ x: c.x, y: fy(c.x, c.z) + R0 * 0.5, z: c.z, r: R0 + 0.6, kind: 'rock' });
+    }
+    for (let i = 0; i < 30; i++) { const p = pol(14, 29, 0); stone(p.x, p.z, 0.2 + rnd() * 0.35, reefY, i); }   // loose stones
+    // the bommie: a tall coral-crusted pinnacle rising from the reef, the place everything gathers round
+    {
+      const bx = 17 * Math.cos(1.1), bz = 17 * Math.sin(1.1), by = reefY(bx, bz);
+      const g = new T.CylinderGeometry(1.3, 2.4, 6.5, 14, 10), pp = g.attributes.position;
+      for (let i = 0; i < pp.count; i++) { const x = pp.getX(i), y = pp.getY(i), z = pp.getZ(i), a = Math.atan2(z, x), n = 1 + Math.sin(a * 5 + y * 1.3) * 0.12 + Math.sin(a * 11 - y * 2.1) * 0.06; pp.setXYZ(i, x * n, y, z * n); }
+      g.computeVertexNormals();
+      const cols = []; for (let i = 0; i < pp.count; i++) { const c = col('#9a9286').lerp(col('#6a8a52'), Math.min(0.45, Math.max(0, (pp.getY(i) + 1) / 7) * 0.6)); cols.push(c.r, c.g, c.b); }
+      g.setAttribute('color', new T.Float32BufferAttribute(cols, 3));
+      const pin = new T.Mesh(g, rockMat); pin.position.set(bx, by + 3, bz); env.add(pin);
+      const bomTmp = new T.Group();
+      for (let k = 0; k < 16; k++) {   // crowned and crusted with coral
+        const a = rnd() * TAU, hh = rnd() < 0.4 ? 6.3 : 1 + rnd() * 5, rr = hh > 6 ? rnd() * 1.1 : 1.3 + (6.5 - hh) / 6.5 * 1.1;
+        const cg = coralAt(new T.Vector3(bx + Math.cos(a) * rr, by + hh, bz + Math.sin(a) * rr), (hh > 6 ? [0, 3, 6] : [1, 2, 6])[k % 3], coralCols[(k * 2) % coralCols.length]);
+        bomTmp.add(cg);   // the reef was already baked: bake these as their own batch
+        cg.scale.setScalar(0.7 + rnd() * 0.7);
+        if (hh <= 6) { cg.lookAt(bx + Math.cos(a) * 9, by + hh, bz + Math.sin(a) * 9); cg.rotateX(Math.PI / 2); }
+      }
+      bake(bomTmp);
+      covers.push({ x: bx, y: by + 3, z: bz, r: 3, kind: 'coral' });
+    }
+    // the arch: a broken ring of rock you can swim the lure through
+    {
+      const ax = 22 * Math.cos(3.6), az = 22 * Math.sin(3.6), ay = reefY(ax, az);
+      const g = new T.TorusGeometry(2.6, 0.75, 10, 24, Math.PI), pp = g.attributes.position;
+      for (let i = 0; i < pp.count; i++) { const x = pp.getX(i), y = pp.getY(i), z = pp.getZ(i), n = 1 + Math.sin(x * 3.1 + y * 2.3) * 0.08; pp.setXYZ(i, x * n, y * n, z * (1 + Math.sin(y * 4) * 0.15)); }
+      g.computeVertexNormals();
+      const cols = []; for (let i = 0; i < pp.count; i++) { const c = col('#9a9286').lerp(col('#6a8a52'), Math.min(0.4, Math.max(0, pp.getY(i) / 3) * 0.5)); cols.push(c.r, c.g, c.b); }
+      g.setAttribute('color', new T.Float32BufferAttribute(cols, 3));
+      const arch = new T.Mesh(g, rockMat); arch.position.set(ax, ay - 0.4, az); arch.rotation.y = 0.6; env.add(arch);
+      covers.push({ x: ax, y: ay + 1.5, z: az, r: 2.5, kind: 'rock' });
     }
     // the wreck on the kelp bed: a broken hull and a leaning mast
     const wreck = new T.Group(), wood = withCaustics(new T.MeshLambertMaterial({ color: 0x4a3a2a }));
@@ -722,10 +801,24 @@
       g.position.copy(pol(4, 20, 70 + rnd() * 120)); g.userData.ph = rnd() * 6; env.add(g); jellies.push(g);
     }
     // comb jellies: little drifting lights that ripple through the rainbow
-    const combs = [];
-    for (let i = 0; i < 36; i++) {
-      const s = new T.Sprite(new T.SpriteMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: T.AdditiveBlending, fog: false }));
-      s.scale.set(0.35, 0.5, 1); s.position.set(0, 999, 0); root.add(s); combs.push(s);
+    const combs = [], camFwd = new T.Vector3();
+    const ciliaTex = canvasTex(256, 128, (g, w, h) => {
+      g.fillStyle = 'rgba(0,0,0,0)'; g.clearRect(0, 0, w, h);
+      for (let b = 0; b < 8; b++) {   // eight comb rows round the body, each a column of rainbow plates
+        const x = (b + 0.5) / 8 * w;
+        for (let y = 0; y < h; y += 4) { g.fillStyle = `hsla(${(y / h * 720 + b * 40) % 360}, 100%, 62%, 0.95)`; g.fillRect(x - 3, y, 6, 3); }
+      }
+    });
+    ciliaTex.wrapS = ciliaTex.wrapT = T.RepeatWrapping;
+    const combGeo = new T.SphereGeometry(1, 16, 12);
+    const combBody = new T.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.22, depthWrite: false, fog: false });
+    const combBands = new T.MeshBasicMaterial({ map: ciliaTex, transparent: true, depthWrite: false, blending: T.AdditiveBlending, fog: false, side: T.DoubleSide });
+    for (let i = 0; i < 24; i++) {
+      const s = new T.Group(), sz = 0.16 + rnd() * 0.18;
+      s.add(new T.Mesh(combGeo, combBody));
+      const bands = new T.Mesh(combGeo, combBands); bands.scale.setScalar(1.03); s.add(bands);
+      const halo = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: 0x8ad8ff, transparent: true, opacity: 0.5, depthWrite: false, blending: T.AdditiveBlending, fog: false })); halo.scale.setScalar(3); s.add(halo);
+      s.scale.set(sz, sz * 1.5, sz); s.position.set(0, 999, 0); s.userData.ph = rnd() * 6; root.add(s); combs.push(s);
     }
     // abyss: vents and tube worms glowing on the floor
     for (let i = 0; i < 24; i++) {
@@ -908,7 +1001,7 @@
       }
       L.beadGeo.setDrawRange(0, nb); L.beadGeo.attributes.position.needsUpdate = true;
     }
-    function removeObj(o) { root.remove(o); }
+    function removeObj(o) { root.remove(o); if (o.swim) disposeFish(o); }
 
     // ---------------------------------------------------------------- per frame
     const fogC = new T.Color(), tmpA = new T.Color(), tmpB = new T.Color(), tmpC = new T.Color();
@@ -993,16 +1086,18 @@
           j.position.set(lx + Math.cos(a) * r, Math.max(-195, Math.min(-66, cam.y + (rnd() - 0.5) * 18)), lz + Math.sin(a) * r);
         }
       });
+      ciliaTex.offset.y = -time.v * 0.6;
+      W.camera.getWorldDirection(camFwd);   // the comb plates beat: light runs down the rows
       combs.forEach((s, i) => {
         if (!twi) { s.visible = false; return; }
         s.visible = true;
-        s.material.color.setHSL((time.v * 0.15 + i * 0.13) % 1, 0.9, 0.6);
-        s.material.opacity = 0.4 + 0.4 * Math.sin(time.v * 3 + i);
-        s.position.y += Math.sin(time.v * 0.6 + i) * dt * 0.2;
-        if (Math.hypot(s.position.x - cam.x, s.position.y - cam.y, s.position.z - cam.z) > 16) {
-          const a = rnd() * TAU, r = 3 + rnd() * 11;
-          s.position.set(cam.x + Math.cos(a) * r, cam.y + (rnd() - 0.5) * 10, cam.z + Math.sin(a) * r);
+        s.position.y += Math.sin(time.v * 0.6 + i) * dt * 0.2; s.rotation.y += dt * 0.3; s.rotation.z = Math.sin(time.v * 0.4 + s.userData.ph) * 0.4;
+        cv.copy(s.position).sub(cam);
+        if (cv.length() > 14 || cv.dot(camFwd) < 0) {   // keep them drifting in the view, not behind you
+          const r = 4.5 + rnd() * 8;
+          s.position.copy(cam).addScaledVector(camFwd, r).add(cv.set((rnd() - 0.5) * r * 1.2, (rnd() - 0.5) * r * 0.7, (rnd() - 0.5) * r * 1.2));
         }
+        s.children[2].material.color.setHSL((time.v * 0.1 + i * 0.17) % 1, 0.8, 0.65);
       });
       for (let i = 0; i < NB; i++) { if (bLife[i] <= 0) continue; bLife[i] -= dt; bPos[i * 3 + 1] += bVel[i] * dt; bPos[i * 3] += Math.sin(time.v * 3 + i) * dt * 0.1; if (bLife[i] <= 0 || bPos[i * 3 + 1] > -0.1) { bLife[i] = 0; bPos[i * 3 + 1] = 99; } }
       bGeo.attributes.position.needsUpdate = true;
@@ -1015,5 +1110,5 @@
     return { setLow(on) { low.on = on; }, spark, makeRig, root, setActive, center, update, makeLure, makeLine, drawLine, removeObj, bubble, puff, worldCovers, addFish, makeFish, get active() { return root.visible; } };
   }
 
-  window.TideDeep = { create, makeFish };
+  window.TideDeep = { create, makeFish, disposeFish };
 })();

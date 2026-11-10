@@ -1,5 +1,6 @@
 package dev.mimic.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,6 +24,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -51,6 +60,24 @@ fun MimicTheme(content: @Composable () -> Unit) = MaterialTheme(
     ),
     content = content,
 )
+
+/**
+ * The back button of the list screens (Settings, About): the system back gesture is invisible, so
+ * these screens show one too. Modes have none on purpose: they leave only with hold-to-exit, so a
+ * grip or a swing never exits by accident.
+ */
+@Composable
+fun BackButton(onBack: () -> Unit) = Box(
+    Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(Ink.raised).clickable(onClick = onBack)
+        .semantics { contentDescription = "Back"; role = Role.Button },
+    contentAlignment = Alignment.Center,
+) {
+    Canvas(Modifier.size(16.dp)) {
+        val w = size.width; val h = size.height
+        val p = Path().apply { moveTo(w * 0.68f, h * 0.08f); lineTo(w * 0.24f, h * 0.5f); lineTo(w * 0.68f, h * 0.92f) }
+        drawPath(p, Ink.text, style = Stroke(2.4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+    }
+}
 
 val Title = TextStyle(color = Ink.text, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
 val Label = TextStyle(color = Ink.text, fontSize = 15.sp, fontWeight = FontWeight.Medium)

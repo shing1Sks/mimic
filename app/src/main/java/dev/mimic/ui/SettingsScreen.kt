@@ -35,12 +35,15 @@ import dev.mimic.ui.kit.Palette
 import dev.mimic.ui.kit.ThemeName
 
 @Composable
-fun SettingsScreen(s: Settings, haptics: HapticEngine, onAbout: () -> Unit) = Column(
+fun SettingsScreen(s: Settings, haptics: HapticEngine, onAbout: () -> Unit, onBack: () -> Unit) = Column(
     Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
     verticalArrangement = Arrangement.spacedBy(14.dp),
 ) {
     var confirmReset by remember { mutableStateOf(false) }
-    Text("Settings", style = Title)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        BackButton(onBack)
+        Text("Settings", style = Title)
+    }
 
     Text("Look", style = Caption)
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

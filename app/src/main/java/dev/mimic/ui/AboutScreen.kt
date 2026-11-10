@@ -53,7 +53,7 @@ private sealed interface UpdateRow {
  * and the licences. Reached from Settings.
  */
 @Composable
-fun AboutScreen(onShowUpdateOnHome: () -> Unit) {
+fun AboutScreen(onShowUpdateOnHome: () -> Unit, onBack: () -> Unit) {
     val ctx = LocalContext.current.applicationContext
     val updater = remember { Updater(ctx) }
     val scope = rememberCoroutineScope()
@@ -65,6 +65,7 @@ fun AboutScreen(onShowUpdateOnHome: () -> Unit) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        BackButton(onBack)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Image(painterResource(R.drawable.ic_mimic), contentDescription = null, modifier = Modifier.size(44.dp))
             Column {

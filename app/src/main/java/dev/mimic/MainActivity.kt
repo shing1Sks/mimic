@@ -128,8 +128,8 @@ class MainActivity : ComponentActivity() {
                         when (screen) {
                             null -> HomeScreen(hid, settings, haptics, onPair = ::makeDiscoverable, onOpen = { screen = it },
                                 needsPermission = !btGranted, permissionBlocked = btBlocked, onAllow = ::allowBluetooth)
-                            Screen.Settings -> SettingsScreen(settings, haptics, onAbout = { screen = Screen.About })
-                            Screen.About -> AboutScreen(onShowUpdateOnHome = { screen = null })
+                            Screen.Settings -> SettingsScreen(settings, haptics, onAbout = { screen = Screen.About }, onBack = { screen = null })
+                            Screen.About -> AboutScreen(onShowUpdateOnHome = { screen = null }, onBack = { screen = Screen.Settings })
                             Screen.Point -> ModeShell(Mode.Point, settings, haptics, onExit = { screen = null }) {
                                 PointScreen(this@MainActivity, hid, settings, haptics, keys)
                             }

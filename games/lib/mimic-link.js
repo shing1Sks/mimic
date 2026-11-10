@@ -246,7 +246,7 @@
         if (changed) padEvent('gamepaddisconnected', p);
         p.mode = mode;
         if (m.name) p.name = String(m.name).slice(0, 24);
-        if (!p.joined) { p.joined = true; getGamepads(); padEvent('gamepadconnected', p); emit('join', publicPeer(p)); }
+        if (!p.joined) { p.joined = true; getGamepads(); padEvent('gamepadconnected', p); emit('join', publicPeer(p)); if (phones().length >= panelPlayers) closeSoon(1800); }
         else if (changed) { getGamepads(); padEvent('gamepadconnected', p); }
         ch.send(JSON.stringify({ t: 'welcome', player: p.n, index: p.index }));
         emit('change', phones());
@@ -283,6 +283,15 @@
     p.ts = now();
     if (d.kind === P().KIND.MOTION) { p.axes = d.axes; p.buttons = d.buttons; }
     else p.pad = d.pad;
+    // the player has the phone in hand now: any button press closes the floating QR panel (the
+    // phone cannot reach its close button)
+    if ((d.kind === P().KIND.MOTION ? d.buttons : Object.values(d.pad.buttons).some(Boolean) || d.pad.hat < 8) && panelOpen() && !p.ready) {
+      p.ready = true; renderFloating();
+      const list = Array.from(peers.values()).filter(x => x.joined);
+      // everyone who joined is ready: go (a solo player is never stuck waiting on an empty seat;
+      // the games' own lobbies keep a join code for a late second player)
+      if (list.every(x => x.ready)) closeSoon(600);
+    }
     if (p.offset !== null) {
       const lat = timeOrigin() + p.ts - (d.t - p.offset);
       p.latencyMs = p.latencyMs === null ? lat : p.latencyMs * 0.9 + lat * 0.1;
@@ -377,6 +386,9 @@
   .mml-list li{display:flex;justify-content:space-between;gap:8px;background:${C.raised};border-radius:10px;padding:8px 10px;font-size:13px}
   .mml-list .m{color:var(--a);font-weight:600}
   .mml-list .s{color:${C.dim};font-variant-numeric:tabular-nums}
+  .mml-list li.empty{background:transparent;border:1px dashed ${C.line};color:${C.dim}}
+  .mml-list .ok{color:#7be08a;font-weight:700}
+  .mml-count{margin:14px 0 -6px;font-size:12px;letter-spacing:.06em;color:${C.dim}}
   .mml-tip{margin:clamp(8px,1.8vh,14px) 0 0;padding:8px 12px;border-radius:10px;background:rgba(242,184,102,.08);border:1px solid rgba(242,184,102,.25);color:${C.text};font-size:12.5px}
   .mml-tip b{color:${C.warn}} .mml-tip code{font:12px ui-monospace,Consolas,monospace;color:${C.text};background:rgba(255,255,255,.06);padding:1px 4px;border-radius:4px;word-break:break-all}
   .mml-x{all:unset;position:absolute;right:12px;top:10px;cursor:pointer;color:${C.dim};font-size:22px;line-height:1;padding:4px 8px;border-radius:8px}
@@ -426,7 +438,7 @@
     if (btnEl.__html !== html) { btnEl.innerHTML = html; btnEl.__html = html; }
     if (doc.querySelector('[data-mimic-join]')) hasJoin = true;   // once a game shows its own entry, stay out of its HUD
     const pos = cfg.button || (hasJoin ? 'off' : 'bl');
-    btnEl.classList.toggle('hide', pos === 'off' || !!doc.pointerLockElement);
+    btnEl.classList.toggle('hide', pos === 'off' || !!doc.pointerLockElement || !relayUp());
     btnEl.style.cssText = pos === 'off' ? '' : `${pos[0] === 't' ? 'top' : 'bottom'}:14px;${pos[1] === 'r' ? 'right' : 'left'}:14px;${pos[0] === 't' ? 'bottom:auto' : 'top:auto'};${pos[1] === 'r' ? 'left:auto' : 'right:auto'}`;
   }
 
@@ -446,16 +458,28 @@
       <div class="mml-qr">${qrSvg(u)}</div>
       <div class="mml-modes">${modeBtns}</div>
       <div class="mml-url">${esc(u)}</div>
-      ${list.length ? `<ul class="mml-list">${list.map(p => `<li style="--a:${MODE_ACC[p.mode]}"><span>Phone ${p.player} <span class="m">${p.mode.toUpperCase()}</span></span><span class="s">${p.latencyMs !== null ? Math.max(0, Math.round(p.latencyMs)) + ' ms' : p.rttMs !== null ? Math.round(p.rttMs / 2) + ' ms' : '…'} · ${p.hz} Hz</span></li>`).join('')}</ul>` : ''}
+      ${slotsHtml(list, closable)}
       ${tip}
       <p class="mml-foot">App phones and browser phones play together.</p>`;
+  }
+  /** Joined phones as player rows; in a lobby (panelPlayers > 1) empty seats wait and each phone presses to be ready. */
+  function slotsHtml(list, floating) {
+    const want = floating ? panelPlayers : 1;
+    if (!list.length && want <= 1) return '';
+    const lat = p => (p.latencyMs !== null ? Math.max(0, Math.round(p.latencyMs)) + ' ms' : p.rttMs !== null ? Math.round(p.rttMs / 2) + ' ms' : '…');
+    const ready = p => { const x = peers.get(p.id); return !!(x && x.ready); };
+    const rows = list.map(p => `<li style="--a:${MODE_ACC[p.mode]}"><span>Player ${p.player} <span class="m">${p.mode.toUpperCase()}</span></span>` +
+      `<span class="s">${want > 1 ? (ready(p) ? '<b class="ok">READY</b> · ' : 'press any button · ') : ''}${lat(p)}</span></li>`);
+    for (let i = list.length; i < want; i++) rows.push(`<li class="empty"><span>Player ${i + 1}</span><span class="s">scan to join…</span></li>`);
+    const head = want > 1 ? `<div class="mml-count">${list.length} of ${want} in · press any button when ready</div>` : '';
+    return `${head}<ul class="mml-list">${rows.join('')}</ul>`;
   }
   function wirePanel(el, mode, closable, rerender) {
     el.querySelectorAll('.mml-modes button').forEach(b => b.addEventListener('click', () => rerender(b.dataset.m)));
     const x = el.querySelector('.mml-x'); if (x) x.addEventListener('click', hideQR);
   }
 
-  function showQR(container, mode) {
+  function showQR(container, mode, players) {
     return ready.then(() => {
       startHost();
       mountRoot();
@@ -469,11 +493,23 @@
         return;
       }
       panelMode = mode;
+      panelPlayers = Math.max(1, Math.min(8, players | 0 || 1));
+      for (const q of peers.values()) q.ready = false;
       renderFloating();
       scrim.classList.remove('hide');
+      openedAt = now(); clearTimeout(closeT); closeT = null;
     });
   }
-  function hideQR() { if (scrim) scrim.classList.add('hide'); }
+  function hideQR() { clearTimeout(closeT); if (scrim) scrim.classList.add('hide'); }
+  let openedAt = 0, closeT = null, panelPlayers = 1;
+  const panelOpen = () => !!scrim && !scrim.classList.contains('hide');
+  /** Close the floating panel after ms (a phone joined: let its row show first); not in its first 0.8 s. */
+  function closeSoon(ms) {
+    if (!panelOpen() || closeT) return;
+    const wait = Math.max(ms, openedAt + 800 - now());
+    if (wait <= 0) { hideQR(); return; }
+    closeT = setTimeout(() => { closeT = null; hideQR(); }, wait);
+  }
   function renderFloating() {
     if (!scrim || panelMode === null) return;
     const p = scrim.querySelector('.mml-panel') || scrim.appendChild(Object.assign(doc.createElement('div'), { className: 'mml-panel' }));
@@ -489,7 +525,11 @@
   }
 
   // data-mimic-join widgets
+  /** A page whose own server has no signaling relay (a plain static host, the site preview) offers no QR: it could not connect. */
+  const relayUp = () => !sameOriginSignal || info !== null;
   function renderJoin(el) {
+    el.hidden = !relayUp();
+    if (el.hidden) return;
     const mode = el.getAttribute('data-mimic-join') || '';
     const u = url(mode);
     if (el.__mml === u + (el.hasAttribute('data-compact') ? 'c' : '')) return;
@@ -503,7 +543,7 @@
     }
     if (!el.__mmlClick) {
       el.__mmlClick = true;
-      el.addEventListener('click', e => { e.stopPropagation(); showQR(null, el.getAttribute('data-mimic-join') || ''); });
+      el.addEventListener('click', e => { e.stopPropagation(); showQR(null, el.getAttribute('data-mimic-join') || '', parseInt(el.getAttribute('data-players'), 10) || 1); });
       ['mousedown', 'mouseup', 'pointerdown', 'pointerup'].forEach(t => el.addEventListener(t, e => e.stopPropagation()));
     }
   }
@@ -513,7 +553,7 @@
     ready.then(() => {
       startHost(); mountRoot();
       els.forEach(renderJoin);
-      fetchInfo().then(() => doc.querySelectorAll('[data-mimic-join]').forEach(renderJoin));
+      fetchInfo().then(() => { doc.querySelectorAll('[data-mimic-join]').forEach(renderJoin); renderButton(); });
     });
   }
   function watchJoins() {
@@ -547,6 +587,9 @@
       mountRoot();
       // a page reload keeps its room: phones that were connected come back by themselves
       if (sget('mimic.link.active')) startHost();
+      // leaving the page (next game, reload): close every phone link now, so phones see it at
+      // once and offer again to the next page in this tab (same room) instead of waiting ~30 s
+      if (global.addEventListener) global.addEventListener('pagehide', () => { for (const p of peers.values()) { try { if (p.ctl && p.ctl.readyState === 'open') p.ctl.send(JSON.stringify({ t: 'bye' })); } catch (e) { /* gone */ } closePc(p); } });
       watchJoins();
       tickUi();
     }).catch(e => console.warn('[mimic-link]', e));

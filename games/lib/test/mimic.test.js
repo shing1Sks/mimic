@@ -272,6 +272,35 @@ const tests = {
     assert(maxPlain > 0.15, 'the short-way arm does jump (' + maxPlain.toFixed(3) + ' m)');
     assert(maxCont < 0.03, 'continuous arm steps at most ' + maxCont.toFixed(3) + ' m');
   },
+  singlePlayerUsesWhicheverPhoneIsSending() {
+    // the app's Bluetooth pad is paired but idle (app in the background), a browser phone moves
+    const idle = mkPad(0), web = mkPad(1); web.id = 'Mimic Web Android (Vendor: 038f Product: 1200)';
+    web.set(phoneQ([1, 0, 0], 30), GRIP);
+    const ctx = load(undefined, () => [idle, web]);
+    const mc = new ctx.MimicController();
+    mc.update(1);
+    assert(mc.connected && mc.via === 'browser', 'reads the browser phone: ' + mc.connected + ' ' + mc.via);
+    const slots = ctx.MimicController.all();
+    slots.forEach(c => c.update(2));
+    assert(!slots[0].connected && slots[1].connected, 'multiplayer slots stay one per pad');
+  },
+  keyNamesFollowTheController() {
+    const app = mkPad(0); app.set(phoneQ([1, 0, 0], 30), GRIP);
+    let ctx = load(undefined, () => [app]); let mc = new ctx.MimicController();
+    for (let i = 0; i < 8; i++) { clock.t += 8; app.set(phoneQ([1, 0, 0], 30 + i), GRIP); mc.update(clock.t); }
+    assert(mc.mode === 'grip' && mc.via === 'app', mc.mode + ' ' + mc.via);
+    assert(mc.keyName('a') === 'Vol Down' && mc.keyName('b') === 'Vol Up' && mc.keyName('center') === 'CENTRE', 'app grip names ' + mc.keyName('a'));
+    const web = mkPad(0); web.id = 'Mimic Web Android (Vendor: 038f Product: 1200)'; web.set(phoneQ([1, 0, 0], 30), GRIP);
+    ctx = load(undefined, () => [web]); mc = new ctx.MimicController();
+    for (let i = 0; i < 8; i++) { clock.t += 8; web.set(phoneQ([1, 0, 0], 30 + i), GRIP); mc.update(clock.t); }
+    assert(mc.keyName('a') === 'HOLD' && mc.keyName('b') === 'B' && mc.keyName('one') === 'SWITCH', 'browser grip names ' + mc.keyName('a'));
+    const wand = mkPad(0); wand.set(phoneQ([1, 0, 0], 30), WAND);
+    ctx = load(undefined, () => [wand]); mc = new ctx.MimicController();
+    for (let i = 0; i < 8; i++) { clock.t += 8; wand.set(phoneQ([1, 0, 0], 30 + i), WAND); mc.update(clock.t); }
+    assert(mc.keyName('a') === 'A' && mc.keyName('center') === 'Center', 'wand names ' + mc.keyName('a'));
+    ctx = load(undefined, () => []); mc = new ctx.MimicController(); mc.update(1);
+    assert(mc.keyName('a') === 'left click', 'mouse names ' + mc.keyName('a'));
+  },
 };
 
 (async () => {

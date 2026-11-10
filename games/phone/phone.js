@@ -118,6 +118,7 @@
       if (typeof m.rtt === 'number') { S.rtt = m.rtt; statusText(); }
     } else if (m.t === 'welcome') { S.player = m.player; statusText(); }
     else if (m.t === 'rumble') rumble(m.s, m.ms, m.p);
+    else if (m.t === 'bye') { C.retry = 0; lost(); }   // the game page is changing: offer again right away
   }
   addEventListener('pagehide', () => { if (C.signal && C.sid) navigator.sendBeacon && navigator.sendBeacon(`${SIG.replace(/\/+$/, '')}/${room}`, new Blob([JSON.stringify({ from: me, to: 'host', type: 'bye', data: { sid: C.sid } })], { type: 'text/plain' })); });
 
@@ -321,11 +322,11 @@
   /** Grip: one hand, the phone in a fist. Centre on top, a huge hold area, B and Switch below. */
   function layoutGrip(W, H) {
     const g = 12, cH = 60, bH = Math.min(96, Math.max(70, H * 0.14));
-    addCtl('center', 'CENTRE', 'games say: hold Vol Up', 'centre', { x: 0, y: 0, w: W, h: cH });
-    addCtl('a', 'HOLD', 'fire · grip · swing<br>games call this Vol Down', 'hold', { x: 0, y: cH + g, w: W, h: H - cH - bH - 2 * g });
+    addCtl('center', 'CENTRE', 'aim straight from here', 'centre', { x: 0, y: 0, w: W, h: cH });
+    addCtl('a', 'HOLD', 'fire · grip · swing', 'hold', { x: 0, y: cH + g, w: W, h: H - cH - bH - 2 * g });
     const half = (W - g) / 2;
-    addCtl('b', 'B', 'Vol Up tap', 'mid', { x: 0, y: H - bH, w: half, h: bH });
-    addCtl('one', 'SWITCH', 'Vol Up double tap', 'sm', { x: half + g, y: H - bH, w: half, h: bH });
+    addCtl('b', 'B', 'pause · back', 'mid', { x: 0, y: H - bH, w: half, h: bH });
+    addCtl('one', 'SWITCH', 'next weapon · mode', 'sm', { x: half + g, y: H - bH, w: half, h: bH });
   }
 
   /** Wand: like the app (D-pad above, A/B under the thumb, small keys below), Centre on top. */

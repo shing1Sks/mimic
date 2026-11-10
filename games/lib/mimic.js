@@ -178,6 +178,12 @@
     },
   };
 
+  const KEY_NAMES = {
+    grip: { a: 'Vol Down', b: 'Vol Up', center: 'CENTRE', one: 'Vol Up ×2', two: 'flick' },
+    gripWeb: { a: 'HOLD', b: 'B', center: 'CENTRE', one: 'SWITCH', two: 'flick' },
+    wand: { a: 'A', b: 'B', center: 'Center', one: '1', two: '2', home: 'HOME', plus: '+', minus: '−' },
+    mouse: { a: 'left click', b: 'right click', center: 'C', one: '1', two: '2', home: 'H', plus: '+', minus: '-' },
+  };
   /** Wand/Grip pads (12 buttons, >= 6 axes; or "Mimic" with fewer than 16), by gamepad index. */
   function isMotionPad(p) {
     return !!p && p.connected !== false && p.axes.length >= 6 &&
@@ -217,11 +223,15 @@
     constructor(opts) {
       opts = opts || {};
       this.slot = Math.max(0, opts.slot | 0);
+      // no slot asked for (a one-player game): read whichever phone is sending, so an idle app
+      // link (app in the background) never hides a browser phone or a second paired phone
+      this._any = opts.slot === undefined;
       this._continuous = !!opts.continuousArm;
       this._armSt = {};
       this.connected = false;      // a phone is sending
       this.source = this.slot === 0 ? 'mouse' : 'none';   // 'phone' | 'mouse' | 'none' (empty slot > 0)
       this.mode = this.slot === 0 ? 'mouse' : null;       // 'wand' | 'grip' | 'mouse' | null
+      this.via = null;                                    // 'app' (Bluetooth) | 'browser' (phone web page) | null
       this._sig = null;
       this.quat = { x: 0, y: 0, z: 0, w: 1 };          // world orientation
       this.forward = { x: 0, y: 0, z: -1 };            // where the phone's top points (world)
@@ -257,7 +267,7 @@
       const pad = this._findPad();
       let q;
       if (pad) {
-        this.connected = true; this.source = 'phone';
+        this.connected = true; this.source = 'phone'; this.via = /mimic web/i.test(pad.id) ? 'browser' : 'app';
         this._sig = trackSig(pad);
         this.mode = sigKnown(this._sig) && this._sig.code === SIG.GRIP ? 'grip' : 'wand';
         const a = pad.axes;
@@ -269,12 +279,12 @@
         this.accel = rotate(C, rotate({ x, y, z, w }, ap)); // phone frame -> level frame -> world
         NAMES.forEach((n, i) => { this._down[n] = !!(pad.buttons[i] && pad.buttons[i].pressed); });
       } else if (this.slot > 0) {
-        this.connected = false; this.source = 'none'; this.mode = null; this._sig = null;
+        this.connected = false; this.source = 'none'; this.mode = null; this._sig = null; this.via = null;
         q = { x: 0, y: 0, z: 0, w: 1 };
         this.accel = { x: 0, y: G, z: 0 };
         NAMES.forEach(n => { this._down[n] = false; });
       } else {
-        this.connected = false; this.source = 'mouse'; this.mode = 'mouse'; this._sig = null;
+        this.connected = false; this.source = 'mouse'; this.mode = 'mouse'; this._sig = null; this.via = null;
         const m = this._mouse;
         q = fromEuler(-m.x * 0.9, m.y * 0.6, 0);
         this.accel = { x: 0, y: G, z: 0 };
@@ -393,12 +403,24 @@
     pressed(name) { return this._down[name] && !this._prev[name]; }
     released(name) { return !this._down[name] && this._prev[name]; }
 
+    /**
+     * What the player presses for a button, in the words their controller uses: the app's Grip
+     * has only the volume keys, a browser phone's Grip has on-screen HOLD / B / CENTRE / SWITCH,
+     * a Wand has A / B / Center / 1 / 2, the mouse stand-in clicks and keys. For hints and menus.
+     */
+    keyName(b) {
+      if (this.mode === 'mouse') return KEY_NAMES.mouse[b] || b;
+      if (this.mode === 'grip') return (this.via === 'browser' ? KEY_NAMES.gripWeb : KEY_NAMES.grip)[b] || b.toUpperCase();
+      return KEY_NAMES.wand[b] || b.toUpperCase();
+    }
+
     /** Rotate a vector from controller-local space (forward = -Z, face = +Y) to world. */
     toWorld(v) { return rotate(this.quat, v); }
 
     _findPad() {
-      const p = motionPads()[this.slot];
-      return p && sending(p) ? p : null;
+      const pads = motionPads(), p = pads[this.slot];
+      if (p && sending(p)) return p;
+      return this._any ? pads.find(sending) || null : null;
     }
 
     _installFallback() {

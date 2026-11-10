@@ -323,6 +323,9 @@
       scene.add(g); gulls.push(g);
     }
 
+    // everything so far is the world above the waterline: hidden while the camera is in the depths
+    const aboveObjs = scene.children.filter(o => !o.isLight && o !== sun.target);
+
     // ---------------------------------------------------------------- the dock
     const woodTex = canvasTex(512, 128, (g, w, h) => {
       g.fillStyle = '#8a6040'; g.fillRect(0, 0, w, h);
@@ -753,9 +756,9 @@
     // ---------------------------------------------------------------- time of day
     let dayT = -1;
     /** t: 0 golden hour .. 1 the sun on the horizon (dusk). */
-    function setDay(t) {
+    function setDay(t, force) {
       t = Math.max(0, Math.min(1, t));
-      if (Math.abs(t - dayT) < 0.002) return;
+      if (!force && Math.abs(t - dayT) < 0.002) return;
       dayT = t;
       const P = palAt(t);
       const elev = (5.2 - 6.4 * t) * Math.PI / 180;
@@ -850,8 +853,9 @@
       return { x: (_v.x + 1) / 2 * innerWidth, y: (1 - _v.y) / 2 * innerHeight, behind: _v.z > 1 };
     }
     resize();
+    function setAbove(v) { aboveObjs.forEach(o => { o.visible = v; }); }
     return {
-      renderer, scene, camera, DECK_Y, bob, update, render, resize, setQuality, setDay, frameFor, updateCamera, snapCamera, toScreen,
+      renderer, scene, camera, setAbove, lights: { hemi, sun, fill }, DECK_Y, bob, update, render, resize, setQuality, setDay, frameFor, updateCamera, snapCamera, toScreen,
       view, get baseFov() { return baseFov; }, createAngler, removeAngler, poseAngler, drawLine, aim, makeFish, makeShadow, ripple, splash, sparkle,
       shake: v => { shake = Math.max(shake, v); }, get time() { return time; }, sunDir,
     };

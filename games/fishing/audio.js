@@ -220,6 +220,17 @@
       this.env(og, t, 0.002, 0.18, 0.5);
       o.connect(lp); lp.connect(og); og.connect(this.sfxBus); o.start(t); o.stop(t + 0.6);
     }
+    /** Passing into a new zone: a deep, slow bell that sinks away. */
+    zone() {
+      if (!this.ctx) return;
+      const c = this.ctx, t = c.currentTime;
+      [110, 164.8, 220.5].forEach((f, i) => {
+        const o = c.createOscillator(), g = c.createGain();
+        o.type = 'sine'; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 0.94, t + 2.5);
+        this.env(g, t + i * 0.04, 0.02, 0.12 / (i + 1), 2.4);
+        o.connect(g); g.connect(this.sfxBus); g.connect(this.verb); o.start(t); o.stop(t + 2.8);
+      });
+    }
     /** The rod groaning under load (the danger zone). */
     creak(level) {
       if (!this.ctx) return;

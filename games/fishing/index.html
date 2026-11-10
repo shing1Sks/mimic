@@ -29,8 +29,14 @@
     <div class="c-weight"><b id="catchKg"></b><span>kg</span><em id="catchCm"></em></div>
     <div class="c-blurb" id="catchBlurb"></div>
     <div class="c-record" id="catchRecord"></div>
+    <div class="choice hidden" id="choice">
+      <button class="nav" id="chSell" data-act="sell"><b>Sell</b><small></small></button>
+      <button class="nav" id="chBait" data-act="keep"><b>Keep as bait</b><small></small></button>
+      <button class="nav" id="chRelease" data-act="release"><b>Release</b><small>luck for rarer fish</small></button>
+    </div>
     <div class="c-next" id="catchNext"></div>
   </div>
+  <div id="gauge" class="hidden"><div class="g-col"><div id="gaugeZones"></div><div id="gaugeLure"><span>0 m</span></div></div></div>
 </div>
 
 <div id="chip" class="mimic-badge"><b>Mimic</b><i></i><span>No phone: mouse</span></div>
@@ -40,15 +46,16 @@
 <section id="title" class="screen">
   <div class="t-left">
     <div class="kicker">A Mimic motion game</div>
-    <h1 class="logo">Tide<span>cast</span></h1>
-    <p class="tagline">Your phone is the rod. Cast it, feel the bite, fight the fish.</p>
+    <h1 class="logo">Tide<span>cast</span><em>Depths</em></h1>
+    <p class="tagline">Your phone is the rod. Cast it, steer the lure into the deep, fight whatever bites, and whatever eats that.</p>
     <div class="menu" id="titleMenu">
-      <button class="mi primary" data-act="calm"><b>Golden Hour</b><small>calm solo fishing, no clock</small></button>
+      <button class="mi primary" data-act="calm"><b>Dive</b><small>cast, steer into the deep, sell what you land, upgrade</small></button>
       <button class="mi" data-act="derby"><b>Sunset Derby</b><small>solo: your heaviest fish before the sun sets</small></button>
-      <button class="mi" data-act="party"><b>Dock Party</b><small>2 to 4 phones side by side on one dock</small></button>
-      <div class="mi-row">
-        <button class="mi" data-act="journal"><b>Fish Journal</b><small id="journalSub">0 of 7 species</small></button>
-        <button class="mi" data-act="settings"><b>Settings</b><small>sound, graphics, hand</small></button>
+      <button class="mi" data-act="party"><b>Dock Party</b><small>2 to 4 phones, one aquarium, fish that eat each other's catch</small></button>
+      <div class="mi-row three">
+        <button class="mi" data-act="shop"><b>Tackle Box</b><small id="shopSub">0 coins</small></button>
+        <button class="mi" data-act="journal"><b>Field Guide</b><small id="journalSub">0 of 15 species</small></button>
+        <button class="mi" data-act="settings"><b>Settings</b><small>sound, hand</small></button>
       </div>
     </div>
     <div class="t-connect">
@@ -63,10 +70,10 @@
     <h3>How to fish</h3>
     <ol class="howto">
       <li><svg viewBox="0 0 24 24"><path d="M5 20L17 4"/><path d="M17 4c3 4 4 9 2 14"/><circle cx="19" cy="19" r="1.6"/></svg><div><b>Cast</b><span id="howCast">Hold A, swing back, snap the rod forward and let go. Harder goes further.</span></div></li>
-      <li><svg viewBox="0 0 24 24"><path d="M3 12h3l2-5 3 10 2-6 2 3h6"/></svg><div><b>Feel</b><span>Light ticks are nibbles. Wait. A heavy thump is the strike.</span></div></li>
-      <li><svg viewBox="0 0 24 24"><path d="M12 21V5M6 11l6-6 6 6"/></svg><div><b>Strike</b><span>Jerk the rod up, hard, right on the thump.</span></div></li>
-      <li><svg viewBox="0 0 24 24"><path d="M4 18c5 0 7-12 16-12"/><path d="M14 6h6v6"/></svg><div><b>Fight</b><span>Let it run, rod high. Reel when it rests, or pump the rod back and reel down.</span></div></li>
-      <li><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 5a7 7 0 0 1 7 7"/><path d="M17 10l2 2 2-2"/></svg><div><b>Reel</b><span id="howReel">Circle the rod tip like a crank, or hold A.</span></div></li>
+      <li><svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20c3-2 5-2 8 0s5 2 8 0"/></svg><div><b>Steer</b><span id="howSteer">Under water the rod is a joystick: tip down dives, turn to bank, level hovers. Hold A to reel up.</span></div></li>
+      <li><svg viewBox="0 0 24 24"><path d="M3 12h3l2-5 3 10 2-6 2 3h6"/></svg><div><b>Feel</b><span>Light ticks are nibbles. A heavy thump is the bite: pull the rod back, hard.</span></div></li>
+      <li><svg viewBox="0 0 24 24"><path d="M4 18c5 0 7-12 16-12"/><path d="M14 6h6v6"/></svg><div><b>Fight</b><span>Let it run, rod high, lean it away from kelp and rocks. Reel when it rests.</span></div></li>
+      <li><svg viewBox="0 0 24 24"><circle cx="9" cy="12" r="3"/><path d="M14 12c2-4 6-5 8-4-1 2-1 6 0 8-2 1-6 0-8-4z"/></svg><div><b>Eat or be eaten</b><span>Big fish swallow what you hook, and then they are on your line.</span></div></li>
     </ol>
     <div class="keys" id="keys"></div>
   </div>
@@ -104,8 +111,8 @@
 
 <!-- ============ JOURNAL ============ -->
 <section id="journal" class="screen hidden">
-  <div class="panel journal-panel">
-    <div class="j-head"><h2>Fish Journal</h2><span id="journalCount"></span></div>
+  <div class="panel journal-panel guide">
+    <div class="j-head"><h2>Field Guide</h2><span id="journalCount"></span></div>
     <div class="species" id="species"></div>
     <div class="row-btns single"><button class="nav" data-act="title">Back</button></div>
   </div>
@@ -121,12 +128,25 @@
   </div>
 </section>
 
+<!-- ============ TACKLE BOX ============ -->
+<section id="shop" class="screen hidden">
+  <div class="box">
+    <div class="box-lid"><h2>Tackle Box</h2><div class="purse"><i></i><b id="shopCoins">0</b> coins</div></div>
+    <div class="box-body">
+      <div class="trays" id="shopTrays"></div>
+      <div class="well"><div class="wl">Bait well</div><div class="baits" id="shopBaits"></div><p>Keep a catch as bait and the fish that eat it come looking. Small fish flee a bait bigger than them.</p></div>
+    </div>
+    <div class="row-btns single"><button class="nav" data-act="shopBack">Close the box</button></div>
+  </div>
+</section>
+
 <!-- ============ PAUSE ============ -->
 <section id="pause" class="screen hidden">
   <div class="panel list-panel">
     <h2>Paused</h2>
     <button class="nav primary" data-act="resume">Resume</button>
     <button class="nav" data-act="restart">Restart</button>
+    <button class="nav" data-act="shop">Tackle box</button>
     <button class="nav" data-act="settings">Settings</button>
     <button class="nav" data-act="end" id="pauseEnd">End round</button>
     <p class="small" id="pauseTip"></p>
@@ -153,8 +173,10 @@
 <script src="../lib/wandcursor.js"></script>
 <script src="logic.js"></script>
 <script src="lobby.js"></script>
+<script src="depths.js"></script>
 <script src="audio.js"></script>
 <script src="scene.js"></script>
+<script src="deep.js"></script>
 <script src="game.js"></script>
 </body>
 </html>

@@ -62,6 +62,13 @@ Updated just before each approved release, not on every change.
   with heights and roofs, roads, rivers, coastlines, parks with trees, airport runways and taxiways,
   city lights at night. Tiles are cached in the browser and requested gently (2 at a time, back-off);
   new Options row "Real-world map detail". The island gets more villages, boats and traffic.
+- **Tidecast: Depths.** The cast becomes a dive: the camera plunges under with the lure and the phone
+  steers it on its line (tip down dives, turn to bank, level hovers, a flick jigs, hold A to reel
+  up; 30-350 m of line). Four zones (sunlit reef, kelp forest over a wreck, bioluminescent twilight,
+  an abyss teaser), 15 fish with schools, ambushers and predators. A pull back sets the hook; a
+  running fish heads for cover and snags unless you lean away, and bigger fish swallow what you've
+  hooked and take over the line. Sell, keep as bait or release; a tackle box of upgrades; a field
+  guide; saved progress. Dock Party becomes a side-on aquarium. Replaces the dock-and-float game.
 - **Tidecast (new):** motion fishing on a golden-hour dock. Cast with a real flick (hold A as a thumb
   on the spool, let go as the rod comes forward: timing and wrist speed set the arc), feel nibbles and
   the strike through the phone, set the hook with an upward jerk, then fight: rod angle against the

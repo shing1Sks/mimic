@@ -522,11 +522,12 @@
       else Tt = cushion(fs.delta) * (pulled + reelLoad) + lift;
       // the reel's drag: above its setting the spool slips and sings instead of the line parting;
       // only a lot more load than that pushes the line itself toward breaking
-      if (Tt > FIGHT.DRAG_LIMIT) {
+      const DL = FIGHT.DRAG_LIMIT + (fs.bonus || 0);
+      if (Tt > DL) {
         slipping = true;
-        fs.line += (Tt - FIGHT.DRAG_LIMIT) * 5 * dt;
+        fs.line += (Tt - DL) * 5 * dt;
         reelIn = 0;
-        Tt = FIGHT.DRAG_LIMIT + (Tt - FIGHT.DRAG_LIMIT) * 0.5;
+        Tt = DL + (Tt - DL) * 0.5;
       }
       if (ddel > 0 && !running) fs.line -= ROD_LEN * 0.65 * ddel;
     } else {
@@ -541,9 +542,10 @@
     fs.maxT = Math.max(fs.maxT, fs.T);
 
     // the line: strain builds above SNAP_T (a second or two of warning), slack runs out the hook
-    if (fs.T > FIGHT.SNAP_T) fs.strain += ((fs.T - FIGHT.SNAP_T) * 3 + 0.36) * dt;
+    const ST = FIGHT.SNAP_T + (fs.bonus || 0);
+    if (fs.T > ST) fs.strain += ((fs.T - ST) * 3 + 0.36) * dt;
     else fs.strain = Math.max(0, fs.strain - 0.5 * dt);
-    fs.danger = fs.T > FIGHT.WARN_T || fs.strain > 0;
+    fs.danger = fs.T > FIGHT.WARN_T + (fs.bonus || 0) || fs.strain > 0;
     // a little sag holds the hook for a while; a loose loop of line loses it fast
     if (fs.T < FIGHT.SLACK_T) fs.slackT += dt * clamp((fs.line - fs.d) / 1.5, 0.4, 1.5);
     else fs.slackT = Math.max(0, fs.slackT - 2 * dt);

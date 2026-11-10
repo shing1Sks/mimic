@@ -178,5 +178,3 @@ body.nocursor, body.nocursor * { cursor: none !important; }
 #lineup .lu-dots i.on { background: var(--ember-2); border-color: var(--ember-2); }
 #lineup .lu-skip { position: absolute; right: 12px; bottom: 12px; padding: 4px 12px; border-radius: 12px; border: 1px solid var(--line); background: transparent; color: var(--ink-dim); font: 600 12px var(--font); letter-spacing: .1em; cursor: pointer; }
 @media (max-width: 760px) { #lineup { top: auto; bottom: 84px; right: 50%; transform: translateX(50%); width: min(420px, calc(100vw - 32px)); } }
-.pp-join { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
-.pp-join [data-mimic-join] { flex: none; }

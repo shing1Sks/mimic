@@ -121,6 +121,47 @@ const tests = {
     }
     assert(ate >= 6, ate + '/10');
   },
+  ambushersHangStillThenLunge() {
+    // a pike that has seen the lure stops a few metres off, holds, then covers the gap fast
+    const rng = L.rng32(7), f = D.spawnFish(D.byId('pike'), 0, -30, -24, rng), l = lure({ y: -30, z: -20, claimed: f.id });
+    f.state = 'approach'; f.lure = l.id;
+    const seen = []; let struck = false, hoverSpeed = 9, lungeSpeed = 0;
+    for (let t = 0; t < 12 && !struck; t += 1 / 60) {
+      const ev = D.stepFish(f, 1 / 60, { lures: [l], fish: [f] }, rng);
+      if (seen[seen.length - 1] !== f.state) seen.push(f.state);
+      if (f.state === 'hover') hoverSpeed = Math.min(hoverSpeed, f.speed);
+      if (f.state === 'lunge') lungeSpeed = Math.max(lungeSpeed, f.speed);
+      struck = ev.some(e => e.type === 'strike');
+    }
+    assert(struck, seen.join('>'));
+    assert(seen.indexOf('hover') >= 0 && seen.indexOf('lunge') > seen.indexOf('hover'), seen.join('>'));
+    assert(hoverSpeed < 0.3 && lungeSpeed > 3, hoverSpeed.toFixed(2) + ' / ' + lungeSpeed.toFixed(2));
+  },
+  predatorsCircleBeforeTheyStrike() {
+    for (let s = 1; s <= 5; s++) {
+      const rng = L.rng32(s), pike = D.spawnFish(D.byId('pike'), 3, -30, -20, rng), small = D.spawnFish(D.byId('perch'), 0, -30, -20, rng);
+      const hooked = [{ lure: 1, fish: small, x: 0, y: -30, z: -20, struggle: 1 }];
+      pike.state = 'chase'; pike.preyFish = small; pike.t = 7;
+      let t = 0, ate = false;
+      for (; t < 7 && !ate; t += 1 / 60) ate = D.stepFish(pike, 1 / 60, { lures: [], fish: [pike], hooked }, rng).some(e => e.type === 'eat');
+      assert(ate && t > 1.5, 'seed ' + s + ': ate=' + ate + ' at ' + t.toFixed(2) + ' s');
+    }
+  },
+  schoolsScatterFromAPredatorAndRegroup() {
+    const rng = L.rng32(5), sch = D.spawnSchool(D.byId('mackerel'), 0, -8, -20, rng);
+    const tarpon = D.spawnFish(D.byId('tarpon'), 200, -8, -20, rng), all = sch.concat([tarpon]);
+    for (let t = 0; t < 4; t += 1 / 60) for (const f of sch) D.stepFish(f, 1 / 60, { lures: [], fish: all }, rng);
+    const lead = sch[0];
+    tarpon.x = lead.x; tarpon.y = lead.y; tarpon.z = lead.z + 2;
+    let scattered = 0;
+    for (let t = 0; t < 1; t += 1 / 60) for (const f of sch) if (D.stepFish(f, 1 / 60, { lures: [], fish: all }, rng).some(e => e.type === 'scatter')) scattered++;
+    assert(scattered >= sch.length / 2, scattered + ' of ' + sch.length);
+    tarpon.x = 500;   // gone: they gather again
+    for (let t = 0; t < 8; t += 1 / 60) for (const f of sch) D.stepFish(f, 1 / 60, { lures: [], fish: all }, rng);
+    assert(sch.every(f => f.state === 'swim'));
+    const spread = Math.max(...sch.map(f => Math.hypot(f.x - lead.x, f.y - lead.y, f.z - lead.z)));
+    assert(spread < 9, 'spread ' + spread.toFixed(1));
+  },
   smallFishNeverEatBigOnes() {
     const rng = L.rng32(3), perch = D.spawnFish(D.byId('perch'), 1, -10, -20, rng), pike = D.spawnFish(D.byId('pike'), 0, -10, -20, rng);
     const hooked = [{ lure: 1, fish: pike, x: 0, y: -10, z: -20, struggle: 1 }];

@@ -18,13 +18,18 @@ canvas#gl { position: fixed; inset: 0; width: 100vw; height: 100vh; display: blo
 #vignette { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 45%, rgba(0,0,0,0) 55%, rgba(20,8,24,0.55) 100%); }
 #flash { position: fixed; inset: 0; pointer-events: none; background: #fff6e0; opacity: 0; }
 #uw { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity .25s;
-  background: radial-gradient(ellipse at 50% 0%, rgba(200,250,255,0.18) 0%, rgba(0,0,0,0) 45%), radial-gradient(ellipse at 50% 55%, rgba(0,0,0,0) 50%, var(--uwEdge, rgba(0,20,30,0.55)) 100%); }
+  background: linear-gradient(180deg, rgba(190,245,255,0.14) 0%, rgba(0,0,0,0) 32%, rgba(0,0,0,0) 72%, var(--uwEdge, rgba(0,20,30,0.45)) 100%); }
 body.under #uw { opacity: 1; }
 body.under #vignette { opacity: 0; }
 #waterline { position: fixed; inset: 0; pointer-events: none; opacity: 0; }
-#waterline.plunge { animation: plunge .7s ease-out; background: radial-gradient(circle at 30% 40%, rgba(255,255,255,0.7) 0 2%, transparent 3%), radial-gradient(circle at 70% 60%, rgba(255,255,255,0.6) 0 1.5%, transparent 2.5%), radial-gradient(circle at 55% 25%, rgba(255,255,255,0.55) 0 1%, transparent 2%), linear-gradient(180deg, rgba(230,250,255,0.85), rgba(60,170,200,0.6)); backdrop-filter: blur(6px); }
-#waterline.breach { animation: plunge .8s ease-out; background: radial-gradient(circle at 20% 30%, rgba(255,255,255,0.6) 0 3%, transparent 4%), radial-gradient(circle at 80% 20%, rgba(255,255,255,0.5) 0 2%, transparent 3%), radial-gradient(circle at 60% 70%, rgba(255,255,255,0.5) 0 2.5%, transparent 3.5%), linear-gradient(180deg, rgba(255,240,220,0.5), rgba(255,255,255,0.2)); backdrop-filter: blur(4px); }
-@keyframes plunge { 0% { opacity: 1; } 100% { opacity: 0; } }
+/* the waterline itself sweeping across the lens: a bright meniscus with green-blue water behind it */
+#waterline.plunge, #waterline.breach { background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0) 41%, rgba(240,253,255,0.75) 47%, rgba(255,255,255,0.9) 48.5%, rgba(110,205,225,0.55) 51%, rgba(40,140,170,0.32) 58%, rgba(40,140,170,0) 70%, rgba(40,140,170,0) 100%); background-size: 100% 300%; }
+#waterline.plunge { animation: wlUp .5s ease-in forwards; }
+#waterline.breach { animation: wlDown .55s ease-out forwards; }
+#waterline.breach::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, rgba(255,255,255,0) 0 37px, rgba(235,250,255,0.35) 38px 40px, rgba(255,255,255,0) 41px 89px); animation: run .9s ease-in forwards; }
+@keyframes wlUp { 0% { opacity: 1; background-position: 0 0%; } 85% { opacity: 1; } 100% { opacity: 0; background-position: 0 100%; } }
+@keyframes wlDown { 0% { opacity: 1; background-position: 0 100%; } 85% { opacity: 1; } 100% { opacity: 0; background-position: 0 0%; } }
+@keyframes run { 0% { transform: translateY(-30%); opacity: 0.9; } 100% { transform: translateY(40%); opacity: 0; } }
 #flash.go { animation: flash .6s ease-out; }
 @keyframes flash { 0% { opacity: 0.85; } 100% { opacity: 0; } }
 button { font-family: var(--font); color: inherit; }
@@ -182,16 +187,6 @@ body.paused #cards, body.paused #floats, body.paused #catch, body.catching #card
 .card .what { font-size: 14px; letter-spacing: 0.04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card .what.hot { color: var(--gold); }
 .card .what.bad { color: var(--coral); }
-.card .bars { margin-top: 8px; display: flex; flex-direction: column; gap: 5px; }
-.bar { position: relative; height: 9px; border-radius: 5px; background: rgba(255,255,255,0.1); overflow: hidden; }
-.bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 5px; }
-.bar.tension i { background: linear-gradient(90deg, #5fd6c8 0%, #ffd27a 60%, #ff5a3c 92%); background-size: var(--w, 100%) 100%; }
-.bar.tension::after { content: ""; position: absolute; left: 92%; top: -2px; bottom: -2px; width: 2px; background: rgba(255,90,60,0.9); }
-.bar.tension.danger { animation: danger .18s infinite alternate; }
-@keyframes danger { to { box-shadow: 0 0 12px rgba(255,90,60,0.9); } }
-.bar.slack i { background: #7aa6ff; }
-.bar.energy { height: 5px; }
-.bar.energy i { background: var(--c); opacity: 0.85; }
 .blabel { display: flex; justify-content: space-between; font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--dim); }
 .card.idle .bars { opacity: 0.45; }
 .card .hint { margin-top: 7px; font-size: 12px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -274,7 +269,6 @@ body.playing .mimic-badge { display: none; }
 .choice .nav.focus { border-color: var(--gold); background: rgba(255,210,122,0.16); box-shadow: 0 0 16px rgba(255,200,90,0.3); }
 .choice .nav.disabled { opacity: 0.4; }
 #catch { width: min(380px, 32vw); pointer-events: auto; }
-.card .bars { display: none !important; }
 #rodg { position: absolute; right: 18px; bottom: 12px; width: 260px; height: 210px; pointer-events: none; }
 #gauge { position: absolute; right: 22px; top: 50%; transform: translateY(-50%); height: min(58vh, 460px); width: 140px; pointer-events: none; opacity: 0.35; transition: opacity .4s; }
 #gauge.under { opacity: 1; }

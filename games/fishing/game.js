@@ -79,7 +79,7 @@
   const PR_MAX = Math.min(window.devicePixelRatio || 1, 1.25), PR_MIN = Math.min(PR_MAX, 0.6), PR_LOW = Math.min(PR_MAX, 0.85);
   const dyn = { pr: PR_MAX, t: 0, n: 0, sum: 0, q: 2, lowN: 0, fps: 60 };
   function setPR(pr) { if (Math.abs(pr - dyn.pr) > 1e-3) { dyn.pr = pr; W.renderer.setPixelRatio(pr); W.resize(); } }
-  function setQ(q) { if (q !== dyn.q) { dyn.q = q; W.setQuality(q); } }
+  function setQ(q) { if (q !== dyn.q) { dyn.q = q; W.setQuality(q); if (deep) deep.setLow(q === 0); } }   // low: no meadow, anemones or shells either
   function dynResolution(rdt) {
     dyn.t += rdt; dyn.n++; dyn.sum += rdt;
     if (dyn.t < 1) return;
@@ -263,7 +263,7 @@
       rumble(p, 0.7, 200, 2, true);
       rec('chase', { p: p.i, sp: e.fish.sp.id, prey: e.prey.sp.id });
     } else if (e.type === 'eat') {
-      if (p.st === 'fight' && p.fish === e.prey) swallowed(p, e.fish);
+      if (p.st === 'fight' && p.fish === e.prey) { swallowed(p, e.fish); if (p.fpos && p.fpos.y < -55) deep.spark(p.fpos, 60, 2.4); }
     }
   }
 
@@ -429,6 +429,7 @@
   /** A predator took the hooked fish: the fight carries on with the predator, deep-hooked and angry. */
   function swallowed(p, pred) {
     const prey = p.fish;
+    p.quietUntil = performance.now() + 2500;
     deep.puff(p.fpos, 0xfff0d0, 2.6); deep.bubble(p.fpos, 26, 1.2);
     if (prey.model) { deep.removeObj(prey.model); prey.model = null; }
     sess.deepFish = sess.deepFish.filter(x => x !== pred); pred.state = 'hooked';
@@ -562,6 +563,11 @@
         if (p.st === 'dive' && tipS > 2.5 && p.jerkCool <= 0) { p.jerkCool = 0.45; l.twitch = 0; p.dive.twitches++; deep.bubble(lu, 5, 0.2); synth.plip(0.6); }
         if (c.pressed('center')) { D.setNeutral(lu, f); float(p, new T.Vector3(lu.x, lu.y + 0.6, lu.z), 'Re-centred', 'hold the rod like this and the lure just sinks', 'cast'); }
         const r = D.steerLure(lu, { f, reel, tip }, dt);
+        if (lu.depth > 55) {
+          const lv = Math.hypot(lu.vx, lu.vy, lu.vz);
+          if (Math.random() < dt * (3 + lv * 16)) deep.spark(lu, 1 + (lv > 1.4 ? 2 : 0), 0.4);
+          if (p.st === 'dive' && tipS > 2.5 && p.jerkCool > 0.4) deep.spark(lu, 26, 1.6);
+        }
         p.dive.t += dt; p.dive.dp += Math.abs(Math.asin(clamp(f.y, -1, 1)) - lu.np) * dt; p.dive.dy += Math.abs(L.wrap(Math.atan2(f.x, -f.z) - lu.ny)) * dt;
         Object.assign(l, { x: lu.x, y: lu.y, z: lu.z, active: true, moving: Math.hypot(lu.vx, lu.vy, lu.vz), light: g.light, bait: p.bait });
         if (reel > 0) { p.clickAcc += reel * dt * 7; while (p.clickAcc > 1) { p.clickAcc--; synth.click(0.5); } }
@@ -747,6 +753,9 @@
     p.clickAcc += reel * dt * 7;
     while (p.clickAcc > 1) { p.clickAcc--; synth.click(0.5); }
     // the line in your hand: a hum rising with the load, hammering pulses in the danger zone
+    p.rumT = (p.rumT || 0) - dt;
+    if (fs.slipping && p.rumT <= 0) { p.rumT = 0.09; rumble(p, 0.45, 25, 0, true); }   // the drag clicking off
+    else if (fs.phase === 'thrash' && p.rumT <= 0) { p.rumT = 0.22; rumble(p, 0.75, 45, 2, true); }
     if (fs.danger) rumble(p, 1, 120, 3);
     else if (fs.T > 0.15) rumble(p, 0.1 + 0.75 * Math.pow(fs.T, 1.3), 140, 1);
     if (fs.danger) {
@@ -763,7 +772,7 @@
   let synthStrainMax = 0;
   /** A message over the fish, at most once per key per fight. */
   function say(p, key, text, sub, big) {
-    if (p.said[key]) return;
+    if (p.said[key] || performance.now() < (p.quietUntil || 0)) return;   // nothing talks over a banner moment
     p.said[key] = true;
     float(p, (p.fpos || p.a.tip).clone().add(new T.Vector3(0, 1, 0)), text, sub, big ? 'big' : '');
   }
@@ -822,7 +831,7 @@
       const el = document.createElement('div');
       el.className = 'card'; el.style.setProperty('--c', p.color);
       el.innerHTML = `<div class="top"><span class="who">${sess.players.length > 1 ? p.name : 'YOU'}</span><span class="best"></span></div>
-        <div class="what"></div><div class="bars"><div class="blabel"><span>line</span><span class="lv"></span></div><div class="bar tension"><i></i></div><div class="bar energy"><i></i></div></div><div class="hint"></div>`;
+        <div class="what"></div><div class="hint"></div>`;
       box.appendChild(el); p.card = el; p.cardKey = '';
     }
     $('board').innerHTML = '';
@@ -907,23 +916,6 @@
         p.card.querySelector('.hint').innerHTML = cs.hint;
         p.card.querySelector('.best').innerHTML = best;
         p.card.classList.toggle('idle', !cs.bars);
-      }
-      if (!cs.bars && p.card.dataset.idle !== '1') {
-        p.card.dataset.idle = '1';
-        p.card.querySelector('.bar.tension i').style.width = '0%'; p.card.querySelector('.bar.energy i').style.width = '0%';
-        p.card.querySelector('.bar.tension').classList.remove('danger', 'slack');
-        p.card.querySelector('.lv').textContent = 'no fish on';
-      }
-      if (cs.bars && p.fight) {
-        p.card.dataset.idle = '';
-        const fs = p.fight, tb = p.card.querySelector('.bar.tension');
-        const tw = clamp(fs.T, 0, 1.1) / 1.1 * 100;
-        tb.firstChild.style.width = tw.toFixed(1) + '%';
-        tb.firstChild.style.setProperty('--w', (100 / Math.max(0.01, tw / 100)).toFixed(0) + '%');
-        tb.classList.toggle('danger', fs.danger);
-        tb.classList.toggle('slack', fs.slackT > 0.3);
-        p.card.querySelector('.bar.energy i').style.width = (fs.S * 100).toFixed(1) + '%';
-        p.card.querySelector('.lv').textContent = p.snagSt.meter > 0.35 ? 'snagging' : fs.slackT > 0.3 ? 'slack' : fs.danger ? 'breaking' : 'fish energy below';
       }
     }
   }
@@ -1424,8 +1416,9 @@
       // ride up with it and break the surface together
       shot.pos.set(p.fpos.x + 1.6, p.fpos.y - 0.4, p.fpos.z + 2.4); shot.look.set(p.fpos.x, p.fpos.y + 0.2, p.fpos.z); shot.speed = 7;
     } else if (p.st === 'fight' && p.fpos) {
-      const fp = p.fpos, dx = p.hk.ox - fp.x, dz = p.hk.oz - fp.z, dl = Math.hypot(dx, dz) || 1, far = 2.8 + p.fish.cm / 45;
-      shot.pos.set(fp.x + dx / dl * far * 0.55 + (-dz / dl) * far * 0.75, Math.min(-1.8, fp.y + 1.1), fp.z + dz / dl * far * 0.55 + (dx / dl) * far * 0.75);
+      // from your side of the line, looking out along it: its left is your left, so "lean it LEFT" reads on screen
+      const fp = p.fpos, dx = p.hk.ox - fp.x, dz = p.hk.oz - fp.z, dl = Math.hypot(dx, dz) || 1, far = 2.4 + p.fish.cm / 55;
+      shot.pos.set(fp.x + dx / dl * far * 0.9 + (-dz / dl) * far * 0.2, Math.min(-1.8, fp.y + 1.2), fp.z + dz / dl * far * 0.9 + (dx / dl) * far * 0.2);
       shot.look.set(fp.x, fp.y + 0.3, fp.z); shot.speed = 2.6; shot.fov = base * 1.05;
     } else return null;
     return shot;
@@ -1514,6 +1507,14 @@
       f.state = 'chase'; f.preyFish = p.fish; f.t = 8; f.cool = 0;
       p.forcedHunter = f;
       return true;
+    },
+    /** Send one fish straight at player i's lure from dist m ahead (watch it come in). */
+    approach(i, species, dist) {
+      const p = sess.players[i || 0], lu = p.lureD; if (!lu || p.st !== 'dive') return null;
+      sess.deepFish.forEach(f => { if (f.lure === p.lure.id) { f.state = 'swim'; f.lure = -1; } });
+      const f = spawnDeep(D.byId(species), lu.x + Math.sin(lu.heading) * dist, lu.y, lu.z - Math.cos(lu.heading) * dist, true);
+      f.state = 'approach'; f.lure = p.lure.id; p.lure.claimed = f.id; f.cool = 0;
+      return f.state;
     },
     castAt(i, d, heading) {   // splash the lure at d metres, heading rad (as if cast)
       const p = sess.players[i || 0], l = p.lure;

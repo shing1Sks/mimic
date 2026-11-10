@@ -14,8 +14,8 @@
 
   // ------------------------------------------------------------------ zones
   const ZONES = [
-    { id: 'reef', name: 'Sunlit Reef', top: 0, bottom: 20, fog: '#2f9fb2', deep: '#2a8aa0', density: 0.022, light: 1.0 },
-    { id: 'kelp', name: 'Kelp Forest', top: 20, bottom: 60, fog: '#1d5a4c', deep: '#143f3a', density: 0.034, light: 0.5 },
+    { id: 'reef', name: 'Sunlit Reef', top: 0, bottom: 20, fog: '#3aaaba', deep: '#17668c', density: 0.022, light: 1.0 },
+    { id: 'kelp', name: 'Kelp Forest', top: 20, bottom: 60, fog: '#1f5e52', deep: '#0f3a3c', density: 0.034, light: 0.5 },
     { id: 'twilight', name: 'Twilight', top: 60, bottom: 200, fog: '#0c1d38', deep: '#060e22', density: 0.05, light: 0.12 },
     { id: 'abyss', name: 'The Abyss', top: 200, bottom: 400, fog: '#03050c', deep: '#010206', density: 0.07, light: 0.0 },
   ];
@@ -252,10 +252,22 @@
     }
     let tx = null, ty = null, tz = null, spd = sp.cruise * 0.7;
     const go = (x, y, z, s) => { tx = x; ty = y; tz = z; spd = s; };
-    if (f.state === 'swim') {
+    if (f.state === 'swim' && sp.school && world.fish) {
+      f.scanT = (f.scanT || rng() * 0.3) - dt;
+      if (f.scanT <= 0) {
+        f.scanT = 0.3;
+        const pr = world.fish.find(o => o !== f && o.sp.eats && o.sp.eats.includes(sp.cls) && o.sp.cls > sp.cls && Math.hypot(o.x - f.x, o.y - f.y, o.z - f.z) < 6);
+        if (pr) { f.state = 'scatter'; f.t = 1 + rng() * 1; f.h = Math.atan2(f.x - pr.x, -(f.z - pr.z)) + (rng() - 0.5) * 1.4; f.speed = sp.speed * 1.4 + 1; f.vy = (rng() - 0.5) * 2; ev.push({ type: 'scatter', fish: f }); }
+      }
+    }
+    if (f.state === 'scatter') {
+      go(f.x + Math.sin(f.h) * 6, f.y + f.vy, f.z - Math.cos(f.h) * 6, sp.speed * 1.4 + 1);
+      if (f.t <= 0) f.state = 'swim';   // and drift back into formation round the leader
+    } else if (f.state === 'swim') {
       if (f.leader && f.leader.state !== 'gone') {   // school: hold a place beside the leader
         const ld = f.leader;
-        go(ld.x + f.off.x, ld.y + f.off.y, ld.z + f.off.z, Math.max(0.5, ld.speed * 1.15 + 0.3));
+        const gap = Math.hypot(ld.x + f.off.x - f.x, ld.z + f.off.z - f.z);   // stragglers hurry back into place
+        go(ld.x + f.off.x, ld.y + f.off.y, ld.z + f.off.z, Math.max(0.5, ld.speed * 1.15 + 0.3 + Math.min(2.5, gap * 0.3)));
       } else if (sp.ambush && f.cover) {
         go(f.cover.x + Math.sin(f.phase * 0.1) * 0.6, f.cover.y, f.cover.z + Math.cos(f.phase * 0.1) * 0.6, 0.3);
       } else {
@@ -290,12 +302,24 @@
           if (h.fish === f || !sp.eats.includes(h.fish.sp.cls) || sp.cls <= h.fish.sp.cls) continue;
           const d = Math.hypot(h.x - f.x, h.y - f.y, h.z - f.z);
           if (d < sp.senseR * 1.6 && -h.y >= sp.dmin - 6 && -h.y <= sp.dmax + 10 && rng() < dt * (0.25 + (h.struggle || 0) * 0.5)) {
-            f.state = 'chase'; f.preyFish = h.fish; f.t = 6; ev.push({ type: 'chase', fish: f, prey: h.fish, lure: h.lure }); break;
+            f.state = 'chase'; f.preyFish = h.fish; f.t = 7; f.circle = undefined; ev.push({ type: 'chase', fish: f, prey: h.fish, lure: h.lure }); break;
           }
         }
       }
-    } else if ((f.state === 'approach' || f.state === 'nibble') && L && L.claimed !== f.id) {
+    } else if ((f.state === 'approach' || f.state === 'nibble' || f.state === 'hover' || f.state === 'lunge') && L && L.claimed !== f.id) {
       f.state = 'swim'; f.lure = -1; f.cool = 4;   // another fish got there first
+    } else if (f.state === 'approach' && L && sp.ambush && Math.hypot(L.x - f.x, L.y - f.y, L.z - f.z) < 3.2) {
+      f.state = 'hover'; f.t = 0.9 + rng() * 1.3;   // an ambusher stops dead and eyes it
+    } else if (f.state === 'hover' && L) {
+      // hanging still, nose on the lure, edging closer...
+      go(L.x, L.y, L.z, 0.06); f.speed *= Math.max(0, 1 - dt * 4);
+      if (f.t <= 0) { f.state = 'lunge'; f.t = 1.5; f.speed = sp.speed * 2 + 2; f.h = Math.atan2(L.x - f.x, -(L.z - f.z)); }
+    } else if (f.state === 'lunge' && L) {
+      // ...then it goes, all at once
+      const d = Math.hypot(L.x - f.x, L.y - f.y, L.z - f.z);
+      go(L.x, L.y, L.z, sp.speed * 2 + 2); f.speed = Math.max(f.speed, sp.speed * 1.6 + 1.5);
+      if (d < 0.9) { f.state = 'strike'; f.t = sp.window; ev.push({ type: 'strike', fish: f, lure: L }); }
+      else if (f.t <= 0) { f.state = 'swim'; f.lure = -1; L.claimed = -1; f.cool = 5; ev.push({ type: 'lose', fish: f }); }
     } else if (f.state === 'approach' && L) {
       const d = Math.hypot(L.x - f.x, L.y - f.y, L.z - f.z);
       go(L.x, L.y, L.z, d > 3 ? Math.max(sp.cruise * 1.3 + 0.6, (L.moving || 0) + 1.2) : Math.max(0.9, (L.moving || 0) + 0.4));
@@ -315,11 +339,19 @@
       if (f.t <= 0) { L.claimed = -1; ev.push({ type: 'miss', fish: f, lure: L }); f.state = 'flee'; f.t = 2.2; f.cool = 8; f.lure = -1; }
     } else if (f.state === 'chase') {
       const h = (world.hooked || []).find(x => x.fish === f.preyFish);
-      if (!h || f.t <= 0) { f.state = 'swim'; f.preyFish = null; f.cool = 6; }
+      if (!h || f.t <= 0) { f.state = 'swim'; f.preyFish = null; f.cool = 6; f.circle = undefined; }
       else {
         const d = Math.hypot(h.x - f.x, h.y - f.y, h.z - f.z);
-        go(h.x, h.y, h.z, sp.speed * 1.1 + 1);
-        if (d < 1 + f.cm / 200) { ev.push({ type: 'eat', fish: f, prey: h.fish, lure: h.lure }); f.state = 'gone'; }
+        if (f.circle === undefined) { f.circle = 1.6 + rng() * 1.6; f.orb = Math.atan2(f.z - h.z, f.x - h.x); }
+        if (f.circle > 0) {
+          // it sizes the struggling fish up: a wide slow circle, closing
+          f.circle -= dt; f.orb += dt * (1.1 + 2 / (3 + f.cm / 60));
+          const R = 2.2 + f.cm / 90 + f.circle * 0.6;
+          go(h.x + Math.cos(f.orb) * R, h.y + 0.4, h.z + Math.sin(f.orb) * R, sp.speed * 0.7 + 0.8);
+        } else {
+          go(h.x, h.y, h.z, sp.speed * 1.7 + 2); f.speed = Math.max(f.speed, sp.speed * 1.4 + 1.5);
+          if (d < 1 + f.cm / 200) { ev.push({ type: 'eat', fish: f, prey: h.fish, lure: h.lure }); f.state = 'gone'; }
+        }
       }
     } else if (f.state === 'flee') {
       go(f.x + Math.sin(f.h) * 6, f.y, f.z - Math.cos(f.h) * 6, sp.speed * 0.8);

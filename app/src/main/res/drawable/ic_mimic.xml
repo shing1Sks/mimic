@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Mimic octopus. Master: docs/brand/mimic-octopus.svg -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp" android:height="96dp" android:viewportWidth="120" android:viewportHeight="120">
+    <group >
+        <path android:pathData="M34,68 C28,82 18,84 16,94 C15,101 23,103 25,97" android:strokeColor="#5EE6D0" android:strokeWidth="7" android:strokeLineCap="round" android:fillColor="#00000000"/>
+        <path android:pathData="M50,72 C50,86 42,92 44,101" android:strokeColor="#5EE6D0" android:strokeWidth="7" android:strokeLineCap="round" android:fillColor="#00000000"/>
+        <path android:pathData="M70,72 C70,86 78,92 76,101" android:strokeColor="#5EE6D0" android:strokeWidth="7" android:strokeLineCap="round" android:fillColor="#00000000"/>
+        <path android:pathData="M86,68 C92,82 102,84 104,94 C105,101 97,103 95,97" android:strokeColor="#5EE6D0" android:strokeWidth="7" android:strokeLineCap="round" android:fillColor="#00000000"/>
+        <path android:pathData="M28,64 C28,38 42,20 60,20 C78,20 92,38 92,64 C92,70 86,72 80,70 C74,68 68,72 60,72 C52,72 46,68 40,70 C34,72 28,70 28,64 Z" android:fillColor="#5EE6D0"/>
+        <path android:pathData="M42,50 a7,7 0 1,0 14,0 a7,7 0 1,0 -14,0 Z M64,50 a7,7 0 1,0 14,0 a7,7 0 1,0 -14,0 Z" android:fillColor="#0A0B0D"/>
+        <path android:pathData="M49.3,47.5 a2.2,2.2 0 1,0 4.4,0 a2.2,2.2 0 1,0 -4.4,0 Z M71.3,47.5 a2.2,2.2 0 1,0 4.4,0 a2.2,2.2 0 1,0 -4.4,0 Z" android:fillColor="#E8EAEE"/>
+    </group>
+</vector>

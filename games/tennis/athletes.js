@@ -96,10 +96,11 @@
     racket.traverse(m => { if (m.isMesh) m.castShadow = true; });
     const mixer = new T.AnimationMixer(model);
     const act = n => { const c = clipOf(g, n); if (!c) return null; const a = mixer.clipAction(c); a.play(); a.setEffectiveWeight(0); return a; };
-    const idle = act('Idle'), run = act('Run');
+    const idle = act('Idle'), run = act('Run'), jump = act('Jump');
     if (idle) idle.setEffectiveWeight(1);
+    if (jump) { jump.setLoop(T.LoopOnce, 1); jump.clampWhenFinished = true; }
     const A = {
-      rig: true, root, racket, model, mixer, idle, run, B, mats, kitBody: kit.body,
+      rig: true, root, racket, model, mixer, idle, run, jump, cheering: false, B, mats, kitBody: kit.body,
       addTo(scene) { scene.add(root, racket); },
       setVisible(v) { root.visible = v; racket.visible = v; },
       paint(c) {
@@ -126,8 +127,13 @@
     A.root.rotation.y = st.facing;
     // clips: idle <-> run by running speed
     const run = Math.min(1, st.run || 0);
+    // st.cheer (0..1): a celebration hop after a big point, blended over the idle / run clips
+    const cheer = A.jump ? Math.min(1, st.cheer || 0) : 0;
+    if (cheer > 0 && !A.cheering) { A.jump.reset(); A.jump.play(); }
+    A.cheering = cheer > 0;
+    if (A.jump) A.jump.setEffectiveWeight(cheer);
     if (A.run && A.idle) {
-      A.run.setEffectiveWeight(run); A.idle.setEffectiveWeight(1 - run);
+      A.run.setEffectiveWeight(run * (1 - cheer)); A.idle.setEffectiveWeight((1 - run) * (1 - cheer));
       A.run.timeScale = 0.7 + run * 0.6;
     }
     A.rest.forEach(([b, q]) => b.quaternion.copy(q));
@@ -141,7 +147,7 @@
       turnBone(B.torso, _side, -(st.lean || 0) * 0.8 - (st.crouch || 0) * 0.18);
     }
     // athletic stance: knees bent, sitting into the legs (less while running: the clip does it)
-    const bend = (st.crouch || 0) * 0.75 * (1 - run * 0.8);
+    const bend = (st.crouch || 0) * 0.75 * (1 - run * 0.8) * (1 - cheer);
     if (bend > 0.01) {
       B.legs.forEach(([u, l]) => { turnBone(u, _side, bend); });
       A.root.updateMatrixWorld(true);
@@ -252,16 +258,19 @@
     geo.setAttribute('aCell', new T.InstancedBufferAttribute(cell, 1));
     geo.setAttribute('aRy', new T.InstancedBufferAttribute(ry, 1));
     geo.setAttribute('aPh', new T.InstancedBufferAttribute(ph, 1));
-    const uni = { uTime: { value: 0 }, uExcite: { value: 0 } };
+    const uni = { uTime: { value: 0 }, uExcite: { value: 0 }, uWave: { value: 0 } };
     const mat = new T.MeshBasicMaterial({ map: atlas.texture, alphaTest: 0.5, side: T.DoubleSide });
     mat.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, uni);
       sh.vertexShader = sh.vertexShader
         .replace('#include <common>', `#include <common>
           attribute float aCell; attribute float aRy; attribute float aPh;
-          uniform float uTime; uniform float uExcite;`)
+          uniform float uTime; uniform float uExcite; uniform float uWave;`)
         .replace('#include <uv_vertex>', `#include <uv_vertex>
           float up = (uExcite > 0.35 && sin(aPh * 13.7) > 1.1 - min(1.0, uExcite) * 1.2) ? 1.0 : 0.0;
+          // a Mexican wave rolling round the stadium after a big moment
+          { vec3 wc = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+            if (uWave > 0.02 && cos(atan(wc.x, wc.z) - uTime * 1.7) > 1.0 - 0.28 * uWave) up = 1.0; }
           { float col = mod(aCell, ${atlas.cols}.0); float row = floor(aCell / ${atlas.cols}.0) + up * ${atlas.rows / 2}.0;
             vUv = (uv + vec2(col, row)) / vec2(${atlas.cols}.0, ${atlas.rows}.0); }`)
         .replace('#include <begin_vertex>', `#include <begin_vertex>
@@ -282,13 +291,17 @@
     const col = new T.Color(), m4 = new T.Matrix4();
     for (let i = 0; i < n; i++) {
       const b = crowd.base[i];
-      mesh.setColorAt(i, col.setScalar(0.8 + Math.random() * 0.2));
+      const v = (0.8 + Math.random() * 0.2) * (b.shade || 1);
+      mesh.setColorAt(i, b.cool ? col.setRGB(v * 0.93, v * 0.97, v * 1.02) : col.setRGB(v, v * 0.99, v * 0.95));
       mesh.setMatrixAt(i, m4.makeScale(b.sc, b.sc, b.sc).setPosition(b.x, b.y, b.z));
     }
     scene.add(mesh);
     crowd.bodies.visible = false; crowd.heads.visible = false;
     crowd.impostors = mesh;
-    return function update() { uni.uTime.value = crowd.t; uni.uExcite.value = crowd.excite; };
+    return function update(dt) {
+      crowd.wave = Math.max(0, (crowd.wave || 0) - (dt || 0) * 0.12);
+      uni.uTime.value = crowd.t; uni.uExcite.value = crowd.excite; uni.uWave.value = Math.min(1, crowd.wave);
+    };
   }
 
   /** A still, seated character (the chair umpire). Feet at the group origin, facing +z. */
@@ -306,7 +319,12 @@
     const mixer = new T.AnimationMixer(model), clip = clipOf(g, 'Sitting');
     if (clip) { mixer.clipAction(clip).play(); mixer.setTime(clip.duration * 0.98); }
     const grp = new T.Group(); grp.add(model);
-    return { group: grp, mixer };
+    const head = model.getObjectByName('Head'), rest = head && head.quaternion.clone();
+    return {
+      group: grp, mixer,
+      /** Turn the head by `yaw` (rad, about world up) from the clip's pose: the umpire follows the ball. */
+      look(yaw) { if (!head) return; head.quaternion.copy(rest); grp.updateMatrixWorld(true); turnBone(head, UP, yaw); },
+    };
   }
 
   Object.assign(TN, { makeRigAthlete, poseRig, bakeCrowdAtlas, crowdImpostors, makeSeated });

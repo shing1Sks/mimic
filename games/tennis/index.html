@@ -7,7 +7,9 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="outline" x="-5%" y="-5%" width="110%" height="110%"><feMorphology in="SourceAlpha" operator="dilate" radius="1.2" result="d"/><feMorphology in="SourceAlpha" operator="erode" radius="0.9" result="e"/><feComposite in="d" in2="e" operator="out" result="ring"/><feFlood flood-color="#ffb547"/><feComposite in2="ring" operator="in"/></filter></svg>
 <div id="stage"></div>
+<div id="vignette"></div>
 
 <!-- ============ HUD ============ -->
 <div id="hud" class="hidden">
@@ -131,6 +133,7 @@
 <div id="pause" class="screen modal hidden">
   <div class="card">
     <h2>PAUSED</h2>
+    <div class="p-score" id="pause-score"></div>
     <div class="menu" id="pause-menu">
       <button class="mi primary" data-act="resume">RESUME</button>
       <button class="mi" data-act="restart">RESTART</button>

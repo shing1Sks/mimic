@@ -212,6 +212,8 @@
     model: athlete({ shirt: AI_BASE.shirt, shorts: AI_BASE.shorts, skin: 0xa86b45, hair: 0x111111, accent: AI_BASE.accent, racket: 0xf2f2f2, grip: 0x1c2b44 }),
     swing: null, reactAt: 0, hitDone: false, home: { x: 0, z: -12.6 }, human: null,
   };
+  P.blob = TN.makeContactShadow(scene); AI.blob = TN.makeContactShadow(scene);
+  P.cheer = AI.cheer = P.slump = AI.slump = 0;   // seconds left of a celebration hop / a dejected slump
   const paintOld = paintable(AI.model, AI_BASE);
   const rigAI = {};            // skinned opponents by body, made once the models load
   let aiLook = null;
@@ -247,6 +249,7 @@
       u.group.rotation.y = Math.PI / 2;           // looking across the court
       scene.add(u.group);
       U.standIn.forEach(m => { m.visible = false; });
+      U.model = u; U.yaw = 0;
     }
     try {
       const atlas = TN.bakeCrowdAtlas(renderer);
@@ -310,19 +313,29 @@
   // HUD helpers
   const sfx = i => (i ? '-' + i : '');
   const hud = {
-    banner(main, sub, kind, dur) {
+    /** size 'big': game / match / opening banners get the full-width treatment. */
+    banner(main, sub, kind, dur, size) {
       const b = $('banner');
+      b.className = '';
+      void b.offsetWidth;   // restart the entrance even when a banner is already up
       b.querySelector('.b-main').textContent = main;
       b.querySelector('.b-sub').textContent = sub || '';
-      b.className = 'on slam ' + (kind || 'neutral');
-      void b.offsetWidth;
+      b.className = 'on slam ' + (kind || 'neutral') + (size === 'big' ? ' big' : '') + (sub ? '' : ' nosub');
       clearTimeout(hud._bt);
-      hud._bt = setTimeout(() => { b.className = ''; }, (dur || 1.6) * 1000);
+      hud._bt = setTimeout(() => { b.className = 'off ' + (kind || 'neutral') + (size === 'big' ? ' big' : ''); }, (dur || 1.6) * 1000);
     },
     /** Shot readout for player i: speed, tags, and where the ball will land (mini court). */
     speed(i, kmh, tags, land) {
       const s = $('speed' + sfx(i));
-      s.querySelector('b').textContent = Math.round(kmh);
+      // the number spins up to the shot's speed like a radar gun
+      const num = s.querySelector('b'), t0 = performance.now(), target = Math.round(kmh);
+      cancelAnimationFrame(num._raf);
+      const tick = () => {
+        const k = Math.min(1, (performance.now() - t0) / 320);
+        num.textContent = Math.round(target * (1 - Math.pow(1 - k, 3)));
+        if (k < 1) num._raf = requestAnimationFrame(tick);
+      };
+      tick();
       s.querySelector('.sp-val').style.display = kmh ? '' : 'none';
       s.querySelector('.sp-tags').innerHTML = (tags || []).map(t => `<span class="${t[1] || ''}">${t[0]}</span>`).join('');
       const ct = s.querySelector('.sp-court');
@@ -335,7 +348,8 @@
         ct.classList.toggle('serve', !!land.box);
         ct.style.display = '';
       } else ct.style.display = 'none';
-      s.className = 'speed on';
+      s.className = 'speed'; void s.offsetWidth;
+      s.className = 'speed on' + (kmh ? '' : ' whiff');
       clearTimeout(hud['_st' + i]);
       hud['_st' + i] = setTimeout(() => { s.className = 'speed'; }, 2100);
     },
@@ -380,6 +394,7 @@
       if (n >= 4 && !G.practice) {
         c.classList.remove('hidden'); c.querySelector('b').textContent = n;
         c.classList.toggle('hot', n >= 10);
+        c.classList.remove('pop'); void c.offsetWidth; c.classList.add('pop');
       } else c.classList.add('hidden');
     },
     toast(i, text) {
@@ -758,8 +773,10 @@
     const power = info.power;
     SFX.hit(power, info.quality, hitter !== 0 && !versus());
     fx.impact(ball.p.x, ball.p.y + 0.04, ball.p.z, power, hitter === 0 ? 0xfff2b0 : 0xffd0d8);
+    if (hitter < 2) fx.contact((hitter === 0 ? P : AI).model.racket, power, info.quality >= 1, hitter === 0 ? 0xbfffe0 : 0xffd2a8);
     fx.setTrailColor(hitter === 0 ? 0xbfffe0 : 0xffd2a8);
     const hh = humanOf(hitter);
+    if (hh && !versus() && info.quality >= 1 && power > 0.55) { const f = $('flash'); f.classList.remove('on'); void f.offsetWidth; f.classList.add('on'); }
     if (hh) {
       if (info.tags) hud.speed(hh.idx, kmh, info.tags, landingFor(hh, !!info.serve)); // hit-stop, kick and rumble come from the contact
       hud.prompt(hh.idx, '');
@@ -820,7 +837,7 @@
     ball.lastHitter = -1; ball.bounces = 0; ball.rolling = false; ball.netTouch = false;
     ball.v = { x: 0, y: 0, z: 0 }; ball.w = { x: 0, y: 0, z: 0 };
     fx.resetTrail();
-    G.mode = 'serve'; G.slowDone = false;
+    G.mode = 'serve'; G.slowDone = false; G.cine = null;
     G.rally = 0; hud.rally(0);
     G.aiServeAt = G.t + 1.5;
     tossOwner = -1;
@@ -899,6 +916,7 @@
     if (ev === 'bounce') {
       const sp = Math.hypot(ball.v.x, ball.v.y, ball.v.z);
       const far = ball.p.z < -2;
+      if (sp > 2) fx.dust(ball.p.x, ball.p.z, ball.v.x, ball.v.z, sp);
       if (ball.toss) {
         SFX.bounce(sp, far);
         return;
@@ -908,6 +926,7 @@
       judgeBounce();
     } else if (ev === 'net' || ev === 'tape') {
       SFX.net();
+      world.net.hit(ball.p.x, Math.hypot(ball.v.x, ball.v.y, ball.v.z) * (ev === 'tape' ? 0.6 : 1), ev === 'tape' ? ball.v.z : -ball.v.z);
       if (!ball.decided) {
         ball.netTouch = true;
         if (ev === 'tape') AU.Crowd.react('ooh');
@@ -1033,6 +1052,14 @@
     hud.score();
     G.mode = 'point'; G.timer = 2.4;
     G.after = matchWon ? 'match' : 'serve';
+    // body language: the winner of a clean winner / ace (or the game) hops, whoever erred slumps
+    const WA = winner === 0 ? P : AI, LA = winner === 0 ? AI : P;
+    const clean = reason === 'WINNER' || reason === 'ACE';
+    if (clean || gameWon) WA.cheer = WA.cheerMax = matchWon ? 1.6 : gameWon ? 1.3 : 1.0;
+    LA.slump = clean ? 1.2 : 1.6;
+    // the camera leans in on the big ones (and circles the winner at the end of the match)
+    G.cine = matchWon ? { kind: 'match', who: winner, t: 0 } : (clean || gameWon) ? { kind: gameWon ? 'game' : 'big', who: winner, t: 0 } : null;
+    if (clean && rally >= 8) world.crowd.wave = Math.max(world.crowd.wave || 0, 0.6);
     const delayCall = 1100;
     const good = versus() || winner === 0;
     if (matchWon) {
@@ -1040,15 +1067,15 @@
         say('Game, set and match, ' + callName(winner));
         const title = G.kind === 'circuit' ? CIRCUIT[G.round].round.toLowerCase() : 'the match';
         hud.banner(versus() ? wn + ' WINS' : winner === 0 ? 'GAME, SET, MATCH' : 'MATCH OVER',
-          versus() ? 'game, set and match' : winner === 0 ? 'you take ' + title : G.opp.name + ' takes ' + title, versus() ? kind : winner === 0 ? 'good' : 'bad', 2.2);
-        if (good) { SFX.fanfare(true); AU.Crowd.react('cheer', 1); world.crowd.excite = 3; } else SFX.sad();
+          versus() ? 'game, set and match' : winner === 0 ? 'you take ' + title : G.opp.name + ' takes ' + title, versus() ? kind : winner === 0 ? 'good' : 'bad', 2.6, 'big');
+        if (good) { SFX.fanfare(true); AU.Crowd.react('cheer', 1); world.crowd.excite = 3; world.crowd.wave = 1; } else SFX.sad();
       }, delayCall);
       G.timer = 4.2;
     } else if (gameWon) {
       setTimeout(() => {
         say('Game, ' + callName(winner));
         const gp = s.games[winner] + 1 >= G.gamesToWin;
-        hud.banner('GAME', wn + '  ' + s.games[0] + ' – ' + s.games[1] + (gp ? ' · one game from the match' : '') + ' · ' + nameOf(G.server) + ' to serve', versus() ? kind : winner === 0 ? 'good' : 'bad', 2.0);
+        hud.banner('GAME', wn + '  ' + s.games[0] + ' – ' + s.games[1] + (gp ? ' · one game from the match' : '') + ' · ' + nameOf(G.server) + ' to serve', versus() ? kind : winner === 0 ? 'good' : 'bad', 2.0, 'big');
         if (good) { SFX.fanfare(false); world.crowd.excite = 2; }
       }, delayCall);
       G.timer = 3.6;
@@ -1111,7 +1138,8 @@
     AI.model.setVisible(!(kind === 'practice'));
     humans.forEach(h => { h.hits = 0; h.A.cplan = null; h.RK.rel = null; h.RK.head = null; h.camState.init = false; });
     G.score = { pts: [0, 0], games: [0, 0] };
-    G.server = 0; G.faults = 0; G.slow = 0;
+    G.server = 0; G.faults = 0; G.slow = 0; G.cine = null;
+    P.cheer = AI.cheer = P.slump = AI.slump = 0;
     G.stats = newStats();
     G.prac = { streak: 0, best: 0, hits: 0, ins: 0, targets: 0, side: 1, serveCount: 0 };
     G.inputGuard = 0.5;
@@ -1129,12 +1157,12 @@
     if (G.practice) {
       P.x = 0; P.z = 12.5;
       G.mode = 'between'; G.timer = 1.2; G.after = 'feed';
-      hud.banner('PRACTICE', 'swing at the fed balls · ' + btnA(mc) + ' for serve practice', 'neutral', 2.2);
+      hud.banner('PRACTICE', 'swing at the fed balls · ' + btnA(mc) + ' for serve practice', 'neutral', 2.2, 'big');
       ball.decided = true; ball.held = -1; ball.p = { x: 0, y: -5, z: -12 };
     } else {
       setupServe();
       const sub = versus() ? 'P1 serves first' : 'you serve first';
-      hud.banner(kind === 'circuit' ? CIRCUIT[G.round].round : 'FIRST TO ' + G.gamesToWin, (kind === 'circuit' ? 'first to ' + G.gamesToWin + ' · ' : '') + sub, 'neutral', 2.0);
+      hud.banner(kind === 'circuit' ? CIRCUIT[G.round].round : 'FIRST TO ' + G.gamesToWin, (kind === 'circuit' ? 'first to ' + G.gamesToWin + ' · ' : '') + sub, 'neutral', 2.0, 'big');
       if (!versus()) setTimeout(() => say(G.opp.name.toLowerCase() + ' to receive. Play.'), 600);
       else setTimeout(() => say('Player one to serve. Play.'), 600);
     }
@@ -1208,25 +1236,27 @@
     $('end-title').className = cls;
     $('end-ladder').innerHTML = ladder;
     $('end-ladder').classList.toggle('hidden', !ladder);
-    $('end-score').textContent = s.games[0] + ' – ' + s.games[1];
+    $('end-score').innerHTML = `<b class="you${s.games[0] < s.games[1] ? ' lo' : ''}">${s.games[0]}</b> – <b class="cpu${s.games[1] < s.games[0] ? ' lo' : ''}">${s.games[1]}</b>`;
+    // [label, P1, P2, the two numbers compared, higher is better]
     const rows = [
-      ['POINTS WON', st.won[0], st.won[1]],
-      ['WINNERS', st.winners[0], st.winners[1]],
-      ['ACES', st.aces[0], st.aces[1]],
-      ['ERRORS', st.errors[0], st.errors[1]],
-      ['DOUBLE FAULTS', st.df[0], st.df[1]],
-      ['FASTEST BALL', Math.round(st.top[0]) + ' km/h', Math.round(st.top[1]) + ' km/h'],
+      ['POINTS WON', st.won[0], st.won[1], st.won, true],
+      ['WINNERS', st.winners[0], st.winners[1], st.winners, true],
+      ['ACES', st.aces[0], st.aces[1], st.aces, true],
+      ['ERRORS', st.errors[0], st.errors[1], st.errors, false],
+      ['DOUBLE FAULTS', st.df[0], st.df[1], st.df, false],
+      ['FASTEST BALL', Math.round(st.top[0]) + ' km/h', Math.round(st.top[1]) + ' km/h', st.top.map(Math.round), true],
     ];
+    const rank = (r, i) => { const [a, b] = r[3]; if (a === b) return ''; return ((i === 0 ? a > b : b > a) === r[4]) ? ' lead' : ' trail'; };
     $('end-stats').innerHTML = '<span class="h"></span><span class="h v">' + nameOf(0) + '</span><span class="h v">' + nameOf(1) + '</span>' +
-      rows.map(r => `<span>${r[0]}</span><span class="v you">${r[1]}</span><span class="v cpu">${r[2]}</span>`).join('') +
-      `<span>LONGEST RALLY</span><span class="v" style="grid-column: span 2">${st.longest} shots</span>`;
+      rows.map((r, i) => `<span style="--i:${i}">${r[0]}</span><span class="v you${rank(r, 0)}" style="--i:${i}">${r[1]}</span><span class="v cpu${rank(r, 1)}" style="--i:${i}">${r[2]}</span>`).join('') +
+      `<span style="--i:6">LONGEST RALLY</span><span class="v" style="grid-column: span 2; --i:6">${st.longest} shots</span>`;
     showScreen('end');
     $('hud').classList.add('hidden');
     menuFocus.end = 0; refreshFocus();
   }
 
   function toTitle() {
-    G.inGame = false; G.paused = false; G.mode = 'title'; G.panel = 'main'; G.slow = 0;
+    G.inGame = false; G.paused = false; G.mode = 'title'; G.panel = 'main'; G.slow = 0; G.cine = null;
     showScreen('title');
     $('hud').classList.add('hidden');
     $('hud').classList.remove('split');
@@ -1250,6 +1280,8 @@
     if (v) {
       const lines = humans.map(h => `<b>${versus() ? nameOf(h.idx) + ':' : 'Phone drifted?'}</b> point at the screen and ${alignHow(h.mc)}.`);
       $('pause-hint').innerHTML = (why ? `<span class="warn">${why}</span><br>` : '') + lines.join('<br>');
+      const sc = G.score;
+      $('pause-score').innerHTML = G.practice ? '' : `<span class="you">${nameOf(0)}</span><b>${sc.games[0]} – ${sc.games[1]}</b><span class="cpu">${nameOf(1)}</span><i>${ptsLabel(0)} – ${ptsLabel(1)}</i>`;
       menuFocus.pause = 0; refreshFocus(); SFX.ui('back');
     } else G.inputGuard = 0.3;
   }
@@ -1407,6 +1439,13 @@
       // backswing preparation
       yaw = AI.stroke === 'fh' ? -1.4 : 1.4; pitch = 0.1;
       if (AI.stroke === 'bh') roll = Math.PI / 2;
+    } else if (AI.cheer > 0) {
+      // racket thrown up in celebration
+      const k = Math.min(1, AI.cheer / 0.3, (AI.cheerMax - AI.cheer) * 5);
+      yaw = lerp(yaw, 0.1, k); pitch = lerp(pitch, 2.5, k);
+    } else if (AI.slump > 0) {
+      const k = Math.min(1, AI.slump / 0.3);
+      pitch = lerp(pitch, -0.9, k); yaw = lerp(yaw, 0.6, k);   // racket hanging down
     }
     qBody.setFromAxisAngle(Y, AI.facing);
     eTmp.set(pitch, yaw, roll, 'YXZ');
@@ -1428,17 +1467,38 @@
     // and rises instead
     const l = split ? { x: me.x * 0.25 + bx * 0.15, y: -0.6, z: me.z - 17 } : { x: me.x * 0.3 + bx * 0.15, y: -0.95, z: me.z - 17 };
     if (!split && p.z > 22.5) { p.y += (p.z - 22.5) * 0.5; p.z = 22.5; }
+    let fovIn = 0, rate = 4;
+    const cine = G.cine;
+    if (cine && !split && (G.mode === 'point' || G.mode === 'ended')) {
+      cine.t += dt;
+      if (cine.kind === 'match') {
+        // close in on the winner and circle them at chest height: our player from behind round to
+        // their side, the far player from the front (the camera never cuts through anyone)
+        const wa = cine.who === 0 ? h.A : (h.A === P ? AI : P), w = loc(h, { x: wa.x, y: 0, z: wa.z });
+        const mine = cine.who === 0, k = clamp(cine.t / 2.6, 0, 1), e = k * k * (3 - 2 * k);
+        const a = mine ? Math.PI - cine.t * 0.42 : 0.35 + cine.t * 0.3, R = lerp(8, 4.6, e);
+        p.x = w.x + Math.sin(a) * R; p.y = lerp(4.2, 1.9, e); p.z = w.z - Math.cos(a) * R * (mine ? 1 : -1);
+        l.x = w.x; l.y = lerp(0.4, 1.15, e); l.z = w.z;
+        rate = 2.2;
+      } else {
+        // a broadcast push-in on the near player
+        const k = clamp(cine.t / 1.3, 0, 1), e = k * k * (3 - 2 * k), amp = cine.kind === 'game' ? 1.3 : 1;
+        p.y -= 0.7 * e * amp; p.z -= 1.1 * e * amp; p.x += 0.5 * e * amp;
+        l.y += 0.55 * e * amp; l.z += 1.5 * e * amp;
+        fovIn = 2.5 * e * amp;
+      }
+    }
     v3(_cp, loc(h, p)); v3(_cl, loc(h, l));
     if (!cs.init) { cs.pos.copy(_cp); cs.look.copy(_cl); cs.init = true; }
-    cs.pos.lerp(_cp, 1 - Math.exp(-dt * 4));
-    cs.look.lerp(_cl, 1 - Math.exp(-dt * 4));
+    cs.pos.lerp(_cp, 1 - Math.exp(-dt * rate));
+    cs.look.lerp(_cl, 1 - Math.exp(-dt * rate));
     const cam = h.cam;
     cam.position.copy(cs.pos);
     if (G.shake > 0) {
       cam.position.x += (Math.random() - 0.5) * G.shake;
       cam.position.y += (Math.random() - 0.5) * G.shake;
     }
-    cam.fov = (split ? 54 : 43) - G.punch * 3.5;
+    cam.fov = (split ? 54 : 43) - G.punch * 3.5 - fovIn;
     cam.lookAt(cs.look);
   }
   function updateCamera(dt) {
@@ -1463,14 +1523,31 @@
   }
 
   function pose(model, st, dt) { if (model.rig) TN.poseRig(model, st, dt); else TN.poseAthlete(model, st); }
+  function updateBody(A, dt) {
+    A.cheer = Math.max(0, A.cheer - dt); A.slump = Math.max(0, A.slump - dt);
+    const b = A.blob, vis = A.model.root.visible;
+    b.visible = vis;
+    if (vis) {
+      b.position.set(A.x, 0.004, A.z);
+      b.rotation.z = A.facing;
+      // tighter and darker without the sun's shadow map, where it is the only thing grounding them
+      const air = A.cheer > 0 ? 0.15 : 0;
+      b.scale.set(0.5 - air * 0.4, 0.36 - air * 0.3, 1);
+      b.material.opacity = (dyn.shadows ? 0.55 : 0.8) - air;
+    }
+  }
+  const cheerOf = A => Math.min(1, A.cheer / 0.3);
+  const leanOf = A => 0.12 + 0.42 * Math.min(1, A.slump / 0.4);
   function updateActors(dt) {
     // humans: the racket arm is the controller's arm model, hung off the athlete's shoulder
     humans.forEach(h => {
       const A = h.A, me = loc(h, { x: A.x, y: 0, z: A.z }), lb = loc(h, ball.p);
       A.facing = clamp((lb.x - me.x) * -0.04, -0.2, 0.2) + (h.s > 0 ? 0 : Math.PI);
       const ptw = clamp(-playerYaw(h) * 0.2, -0.45, 0.45);
-      pose(A.model, { x: A.x, z: A.z, facing: A.facing, run: A.run, phase: A.phase, lean: 0.12, twist: ptw, crouch: playerCrouch(), racketQuat: h.RK.wq, arm: { elbow: h.RK.welbow, hand: h.RK.whand }, hand: handOf(h) }, dt);
+      updateBody(A, dt);
+      pose(A.model, { x: A.x, z: A.z, facing: A.facing, run: A.run, phase: A.phase, lean: leanOf(A), twist: ptw, crouch: playerCrouch(), cheer: cheerOf(A), racketQuat: h.RK.wq, arm: { elbow: h.RK.welbow, hand: h.RK.whand }, hand: handOf(h) }, dt);
     });
+    if (!humans.includes(H[1])) updateBody(AI, dt);
     if (AI.human) return;
     AI.facing = Math.PI + clamp((ball.p.x - AI.x) * 0.04, -0.35, 0.35);
     let atw = 0;
@@ -1478,7 +1555,7 @@
       const k = clamp((G.t - AI.swing.t0) / AI.swing.dur, 0, 1);
       atw = AI.swing.kind === 'fh' ? lerp(-0.7, 0.8, k) : AI.swing.kind === 'bh' ? lerp(0.7, -0.6, k) : 0;
     }
-    pose(AI.model, { x: AI.x, z: AI.z, facing: AI.facing, run: AI.run, phase: AI.phase, lean: 0.12, twist: atw, crouch: G.mode === 'rally' ? 0.5 : 0.25, racketQuat: aiRacketQuat() }, dt);
+    pose(AI.model, { x: AI.x, z: AI.z, facing: AI.facing, run: AI.run, phase: AI.phase, lean: leanOf(AI), twist: atw, crouch: G.mode === 'rally' ? 0.5 : 0.25, cheer: cheerOf(AI), racketQuat: aiRacketQuat() }, dt);
   }
 
   // controller status
@@ -1528,10 +1605,15 @@
   addEventListener('pointerdown', askRumble, true);
   addEventListener('keydown', askRumble, true);
 
+  const meterEl = { box: $('meter'), fill: $('hud').querySelector('.m-fill'), live: false, over: false };
+  $('hud').querySelector('.m-tick').style.left = (15 / 35) * 100 + '%';
   function updateMeter() {
-    // racket-head speed (m/s); the tick marks a solid groundstroke
-    $('hud').querySelector('.m-fill').style.width = clamp(H[0].RK.speed / 35, 0, 1) * 100 + '%';
-    $('hud').querySelector('.m-tick').style.left = (15 / 35) * 100 + '%';
+    // racket-head speed (m/s); the tick marks a solid groundstroke. Quiet until the racket moves.
+    const sp = H[0].RK.speed;
+    meterEl.fill.style.width = clamp(sp / 35, 0, 1) * 100 + '%';
+    const live = sp > 3, over = sp > 15;
+    if (live !== meterEl.live) { meterEl.live = live; meterEl.box.classList.toggle('live', live); }
+    if (over !== meterEl.over) { meterEl.over = over; meterEl.box.classList.toggle('over', over); }
   }
 
   // ---------------------------------------------------------------------------------
@@ -1674,6 +1756,7 @@
   function activate(el) {
     if (!el) return;
     AU.resume();
+    el.classList.add('press'); setTimeout(() => el.classList.remove('press'), 140);
     if (el.dataset.opt) { changeOpt(el.dataset.opt, 1); return; }
     const act = el.dataset.act;
     SFX.ui(act === 'back' ? 'back' : 'ok');
@@ -1829,6 +1912,14 @@
     updateActors(rdt);
     updateCamera(rdt);
     world.crowd.update(rdt);
+    world.net.update(rdt);
+    const U = world.crowd.umpire;
+    if (U && U.model) {
+      // the umpire's head follows the ball across the court (eased, within a comfortable turn)
+      const want = G.inGame && ball.p.y > -1 ? clamp(Math.atan2(ball.p.z - U.seat.z, ball.p.x - U.seat.x), -1.1, 1.1) : 0;
+      U.yaw = lerp(U.yaw, want, 1 - Math.exp(-rdt * 6));
+      U.model.look(-U.yaw);
+    }
     const showBall = G.inGame && ball.p.y > -1;
     fx.update(rdt, camera, ball.p, showBall);
     targets.forEach((t, i) => { if (t.visible) t.material.opacity = 0.55 + Math.sin(now / 300 + i) * 0.25; });
@@ -1844,7 +1935,7 @@
   // testing / debugging hook
   window.__sunvolley = {
     debugCam(p, l) { dbgCam = p ? { p: new THREE.Vector3(p[0], p[1], p[2]), l: new THREE.Vector3(l[0], l[1], l[2]) } : null; },
-    G, P, AI, H, ball, mc, world, renderer, scene, settings, circuit, lobby, ROSTER, CIRCUIT, startGame, toTitle, showIntro, openLobby, startVersus, showEnd, setPaused,
+    G, P, AI, H, ball, mc, world, renderer, scene, settings, circuit, lobby, ROSTER, CIRCUIT, startGame, toTitle, showIntro, openLobby, startVersus, showEnd, setPaused, hud, fx, pointTo,
     get humans() { return humans; }, get renderScale() { return dyn.pr; }, get tossOwner() { return tossOwner; },
     get fps() { const s = fpsWin.reduce((a, b) => a + b, 0); return fpsWin.length / (s || 1); },
   };

@@ -41,6 +41,8 @@
     g.traverse(o => { if (o.isMesh) o.castShadow = true; });
     strings.castShadow = false;
     g.userData.headOffset = new THREE.Vector3(0, 0, -0.53);
+    g.userData.strings = strings.material;
+    g.userData.frame = fm;
     return g;
   }
   TN.makeRacket = makeRacket;
@@ -199,6 +201,42 @@
       c.fillStyle = g; c.fillRect(0, 0, w, h);
     });
   }
+  TN.glowTex = glowTex;
+  // contact glint: a hot core with four thin rays
+  function starTex() {
+    return TN.canvasTex(128, 128, (c, w, h) => {
+      c.clearRect(0, 0, w, h);
+      c.globalCompositeOperation = 'lighter';
+      const core = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w * 0.28);
+      core.addColorStop(0, 'rgba(255,255,255,1)'); core.addColorStop(0.3, 'rgba(255,240,200,0.7)'); core.addColorStop(1, 'rgba(255,200,120,0)');
+      c.fillStyle = core; c.fillRect(0, 0, w, h);
+      [0, Math.PI / 2].forEach(a => {
+        c.save(); c.translate(w / 2, h / 2); c.rotate(a);
+        const ray = c.createLinearGradient(-w / 2, 0, w / 2, 0);
+        ray.addColorStop(0, 'rgba(255,255,255,0)'); ray.addColorStop(0.5, 'rgba(255,255,255,0.95)'); ray.addColorStop(1, 'rgba(255,255,255,0)');
+        c.fillStyle = ray; c.fillRect(-w / 2, -1.5, w, 3); c.restore();
+      });
+    });
+  }
+  // shock ring: a thin bright annulus that expands off the strings
+  function ringTex() {
+    return TN.canvasTex(128, 128, (c, w, h) => {
+      c.clearRect(0, 0, w, h);
+      const g = c.createRadialGradient(w / 2, h / 2, w * 0.3, w / 2, h / 2, w / 2);
+      g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.55, 'rgba(255,255,255,0.9)'); g.addColorStop(0.75, 'rgba(255,255,255,0.25)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = g; c.fillRect(0, 0, w, h);
+    });
+  }
+
+  /** Soft contact shadow under a player: grounds them whether or not the sun's shadow map is on. */
+  TN.makeContactShadow = function (scene) {
+    const m = new THREE.Mesh(new THREE.CircleGeometry(1, 28), new THREE.MeshBasicMaterial({
+      map: glowTex('rgba(0,0,0,0.85)', 'rgba(0,0,0,0.45)'), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }));
+    m.rotation.x = -Math.PI / 2;
+    m.renderOrder = 1;
+    scene.add(m);
+    return m;
+  };
 
   /** Ball, blob shadow, trail, impact + bounce effects. */
   function makeBallFX(scene) {
@@ -243,22 +281,36 @@
 
     // impact sprites pool
     const sparkTex = glowTex('rgba(255,255,255,1)', 'rgba(255,230,140,0.5)');
+    const glintTex = starTex(), shockTex = ringTex();
     const pool = [];
-    for (let i = 0; i < 24; i++) {
+    for (let i = 0; i < 28; i++) {
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: sparkTex, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
       s.visible = false; scene.add(s);
-      pool.push({ s, life: 0, max: 1, vx: 0, vy: 0, vz: 0, grow: 0, size: 1 });
+      pool.push({ s, life: 0, max: 1, vx: 0, vy: 0, vz: 0, grow: 0, size: 1, g: 6, a: 1 });
     }
-    function spawn(x, y, z, o) {
-      const p = pool.find(q => q.life <= 0) || pool[0];
+    // court dust kicked up by a bounce: soft, normally blended, drifts and settles
+    const dustTex = glowTex('rgba(255,255,255,0.9)', 'rgba(255,255,255,0.35)');
+    const dust = [];
+    for (let i = 0; i < 18; i++) {
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: dustTex, transparent: true, depthWrite: false, color: 0xd9e4f2 }));
+      s.visible = false; scene.add(s);
+      dust.push({ s, life: 0, max: 1, vx: 0, vy: 0, vz: 0, grow: 0, size: 1, g: -0.2, a: 0.32 });
+    }
+    function spawn(x, y, z, o, list) {
+      list = list || pool;
+      const p = list.find(q => q.life <= 0) || list[0];
       p.s.position.set(x, y, z);
       p.life = p.max = o.life;
       p.vx = o.vx || 0; p.vy = o.vy || 0; p.vz = o.vz || 0;
       p.size = o.size; p.grow = o.grow || 0;
-      p.s.material.color.set(o.color || 0xffffff);
-      p.s.material.opacity = 1;
+      if (o.g !== undefined) p.g = o.g; else if (list === pool) p.g = 6;
+      if (list === pool) { p.s.material.map = o.map || sparkTex; p.s.material.rotation = o.rot || 0; p.a = o.a || 1; }
+      p.s.material.color.set(o.color || (list === pool ? 0xffffff : 0xd9e4f2));
+      p.s.material.opacity = p.a;
       p.s.visible = true;
     }
+    const flashing = [];   // rackets whose strings / frame are flashing after a hit
+    const _head = new THREE.Vector3();
 
     // bounce marks (flat rings)
     const ringGeo = new THREE.RingGeometry(0.7, 1, 32);
@@ -283,13 +335,35 @@
         }
       },
       bounce(x, z, speed, out) {
-        spawn(x, 0.08, z, { life: 0.4, size: 0.25, grow: 1.6, vy: 0.4, color: out ? 0xff7766 : 0xd8e6ff });
+        spawn(x, 0.08, z, { life: 0.3, size: 0.22, grow: 1.4, vy: 0.3, a: out ? 1 : 0.55, color: out ? 0xff7766 : 0xd8e6ff });
         const mk = marks[markI++ % marks.length];
         mk.m.position.set(x, 0.004, z);
         mk.m.material.color.set(out ? 0xff4d4d : 0xffffff);
-        mk.life = mk.max = out ? 2.6 : 1.1;
-        mk.size = out ? 0.28 : 0.16;
+        mk.life = mk.max = out ? 2.6 : 0.8;
+        mk.size = out ? 0.28 : 0.14;
+        mk.peak = out ? 1 : 0.6;
         mk.m.visible = true;
+      },
+      /** Dust off the court where the ball lands, thrown forward along its travel. */
+      dust(x, z, vx, vz, speed) {
+        const k = Math.min(1, speed / 25), h = Math.hypot(vx, vz) || 1, dx = vx / h, dz = vz / h;
+        const n = 3 + Math.round(k * 4);
+        for (let i = 0; i < n; i++) {
+          const a = (Math.random() - 0.5) * 1.6, sp = (0.4 + Math.random() * 0.9) * (0.5 + k);
+          const ca = Math.cos(a), sa = Math.sin(a);
+          spawn(x, 0.05, z, { life: 0.45 + Math.random() * 0.35, size: 0.1 + k * 0.08, grow: 2.2 + Math.random(),
+            vx: (dx * ca - dz * sa) * sp, vy: 0.25 + Math.random() * 0.35 * k, vz: (dz * ca + dx * sa) * sp }, dust);
+        }
+      },
+      /** The racket meets the ball: glint and shock ring on the strings, frame and strings flash. */
+      contact(racket, power, sweet, color) {
+        if (!racket) return;
+        racket.updateMatrixWorld(true);
+        racket.localToWorld(_head.copy(racket.userData.headOffset || _head.set(0, 0, -0.53)));
+        const p = Math.max(0, Math.min(1, power));
+        spawn(_head.x, _head.y, _head.z, { map: glintTex, life: 0.13 + p * 0.05, size: 0.45 + p * 0.55 + (sweet ? 0.25 : 0), grow: 0.6, g: 0, rot: Math.random() * Math.PI, color: sweet ? 0xfff6c8 : 0xffffff });
+        spawn(_head.x, _head.y, _head.z, { map: shockTex, life: 0.2, size: 0.22, grow: 2.4 + p * 2.6, g: 0, a: 0.45 + p * 0.35, color: color || 0xfff2b0 });
+        if (racket.userData.strings) flashing.push({ r: racket, t: 0.16 + p * 0.06, max: 0.16 + p * 0.06, k: 0.8 + p * 1.2 });
       },
       update(dt, cam, bp, visible) {
         ball.visible = halo.visible = shadow.visible = trail.visible = visible;
@@ -328,17 +402,30 @@
         tGeo.attributes.position.needsUpdate = true;
         tGeo.attributes.color.needsUpdate = true;
         // sprites
-        pool.forEach(p => {
+        const stepSprite = p => {
           if (p.life <= 0) return;
           p.life -= dt;
           if (p.life <= 0) { p.s.visible = false; return; }
           const k = p.life / p.max;
           p.s.position.x += p.vx * dt; p.s.position.y += p.vy * dt; p.s.position.z += p.vz * dt;
-          p.vy -= 6 * dt;
+          p.vy -= p.g * dt;
           const sz = p.size * (1 + p.grow * (1 - k));
           p.s.scale.set(sz, sz, 1);
-          p.s.material.opacity = k;
+          p.s.material.opacity = k * p.a;
+        };
+        pool.forEach(stepSprite);
+        dust.forEach(p => {
+          if (p.life > 0) { const drag = Math.exp(-dt * 3.5); p.vx *= drag; p.vz *= drag; p.vy *= drag; }
+          stepSprite(p);
         });
+        for (let i = flashing.length - 1; i >= 0; i--) {
+          const f = flashing[i];
+          f.t -= dt;
+          const k = Math.max(0, f.t / f.max), s = 1 + f.k * k * k;
+          f.r.userData.strings.color.setScalar(s);
+          if (f.r.userData.frame) f.r.userData.frame.emissive.setScalar(0.35 * f.k * k * k);
+          if (f.t <= 0) flashing.splice(i, 1);
+        }
         marks.forEach(mk => {
           if (mk.life <= 0) return;
           mk.life -= dt;
@@ -346,7 +433,7 @@
           const k = mk.life / mk.max;
           const sz = mk.size * (1 + (1 - k) * 0.6);
           mk.m.scale.set(sz, sz, 1);
-          mk.m.material.opacity = Math.min(1, k * 1.5);
+          mk.m.material.opacity = Math.min(1, k * 1.5) * (mk.peak || 1);
         });
       },
     };

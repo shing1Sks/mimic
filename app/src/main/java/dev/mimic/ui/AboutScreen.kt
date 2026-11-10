@@ -81,13 +81,12 @@ fun AboutScreen(onShowUpdateOnHome: () -> Unit, onBack: () -> Unit) {
         Text("Updates", style = Caption)
         Panel {
             val (line, warn) = when (val r = row) {
-                UpdateRow.Idle -> (if (BuildConfig.UPDATE_CHECK) "Mimic looks for a new version once a day when you open it."
-                    else "Debug build: it never updates itself. Install new builds by hand.") to false
+                UpdateRow.Idle -> (if (BuildConfig.UPDATE_CHECK) "Checks once a day." else "Debug build: no automatic updates.") to false
                 UpdateRow.Checking -> "Checking..." to false
                 is UpdateRow.Done -> when (val res = r.result) {
                     CheckResult.UpToDate -> "You have the latest version." to false
                     is CheckResult.Available -> "Mimic ${res.info.versionName} is available." to false
-                    CheckResult.Failed -> "Could not reach the update server. Check your internet connection and try again." to true
+                    CheckResult.Failed -> "Couldn't connect. Try again later." to true
                 }
             }
             Text(line, style = Label.copy(color = if (warn) Ink.warn else Ink.text))
@@ -109,59 +108,31 @@ fun AboutScreen(onShowUpdateOnHome: () -> Unit, onBack: () -> Unit) {
 
         Text("How to pair", style = Caption)
         Panel {
-            Text("1. On Home, tap Pair a new laptop and allow it. The phone stays visible for 2 minutes.", style = Label)
-            Text("2. On Windows: Settings > Bluetooth & devices > Add device > Bluetooth, then pick this phone.", style = Label)
-            Text("3. Confirm the same code on both screens. Next time Mimic reconnects to that PC by itself.", style = Label)
-            Text(
-                "PC can't see the phone? Keep Mimic open and tap Pair a new laptop again. If it was paired " +
-                    "before, remove it on the PC first.",
-                style = Caption,
-            )
-            Text(
-                "After an update: if Home says Mimic's Bluetooth controls changed, or buttons or vibration stop " +
-                    "reaching the PC, remove Mimic under Bluetooth devices on the PC and pair again.",
-                style = Caption.copy(color = Ink.warn),
-            )
+            Text("1. On Home, tap Pair a new laptop.", style = Label)
+            Text("2. On Windows: Settings > Bluetooth > Add device, pick this phone.", style = Label)
+            Text("3. Confirm the code. Mimic reconnects by itself after that.", style = Label)
+            Text("Not showing up? Remove the phone on the PC and pair again.", style = Caption)
         }
 
-        Text("Good to know", style = Caption)
+        Text("Point's CENTRE button", style = Caption)
         Panel {
-            Text("Point: CENTRE", style = Label)
-            Text(
-                "Moves the cursor to the middle of the screen. It sends the F9 key, and the Mimic tray app " +
-                    "on Windows turns that into \"cursor to the middle\". Without the tray app running, CENTRE does nothing.",
-                style = Caption,
-            )
-            LinkRow("Get the Windows tray app") { openUrl(ctx, TRAY_URL) }
-            Text("Grip", style = Label)
-            Text(
-                "Made for Mimic games in Chrome or Edge: it sends motion, like the Wand. For the PC's mouse, use Point.",
-                style = Caption,
-            )
-            Text("Leaving a mode", style = Label)
-            Text("Hold the round button in the top corner until its ring fills. Back is ignored so a grip never exits by accident.", style = Caption)
+            Text("Needs the Mimic tray app on Windows.", style = Label)
+            LinkRow("Get the tray app") { openUrl(ctx, TRAY_URL) }
         }
 
         Text("Links", style = Caption)
         Panel {
-            LinkRow("Website  mimic.shing.in") { openUrl(ctx, SITE_URL) }
-            LinkRow("Source code on GitHub") { openUrl(ctx, REPO_URL) }
-            LinkRow("Releases and notes") { openUrl(ctx, RELEASES_URL) }
+            LinkRow("mimic.shing.in") { openUrl(ctx, SITE_URL) }
+            LinkRow("Source code") { openUrl(ctx, REPO_URL) }
             LinkRow("Report a problem") { openUrl(ctx, "$REPO_URL/issues") }
         }
 
         Text("Licences", style = Caption)
         Panel {
-            Text("Mimic is free and open source under the MIT licence.", style = Label)
-            LinkRow(if (showMit) "Hide the MIT licence" else "Read the MIT licence") { showMit = !showMit }
+            Text("Mimic is open source (MIT). It uses Kotlin, AndroidX and Jetpack Compose (Apache 2.0).", style = Caption)
+            LinkRow(if (showMit) "Hide MIT licence" else "MIT licence") { showMit = !showMit }
             if (showMit) LicenceText(ctx, R.raw.licence_mit)
-            Text(
-                "Built with open-source libraries under the Apache License 2.0: Kotlin standard library, " +
-                    "kotlinx.coroutines, AndroidX (Activity, Core, Lifecycle) and Jetpack Compose " +
-                    "(Runtime, UI, Foundation, Material 3), by JetBrains and Google / The Android Open Source Project.",
-                style = Caption,
-            )
-            LinkRow(if (showApache) "Hide the Apache License 2.0" else "Read the Apache License 2.0") { showApache = !showApache }
+            LinkRow(if (showApache) "Hide Apache 2.0 licence" else "Apache 2.0 licence") { showApache = !showApache }
             if (showApache) LicenceText(ctx, R.raw.apache_2_0)
         }
         Box(Modifier.height(12.dp))

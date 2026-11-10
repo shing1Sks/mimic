@@ -57,11 +57,7 @@ fun SettingsScreen(s: Settings, haptics: HapticEngine, onAbout: () -> Unit, onBa
         ToggleRow("Vibration (buttons and game rumble)", s.haptics.value) { s.haptics.value = it; if (it) haptics.play(Feel.Click) }
         if (s.haptics.value) {
             SliderRow("Vibration strength", s.hapticStrength.value, 0f..1f) { s.hapticStrength.value = it }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                ActionButton("Try click", Modifier.weight(1f)) { haptics.play(Feel.Click) }
-                ActionButton("Try thud", Modifier.weight(1f)) { haptics.play(Feel.Thud) }
-                ActionButton("Try hit", Modifier.weight(1f)) { haptics.rumble(255, 120, 0) }
-            }
+            ActionButton("Try it", Modifier.fillMaxWidth()) { haptics.rumble(255, 120, 0) }
         }
         ToggleRow("Left-handed (mirror layouts)", s.leftHanded.value) { s.leftHanded.value = it }
     }
@@ -84,27 +80,21 @@ fun SettingsScreen(s: Settings, haptics: HapticEngine, onAbout: () -> Unit, onBa
         ToggleRow("Steer left stick by tilting", s.tiltSteer.value) { s.tiltSteer.value = it }
     }
 
-    Text("Wand and Grip", style = Caption)
+    // No Wand / Grip speed slider on purpose: they send the phone's real angle, each game maps it 1:1.
+    Text("Wand", style = Caption)
     Panel {
-        ToggleRow("Wand: tap the back of the phone for B (experimental)", s.backTap.value) { s.backTap.value = it }
-        // No speed slider on purpose: these send the phone's real angle and the game maps it 1:1.
-        Text("Wand and Grip send the phone's real angle, so aim speed is set in each game, not here.", style = Caption)
+        ToggleRow("Tap the back of the phone for B (experimental)", s.backTap.value) { s.backTap.value = it }
     }
 
     Panel {
         ActionButton(if (confirmReset) "Tap again to reset" else "Reset settings to defaults", Modifier.fillMaxWidth()) {
             if (confirmReset) { s.resetToDefaults(); confirmReset = false; haptics.play(Feel.Thud) } else confirmReset = true
         }
-        Text(
-            if (confirmReset) "Resets everything on this page. Your paired PC stays paired."
-            else "Look, vibration, pointer and pad settings go back to how they were at install.",
-            style = Caption,
-        )
+        if (confirmReset) Text("Everything on this page goes back to default. Your PC stays paired.", style = Caption)
     }
 
     Panel {
-        ActionButton("About, help and licences", Modifier.fillMaxWidth(), onClick = onAbout)
-        Text("Mimic ${dev.mimic.BuildConfig.VERSION_NAME}. How to pair, update check, links.", style = Caption)
+        ActionButton("About Mimic", Modifier.fillMaxWidth(), onClick = onAbout)
     }
     Box(Modifier.height(12.dp))
 }

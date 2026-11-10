@@ -87,7 +87,7 @@
     mute(m) { muted = m; if (master) master.gain.setTargetAtTime(m ? 0 : volume, ctx.currentTime, 0.08); },
 
     /** Per-frame continuous sound. s: flight state; view: 'chase'|'cockpit'|'external'. */
-    update(s, view, warn, paused) {
+    update(s, view, warn, paused, rush) {
       if (!ready) return;
       const t = ctx.currentTime, k = 0.06;
       if (paused || !s) {
@@ -116,10 +116,12 @@
       }
       N.cabin.frequency.setTargetAtTime(inside ? 1400 : 6000, t, 0.2);
       const v = s.tas;
-      const windAmt = clamp((v / 70) * (v / 70), 0, 1.2) * (inside ? 0.22 : 0.5) * (s.crashed ? 0 : 1);
+      // ground rush: low and fast, the air gets louder and brighter
+      const r = rush || 0;
+      const windAmt = clamp((v / 70) * (v / 70), 0, 1.2) * (inside ? 0.22 : 0.5) * (s.crashed ? 0 : 1) * (1 + 1.3 * r);
       N.windG.gain.setTargetAtTime(windAmt * (N.windS ? 0.4 : 1), t, 0.15);
       if (N.windS) { N.windSG.gain.setTargetAtTime(windAmt * 1.6 * (1 + (s.stall || 0) * 0.8), t, 0.15); N.windS.playbackRate.setTargetAtTime(0.8 + v / 200, t, 0.3); }
-      N.windBP.frequency.setTargetAtTime(250 + v * 18, t, 0.2);
+      N.windBP.frequency.setTargetAtTime(250 + v * 18 + r * 900, t, 0.2);
       const roll = s.onGround && !s.crashed ? clamp(s.groundSpeed / 30, 0, 1) : 0;
       N.rumG.gain.setTargetAtTime(roll * (s.scraping ? 0.2 : 0.5), t, 0.05);
       N.scrG.gain.setTargetAtTime(s.scraping && s.groundSpeed > 1 ? 0.25 : 0, t, 0.05);
@@ -181,6 +183,21 @@
       o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.15);
     },
     chime() { this.blip(660); setTimeout(() => this.blip(990), 110); },
+    /** Air tearing past: a filtered noise sweep (ridge skims, near misses). */
+    whoosh(strength) {
+      if (!ready) return;
+      const t = ctx.currentTime, s = clamp(strength || 0.6, 0.1, 1);
+      const n = noiseSource(); const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.2;
+      bp.frequency.setValueAtTime(400, t); bp.frequency.exponentialRampToValueAtTime(2600, t + 0.18); bp.frequency.exponentialRampToValueAtTime(300, t + 0.6);
+      const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.5 * s, t + 0.12); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.65);
+      n.connect(bp); bp.connect(g); g.connect(master); n.stop(t + 0.7);
+    },
+    /** A rising two-note sting for a multiplier step (higher notes for higher steps). */
+    step(n) {
+      if (!ready) return;
+      const base = 440 * Math.pow(2, Math.min(n, 8) / 12 * 2);
+      this.blip(base); setTimeout(() => this.blip(base * 1.5), 70);
+    },
   };
   window.AudioFX = AudioFX;
 })();

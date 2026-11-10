@@ -13,6 +13,28 @@ const t = {
   down() { const d = hat(v(4)); assert.ok(d.down && !d.left); },
   left() { const d = hat(v(6)); assert.ok(d.left && !d.down); },
   diagonalUpRight() { const d = hat(v(1)); assert.ok(d.up && d.right); },
+  // stunts: two quick full flicks the same way fire once; a held stick or a slow second flick never does
+  doubleFlickRolls() {
+    const f = new ctx.FlightInputFlick();
+    const seq = [[0.1, 1], [0.1, 0], [0.1, 1], [0.3, 0]], out = [];
+    for (const [d, v] of seq) for (let t = 0; t < d; t += 1 / 60) out.push(f.update(1 / 60, v, 0).roll);
+    assert.strictEqual(out.filter(x => x === 1).length, 1);
+  },
+  heldStickNeverFlicks() {
+    const f = new ctx.FlightInputFlick(); let n = 0;
+    for (let t = 0; t < 5; t += 1 / 60) n += Math.abs(f.update(1 / 60, -1, 1).roll) + f.update(0, -1, 1).loop;
+    assert.strictEqual(n, 0);
+  },
+  slowSecondFlickIsATurnNotARoll() {
+    const f = new ctx.FlightInputFlick(); let n = 0;
+    for (const [d, v] of [[0.3, 1], [0.4, 0], [0.3, 1]]) for (let t = 0; t < d; t += 1 / 60) n += Math.abs(f.update(1 / 60, v, 0).roll);
+    assert.strictEqual(n, 0);
+  },
+  doublePullLoops() {
+    const f = new ctx.FlightInputFlick(); let n = 0;
+    for (const [d, v] of [[0.08, 1], [0.08, 0], [0.08, 1]]) for (let t = 0; t < d; t += 1 / 60) n += f.update(1 / 60, 0, v).loop;
+    assert.strictEqual(n, 1);
+  },
   // the phone: tilt is read against gravity, so twisting it (or the phone's own slow yaw drift)
   // never leaks into pitch or roll, even when the neutral pose is not flat
   twistDoesNotLeakIntoRoll() {

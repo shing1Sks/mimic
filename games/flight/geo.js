@@ -346,6 +346,10 @@
     }
     // ---- ring time trial over the real terrain (planned in the browser from the heights)
     const rs = P.rings ? Object.assign(F.toLocal(P.rings.lon, P.rings.lat), { hdg: P.rings.hdg }) : (air ? { x: loc.start.x, z: loc.start.z, hdg: loc.start.hdg } : null);
+    // ---- low pass: two minutes low and fast over the real ground, scored by skim.js
+    const ls = rs || { x: (startRunway ? homeRw.thr.x : 0), z: (startRunway ? homeRw.thr.z : 0), hdg: startRunway ? homeRw.hdg : 0 };
+    out.unshift({ id: 'lowpass', name: 'Low pass', blurb: 'Two minutes low and fast over the real ground. Ridges, valleys and rolls score.', goal: 'Low pass: get under 200 ft at speed and stay there. 2:00 on the clock',
+      skimStart: ls, steps: [] });
     if (rs) out.push({ id: 'rings', name: 'Ring run', blurb: 'Eight rings low over the real terrain, against the clock.', goal: 'Fly through 8 rings, low and fast. Follow the arrow', ringsStart: rs, steps: [] });
     // ---- free flight
     out.push({ id: 'free', name: 'Free flight', blurb: air ? 'No goal: you are airborne, go and look around.' : 'Runway ' + homeRw.name + ', engine idling. No goal: fly anywhere you like.',

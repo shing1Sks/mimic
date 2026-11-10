@@ -23,7 +23,7 @@
 
   const KEY_ACTIONS = {
     KeyF: 'flapsDown', KeyV: 'flapsUp', KeyG: 'gear', KeyC: 'camera', Escape: 'pause', KeyP: 'pause',
-    Enter: 'confirm', NumpadEnter: 'confirm', Backspace: 'back', KeyH: 'legend', KeyR: 'restart', KeyT: 'timeSkip',
+    Enter: 'confirm', NumpadEnter: 'confirm', Backspace: 'back', KeyH: 'legend', KeyR: 'restart', KeyT: 'timeSkip', Digit1: 'rollKey', Digit2: 'loop',
   };
   const NAV_KEYS = { ArrowUp: 'navUp', ArrowDown: 'navDown', ArrowLeft: 'navLeft', ArrowRight: 'navRight', KeyW: 'navUp', KeyS: 'navDown', KeyA: 'navLeft', KeyD: 'navRight' };
 
@@ -82,6 +82,10 @@
         this.kb[ax] = cur + clamp(tgt - cur, -rate * dt, rate * dt);
       }
       elev += this.kb.elevator * (S.invert ? -1 : 1); ail += this.kb.aileron; rud += this.kb.rudder;
+      // stunts on the keyboard are keys (1 roll, toward A or D if held; 2 loop): a double tap of a
+      // key is how keyboard pilots make small corrections, so flicks are for sticks only
+      if (actions.delete('rollKey')) actions.add(kbT.aileron < 0 ? 'rollLeft' : 'rollRight');
+      let rawAil = 0, rawElev = 0;
       if (this.k('ShiftLeft', 'ShiftRight', 'PageUp', 'Equal', 'NumpadAdd')) thrRate += 0.6;
       if (this.k('ControlLeft', 'ControlRight', 'PageDown', 'Minus', 'NumpadSubtract')) thrRate -= 0.6;
       if (this.k('BracketRight', 'End')) trimRate += 0.25;
@@ -119,6 +123,8 @@
         const sa = shape(lx, sf, 0.08, S.expo);
         const sr = shape(rx, 1, 0.12, S.expo * 0.5);
         elev += se; ail += sa; rud += sr;
+        if (Math.abs(sa) > Math.abs(rawAil)) rawAil = sa;
+        if (Math.abs(se) > Math.abs(rawElev)) rawElev = se;
         thrRate += (r2 - l2) * 0.6;
         // D-pad: standard pads use buttons 12-15; the Mimic Pad sends a hat on axis 9 (and its
         // button 12 is Home, not a direction)
@@ -148,6 +154,14 @@
         this._flapButton(st, b(0), actions);
         if (Math.abs(lx) + Math.abs(ly) > 0.3 || p.buttons.some(x => x.pressed)) this.lastSource = mimicPad ? 'Mimic Pad' : 'gamepad';
         st.prev = p.buttons.map(x => x.pressed);
+      }
+
+      // ---------------- stunt flicks: two quick full deflections of a stick the same way
+      if (flying) {
+        const f = this.flick || (this.flick = new Flick());
+        const g = f.update(dt, rawAil, rawElev);
+        if (g.roll) actions.add(g.roll > 0 ? 'rollRight' : 'rollLeft');
+        if (g.loop > 0) actions.add('loop');
       }
 
       // ---------------- integrate throttle/trim, mix
@@ -215,6 +229,23 @@
     return m(m({ x: 0, y: sy, z: 0, w: cy }, { x: sp, y: 0, z: 0, w: cp }), { x: 0, y: 0, z: sr, w: cr });
   }
 
+  /**
+   * Stunt gesture: a double flick of an axis to full (out, back under half, out again the same way
+   * within `win` s). A held stick or key never fires, so a long turn stays a turn.
+   */
+  function Flick(win) { this.win = win || 0.45; this.t = 0; this.ax = { a: 0, at: -9, dir: 0 }; this.el = { a: 0, at: -9, dir: 0 }; }
+  Flick.prototype.axis = function (st, v) {
+    const dir = v > 0.9 ? 1 : v < -0.9 ? -1 : 0;
+    let fired = 0;
+    if (dir && !st.a) {
+      if (st.dir === dir && this.t - st.at < this.win) { fired = dir; st.at = -9; } else st.at = this.t;
+      st.dir = dir; st.a = 1;
+    } else if (!dir && Math.abs(v) < 0.5) st.a = 0;
+    return fired;
+  };
+  Flick.prototype.update = function (dt, ail, elev) { this.t += dt; return { roll: this.axis(this.ax, ail), loop: this.axis(this.el, elev) }; };
+
+  window.FlightInputFlick = Flick;
   window.FlightInputPhone = { attitude: phoneAttitude, relative, washout, fromEuler };
   window.FlightInput = FlightInput;
   window.FlightInputHat = hatDirs;

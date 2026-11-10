@@ -142,6 +142,8 @@ const t = {
     const ch = Geo.planChallenges(DB, loc, { windFromDeg: 270 });
     const ids = ch.map(c => c.id);
     for (const k of ['tour', 'hop', 'landing', 'free']) assert.ok(ids.includes(k), k);
+    assert.strictEqual(ids[0], 'lowpass', 'the low pass leads the list');
+    assert.ok(ch[0].skimStart && Number.isFinite(ch[0].skimStart.x), 'and knows where it starts');
     const hop = ch.find(c => c.id === 'hop');
     const dest = hop.steps[hop.steps.length - 1];
     assert.strictEqual(dest.kind, 'land'); assert.notStrictEqual(dest.airport, 'VOBG');

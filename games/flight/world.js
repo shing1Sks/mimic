@@ -784,6 +784,15 @@ void main(){ vec2 c = gl_PointCoord - 0.5; float r = length(c) * 2.0; float a = 
       [new THREE.IcosahedronGeometry(0.24, 0).translate(-0.15, 0.8, -0.1), lin('#4a6c2b')],
       [new THREE.IcosahedronGeometry(0.22, 0).translate(0.02, 0.92, -0.02), lin('#5a7d34')],
     ], true);
+    // far versions: one cone or one blob, ~1/8 of the triangles, swapped in per chunk by distance
+    const treeConLo = mergeColored([
+      [new THREE.CylinderGeometry(0.05, 0.08, 0.3, 3, 1, true).translate(0, 0.15, 0), lin('#4b3524')],
+      [new THREE.ConeGeometry(0.42, 0.8, 6, 1, true).translate(0, 0.6, 0), lin('#27462c')],
+    ], true);
+    const treeDecLo = mergeColored([
+      [new THREE.CylinderGeometry(0.05, 0.08, 0.45, 3, 1, true).translate(0, 0.22, 0), lin('#4f3a28')],
+      [new THREE.IcosahedronGeometry(0.4, 0).scale(1, 0.9, 1).translate(0, 0.7, 0), lin('#4d702d')],
+    ], true);
     const treeMat = new THREE.MeshLambertMaterial({ vertexColors: true });
     const CH = 12, chunkSize = T.SIZE / CH;
     const treeChunks = [];
@@ -827,7 +836,8 @@ void main(){ vec2 c = gl_PointCoord - 0.5; float r = length(c) * 2.0; float a = 
         if (!list.length) return;
         const cx = -HALF + (Math.floor(ci / CH) + 0.5) * chunkSize, cz = -HALF + (ci % CH + 0.5) * chunkSize;
         let maxY = 0; list.forEach(t => { maxY = Math.max(maxY, t[1] + t[3]); });
-        const g = shareGeo(geo, new THREE.Sphere(new THREE.Vector3(cx, maxY / 2, cz), chunkSize * 0.75 + maxY));
+        const sphere = new THREE.Sphere(new THREE.Vector3(cx, maxY / 2, cz), chunkSize * 0.75 + maxY);
+        const g = shareGeo(geo, sphere), gLo = shareGeo(type ? treeDecLo : treeConLo, sphere);
         const im = new THREE.InstancedMesh(g, treeMat, list.length);
         list.forEach((t, i) => {
           q4.setFromAxisAngle(yAxis, t[4]); s4.set(t[3] * (0.85 + 0.3 * ((i * 7919) % 10) / 10), t[3], t[3]); p4.set(t[0], t[1], t[2]);
@@ -838,7 +848,7 @@ void main(){ vec2 c = gl_PointCoord - 0.5; float r = length(c) * 2.0; float a = 
         im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
         im.castShadow = false; im.receiveShadow = false;
         scene.add(im);
-        treeChunks.push({ im, cx, cz });
+        treeChunks.push({ im, cx, cz, g, gLo });
       });
     });
     W.treeCount = treeCount;
@@ -1040,7 +1050,13 @@ void main(){ vec2 c = gl_PointCoord - 0.5; float r = length(c) * 2.0; float a = 
         W.updateTerrainLod(camera.position);
         // trees are most of the island's triangles: draw them as far as the fog lets you see them
         const far = W.treeFar + Math.max(0, camera.position.y - 500) * 1.2;
-        if (W.islandOn) for (const t of treeChunks) t.im.visible = Math.hypot(camera.position.x - t.cx, camera.position.z - t.cz) < far + chunkSize * 0.7;
+        if (W.islandOn) for (const t of treeChunks) {
+          const d = Math.hypot(camera.position.x - t.cx, camera.position.z - t.cz);
+          t.im.visible = d < far + chunkSize * 0.7;
+          // full trees only in the chunks around the camera (a 15 m tree is a few pixels past ~1.5 km)
+          const lo = Math.max(0, d - chunkSize * 0.72) + Math.max(0, camera.position.y - 400) > 1200;
+          t.im.geometry = lo ? t.gLo : t.g;
+        }
       }
       sky.mesh.position.copy(camera.position);
       water.position.x = Math.round(camera.position.x / 1000) * 1000; water.position.z = Math.round(camera.position.z / 1000) * 1000;

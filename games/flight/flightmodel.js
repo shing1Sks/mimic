@@ -31,7 +31,7 @@
     CL0: 0.22, CLa: 5.0, alphaCrit: 15 * DEG, alphaCritNeg: -13 * DEG,
     CD0: 0.027, gearCD: 0.012, flapCD: 0.05, flapCL: 0.6, flapAlphaLoss: 1.5 * DEG,
     CYb: -0.4, CYdr: 0.12,
-    Clb: -0.1, Clp: -0.47, Clr: 0.1, Clda: 0.042,
+    Clb: -0.1, Clp: -0.47, Clr: 0.1, Clda: 0.065,
     Cm0: 0.035, Cma: -0.9, Cmq: -16, Cmde: 0.37, Cmflap: -0.07,
     Cnb: 0.07, Cnr: -0.1, Cnp: -0.04, Cndr: 0.075, Cnda: -0.012, pFactor: 0.005,
     propWash: 0.06,
@@ -547,16 +547,57 @@
     const A = AIRCRAFT, CLmax = liftCoefficient(alphaCritFor(flap || 0), flap || 0);
     return Math.sqrt(2 * A.mass * G / (RHO0 * A.S * CLmax));
   }
-  const STEADY = { maxBank: 33 * DEG, maxGamma: 10 * DEG, minGamma: -12 * DEG };
+  const STEADY = { maxBank: 33 * DEG, sportBank: 60 * DEG, maxGamma: 10 * DEG, minGamma: -12 * DEG, stuntAgl: 150 };
   function steady(s, c, out, dt) {
     const ap = s.ap || (s.ap = { ie: 0, ia: 0, on: false });
-    if (s.onGround || s.tas < 20) { ap.on = false; return out; }   // the takeoff roll and rotation are flown raw
+    if (s.onGround || s.tas < 20) { ap.on = false; ap.stunt = null; return out; }   // the takeoff roll and rotation are flown raw
     const A = AIRCRAFT, att = attitude(s), bank = att.bank * DEG, V = Math.max(s.tas, 20);
+    // ---- stunts (c.stunt: 'rollLeft' | 'rollRight' | 'loop', one frame, from the input's double
+    // flick): a scripted roll or loop, then back to attitude hold
+    const gest = { roll: c.stunt === 'rollRight' ? 1 : c.stunt === 'rollLeft' ? -1 : 0, loop: c.stunt === 'loop' ? 1 : 0 };
+    if (!ap.stunt && (gest.roll || gest.loop) && s.agl <= STEADY.stuntAgl) ap.refused = 'low';
+    if (!ap.stunt && s.agl > STEADY.stuntAgl) {
+      const start = kind => { if (!ap.on) ap.ie = s.surfaces.elevator - (c.trim || 0); return { kind, acc: 0, t: 0, phase: 'pull' }; };
+      // a trainer needs energy: ~80 kt for a roll, a dive to ~125 kt for a loop (else the game says so)
+      if (gest.roll) { if (s.airspeed > 41) ap.stunt = Object.assign(start('roll'), { dir: gest.roll }); else ap.refused = 'roll'; }
+      else if (gest.loop > 0) { if (s.airspeed > 64) ap.stunt = start('loop'); else ap.refused = 'loop'; }
+    }
+    if (ap.stunt) {
+      const st = ap.stunt; st.t += dt;
+      // pitch rate command through the same inner loop as attitude hold, the wing kept below its stall
+      const lim = alphaCritFor(s.flap) - 2.5 * DEG;
+      const qLoop = q => {
+        if (s.alpha > lim) q = Math.min(q, s.omega.y - 3 * (s.alpha - lim));
+        const qe = q - s.omega.y; ap.ie = clamp(ap.ie + 1.2 * qe * dt, -1, 1);
+        return clamp(ap.ie + 1.0 * qe - (c.trim || 0), -1.5, 1.5);
+      };
+      if (st.kind === 'roll') {
+        // a barrel roll: raise the nose ~15 deg, then full aileron with light back pressure
+        if (st.phase === 'pull') {
+          out.elevator = qLoop(0.45); out.aileron = clamp(-1.6 * bank - 0.8 * s.omega.x, -1, 1);
+          if (att.pitch > 10 || st.t > 1.3) st.phase = 'roll';
+        } else {
+          st.acc += s.omega.x * dt * st.dir;
+          out.aileron = st.dir;
+          out.elevator = qLoop(0.12 * Math.cos(bank) + 0.06);
+          if (st.acc > 2 * Math.PI - 0.3 || st.t > 10) ap.stunt = null;
+        }
+      } else {
+        st.acc += s.omega.y * dt;
+        out.elevator = qLoop(clamp(3.4 * G / V, 0.3, 1.1));   // ~3.5 g at the bottom, floating over the top
+        out.aileron = clamp(-s.omega.x * 0.6, -0.4, 0.4);
+        if (st.acc > 2 * Math.PI - 0.5 || s.airspeed < 22 || st.t > 16) ap.stunt = null;
+      }
+      if (!ap.stunt) { ap.on = false; ap.done = st.kind; }
+      return out;
+    }
     if (!ap.on) { ap.on = true; ap.ie = s.surfaces.elevator - (c.trim || 0); ap.ia = 0; }   // bumpless engage
     // ---- roll: target bank from the stick, roll-rate inner loop with feed-forward
-    // near the ground the bank is kept shallow: 14 deg below 100 ft, the full 33 deg from 500 ft
+    // near the ground the bank is kept shallow: 14 deg below 100 ft, the full 33 deg from 500 ft;
+    // well clear of the ground the last 15% of the stick opens it up to a sporty 60 deg
     const maxBank = STEADY.maxBank * (0.42 + 0.58 * smoothstep(30, 150, s.agl));
-    const bankT = clamp(c.aileron, -1, 1) * maxBank;
+    const ail = clamp(c.aileron, -1, 1), sport = smoothstep(150, 300, s.agl) * smoothstep(0.85, 1, Math.abs(ail));
+    const bankT = ail * maxBank + Math.sign(ail) * sport * (STEADY.sportBank - STEADY.maxBank);
     const pCmd = clamp(1.6 * (bankT - bank), -0.7, 0.7);
     const pGain = A.b / (2 * V) * Math.abs(A.Clp) / A.Clda;   // aileron for a steady roll rate
     ap.ia = clamp(ap.ia + 0.4 * (bankT - bank) * dt, -0.15, 0.15);

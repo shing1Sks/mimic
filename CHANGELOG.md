@@ -19,6 +19,25 @@ Updated just before each approved release, not on every change.
   without a signaling relay show no QR that could not connect.
 - **Every local play is recorded:** on this machine's server each play saves the game video and every
   input (no prompt), so feedback can point at a real session; `?rec=0` turns it off.
+- **Willowlight (new):** two-phone floodlit cricket in Grip. One phone bowls a real overarm action (pace
+  from arm speed, length from release timing, line from the swing plane, spin from wrist twist, swing
+  from the seam), the other bats with the phone as the handle (timing, swing path, straight or cross
+  bat). Edges, bowled, LBW, catches by AI fielders, auto-run singles, fours and sixes; broadcast HUD
+  with speed gun, pitch map and wicket / six replays; two-seat lobby with role swap; solo match and
+  nets against the computer. Dropped for now: reverse swing, run-outs, byes, DRS.
+- **IRONFERN: ADRENALINE.** Weak-spot hits, kills and dodges fill a meter; when it is full and an animal
+  lunges at you the world slows to 0.28x for up to 3 s (aim stays 1:1, the phone beats like a heart)
+  and a kill inside it is a CLUTCH. Rumble on every shot, kill, hurt, roar, charge and big footstep
+  (the game never vibrated before); freezes on kills, slow-motion rex and trike deaths; a new gun and
+  arm look with spring recoil; Light quality about half the GPU time. Browser phones see HOLD / B /
+  CENTRE / SWITCH.
+- **Gyrowing: Low pass and the skim score.** Fly under 200 ft and over 70 kt over real terrain to
+  build x8 chains with ridge-skim, valley-threading and stunt bonuses; every place, including any
+  searched airport, leads with a 2-minute Low pass with a best score. Speed streaks, a tighter
+  low-level camera and ground-rush audio; barrel rolls and loops (double-flick the stick, or 1 / 2);
+  60 deg sport turns at full stick; rumble for skimming, bonuses, rings and stunts. Rebuilt cockpit
+  (chrome gauges, leather glareshield, wet compass, real yokes, throttle quadrant, night lighting).
+  Faster: tree LOD, Performance tier by default on integrated GPUs, no cockpit glass overlay.
 - **Tidecast (new):** motion fishing on a golden-hour dock. Cast with a real flick (hold A as a thumb
   on the spool, let go as the rod comes forward: timing and wrist speed set the arc), feel nibbles and
   the strike through the phone, set the hook with an upward jerk, then fight: rod angle against the

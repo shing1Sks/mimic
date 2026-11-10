@@ -5,13 +5,13 @@
   const KEYS = {
     phone: { thrUp: 'hold D-pad up', thrDown: 'D-pad down', noseUp: 'tilt the phone\'s nose up gently', noseDown: 'tilt the nose down',
       gear: 'press 2', brake: 'hold B', flaps: 'A', flapsUp: 'hold A', turn: 'bank the phone', relevel: 'tap Center to re-level',
-      left: 'bank the phone left', right: 'bank the phone right', straighten: 'twist the phone' },
+      left: 'bank the phone left', right: 'bank the phone right', straighten: 'twist the phone', roll: 'flick the stick to one side twice', loop: 'flick it back twice' },
     pad: { thrUp: 'hold R2', thrDown: 'L2', noseUp: 'pull the left stick back gently', noseDown: 'push the left stick forward',
       gear: 'press X', brake: 'hold B', flaps: 'A', flapsUp: 'hold A', turn: 'push the left stick sideways', relevel: '',
-      left: 'left stick left', right: 'left stick right', straighten: 'right stick (rudder)' },
+      left: 'left stick left', right: 'left stick right', straighten: 'right stick (rudder)', roll: 'flick the left stick to one side twice', loop: 'flick it back twice' },
     kbm: { thrUp: 'hold Shift', thrDown: 'Ctrl', noseUp: 'hold S gently', noseDown: 'press W',
       gear: 'press G', brake: 'hold Space', flaps: 'F', flapsUp: 'press V', turn: 'A / D to bank', relevel: '',
-      left: 'hold A', right: 'hold D', straighten: 'Q / E rudder' },
+      left: 'hold A', right: 'hold D', straighten: 'Q / E rudder', roll: 'press 1', loop: 'press 2' },
   };
   const VR = 55;   // kt: lift the nose
   const km = m => (m / 1000).toFixed(1) + ' km';
@@ -24,7 +24,8 @@
     const k = KEYS[s.device] || KEYS.kbm;
     const air = !s.onGround;
     if (air && s.stall) return { id: 'stall', text: `Stall! Nose down (${k.noseDown}) and add throttle (${k.thrUp})` };
-    if (air && Math.abs(s.bank || 0) > 35) {
+    // (60 deg is the Steady assist's sport turn; a roll or loop the assist is flying is not a problem)
+    if (air && Math.abs(s.bank || 0) > 65 && !s.stunt) {
       const side = s.bank < 0 ? 'right' : 'left';   // bank < 0 = left wing down: roll right
       return { id: 'level', text: `Steep bank (${Math.round(Math.abs(s.bank))}°): roll the wings level, ${k[side]}` };
     }
@@ -34,6 +35,7 @@
       return { id: 'flapsUp', text: `Flaps up for the climb: ${k.flapsUp} (flaps ${['up', '10', '20', '30'][s.flaps]} is all drag)` };
     }
     if (s.mode === 'mission') return missionCoach(s, k);
+    if (s.mode === 'lowpass') return lowpass(s, k);
     if (s.mode === 'free') return s.onGround ? (takeoff(s, k) || free(k, s)) : (s.aglFt < 1000 && s.t < 90 ? { id: 'climb', text: `Climb to 1,000 ft (${Math.round(s.aglFt)} now). Keep the nose a little up, not steep` } : free(k, s));
     if (s.mode === 'runway') {
       const t = takeoff(s, k); if (t) return t;
@@ -98,7 +100,23 @@
     return free(k);
   }
 
+  /** The low-pass run: get down, keep the chain, use the ground. s.skim: { mult, active } */
+  function lowpass(s, k) {
+    const sk = s.skim || {};
+    if (s.onGround) return takeoff(s, k) || { id: 'lpGo', text: 'Take off and get down low' };
+    if (s.ias < 70) return { id: 'lpSlow', text: `Speed up, a skim counts from 70 kt (${Math.round(s.ias)} now): ${k.thrUp}` };
+    if (s.aglFt > 200) return { id: 'lpDown', text: `Get down, under 200 ft starts a chain (${Math.round(s.aglFt)} ft now): ${k.noseDown}` };
+    if (sk.active && sk.mult >= 3) return { id: 'lpRidge', text: `x${sk.mult}! Cross ridges close and fly between valley walls for bonuses. Climbing away banks the chain` };
+    return { id: 'lpLow', text: 'Skimming: the lower and faster, the more it pays. Stay low to build the multiplier' };
+  }
+
   function free(k, s) {
+    // every so often, well clear of the ground, a reminder of the fun stuff
+    if (s && !s.onGround && s.t > 40 && s.aglFt > 600) {
+      const tip = Math.floor(s.t / 14) % 3;
+      if (tip === 0) return { id: 'free', text: `Barrel roll: ${k.roll}. A loop: dive past 125 kt, then ${k.loop}` };
+      if (tip === 1) return { id: 'free', text: 'Skim: dive under 200 ft at speed and a chain starts. Crest ridges close for bonuses' };
+    }
     const n = s && s.nearest;
     if (n) return { id: 'free', text: `Free flight. Nearest runway: ${n.name} ${n.rwy}, ${Math.round(n.distKm)} km ${n.dir}. ${k.turn} to turn` };
     return { id: 'free', text: `Free flight. Try a gentle turn: ${k.turn}. Land back on runway 09 when ready (gear: ${k.gear.replace(/^(press|hold) /, '')}, flaps: ${k.flaps})` };

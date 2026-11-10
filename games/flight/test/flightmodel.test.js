@@ -327,5 +327,29 @@ console.log('hands-off stability (the mid-flight "push")');
   check('Steady: full roll at 60 ft stays a shallow bank (< 17 deg) and does not crash', maxBank < 17 && !s.crashed, { maxBank, crashed: s.crashReason });
 }
 
+{
+  // Steady stunts: a roll or (fast enough) a loop on command; a held stick only turns
+  const fly = (speed, stunt, T, axis) => {
+    const s = FM.trimState({ speed, gamma: 0, alt: 800, heading: 0, gear: false });
+    const e = FM.flatEnv(0), c = FM.controls(); c.throttle = 1; c.trim = s.trim.trim; c.gear = false;
+    let maxBank = 0, maxPitch = -90;
+    for (let t = 0; t < T; t += DT) {
+      c[axis] = stunt === 'hold' ? 1 : 0;
+      c.stunt = t === 0 && stunt !== 'hold' ? stunt : null;
+      FM.step(s, FM.applyAssists(s, c, { autoRudder: true, level: 'steady', dt: DT }), DT, e);
+      const a = FM.attitude(s); maxBank = Math.max(maxBank, Math.abs(a.bank)); maxPitch = Math.max(maxPitch, a.pitch);
+    }
+    return { maxBank: Math.round(maxBank), maxPitch: Math.round(maxPitch), end: FM.attitude(s), done: s.ap.done, refused: s.ap.refused, crashed: s.crashed };
+  };
+  const roll = fly(55, 'rollRight', 16, 'aileron');
+  check('Steady: a roll command right does a full roll and comes back level', roll.maxBank > 170 && Math.abs(roll.end.bank) < 5 && roll.done === 'roll' && !roll.crashed, roll);
+  const held = fly(55, 'hold', 12, 'aileron');
+  check('  a held full stick is a 60 deg sport turn, never a roll', held.maxBank > 50 && held.maxBank < 66 && !held.done, held);
+  const loop = fly(70, 'loop', 16, 'elevator');
+  check('  a loop command at 136 kt loops (nose through the vertical) and recovers', loop.maxPitch > 80 && loop.done === 'loop' && Math.abs(loop.end.bank) < 5 && !loop.crashed, loop);
+  const slow = fly(50, 'loop', 6, 'elevator');
+  check('  at cruise speed a loop is refused (not enough energy)', slow.refused === 'loop' && !slow.done, slow);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

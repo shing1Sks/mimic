@@ -42,6 +42,20 @@ const t = {
     assert.ok(/HAL/.test(c.text) && /12 km/.test(c.text) && /south-east/.test(c.text), c.text);
     assert.ok(!/09/.test(c.text), 'no island runway in the real world');
   },
+  lowPassSaysGetDownThenKeepTheChain() {
+    const lp = o => at(Object.assign({ mode: 'lowpass', onGround: false, gearDown: false, throttle: 0.8, ias: 100, aglFt: 600 }, o));
+    assert.strictEqual(lp({}).id, 'lpDown');
+    assert.ok(/600 ft/.test(lp({}).text), lp({}).text);
+    assert.strictEqual(lp({ ias: 60 }).id, 'lpSlow');
+    assert.strictEqual(lp({ aglFt: 120, skim: { active: true, mult: 1 } }).id, 'lpLow');
+    assert.ok(/x4/.test(lp({ aglFt: 80, skim: { active: true, mult: 4 } }).text));
+  },
+  freeFlightTipsTheStuntsLater() {
+    const f = t => at({ mode: 'free', device: 'kbm', onGround: false, aglFt: 2000, ias: 95, gearDown: false, throttle: 0.7, t });
+    assert.ok(!/roll/i.test(f(10).text), 'not straight away');
+    assert.ok(/press 1/.test(f(42).text) && /125 kt/.test(f(42).text), f(42).text);
+    assert.ok(/twice/.test(at({ mode: 'free', device: 'pad', onGround: false, aglFt: 2000, ias: 95, gearDown: false, throttle: 0.7, t: 42 }).text), 'pads flick');
+  },
   stallWarningBeatsEverything() {
     const c = at({ throttle: 1, ias: 35, onGround: false, aglFt: 500, gearDown: false, stall: true });
     assert.strictEqual(c.id, 'stall');
@@ -61,10 +75,11 @@ const t = {
     assert.strictEqual(A({ t: 30 }).id, 'free');
   },
   steepBankSaysRollLevelTheRightWay() {
-    const c = at({ onGround: false, aglFt: 300, ias: 70, throttle: 1, gearDown: false, bank: -42 });
+    const c = at({ onGround: false, aglFt: 300, ias: 70, throttle: 1, gearDown: false, bank: -72 });
     assert.strictEqual(c.id, 'level');
-    assert.ok(/right/.test(c.text) && /42/.test(c.text), c.text);
-    assert.notStrictEqual(at({ onGround: false, aglFt: 300, ias: 70, throttle: 1, gearDown: false, bank: -20 }).id, 'level');
+    assert.ok(/right/.test(c.text) && /72/.test(c.text), c.text);
+    assert.notStrictEqual(at({ onGround: false, aglFt: 300, ias: 70, throttle: 1, gearDown: false, bank: -58 }).id, 'level', 'a 60 deg sport turn is fine');
+    assert.notStrictEqual(at({ onGround: false, aglFt: 3000, ias: 90, throttle: 1, gearDown: false, bank: 150, stunt: true }).id, 'level', 'not mid-roll');
   },
   // ---- missions: the coach turns the objective into the next control input
   missionTakeoffUsesTheRunwayCoaching() {

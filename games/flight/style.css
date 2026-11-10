@@ -155,6 +155,29 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0f13; col
 #turbChip { position: fixed; top: 60px; left: 50%; transform: translateX(-50%); z-index: 4; font-size: 11px; letter-spacing: 0.16em; color: #ffd28a;
   background: rgba(40, 24, 4, 0.7); border: 1px solid rgba(255, 177, 59, 0.45); padding: 4px 10px; border-radius: 999px; pointer-events: none; animation: pulse 2.4s ease-in-out infinite; }
 
+/* ---------- skim meter (right rail): low-flying chain, multiplier, callouts */
+#skim { position: fixed; right: 18px; top: 50%; transform: translateY(-50%); z-index: 4; width: clamp(168px, 12vw, 232px); pointer-events: none; text-align: right; --low: 0;
+  padding: 10px 14px 12px; border-radius: 12px; background: rgba(8, 11, 14, 0.62); border: 1px solid var(--line); border-right: 3px solid rgba(255, 177, 59, calc(0.3 + 0.7 * var(--low)));
+  transition: box-shadow 0.2s, border-color 0.2s; }
+#skim.live { box-shadow: 0 0 calc(30px * var(--low)) rgba(255, 140, 40, calc(0.45 * var(--low))); }
+#skim .sk-mult { font-size: 13px; font-weight: 700; letter-spacing: 0.16em; color: var(--dim); }
+#skim.live .sk-mult { font-size: clamp(32px, 2.6vw, 46px); line-height: 1; letter-spacing: 0.02em; font-style: italic; color: var(--amber); text-shadow: 0 0 14px rgba(255, 140, 40, 0.6); }
+#skim .sk-pts { font-size: clamp(24px, 1.9vw, 34px); font-weight: 700; font-variant-numeric: tabular-nums; color: #fff; margin-top: 2px; }
+#skim .sk-sub { font-size: 11px; letter-spacing: 0.1em; color: var(--dim); text-transform: uppercase; }
+#skim .sk-bar { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.1); margin-top: 8px; overflow: hidden; }
+#skim .sk-bar i { display: block; height: 100%; background: var(--amber); transform-origin: 100% 50%; transform: scaleX(0); transition: transform 0.08s linear; }
+#skim .sk-total { font-size: 12px; color: #c3ccd2; margin-top: 6px; min-height: 0; }
+#skim .sk-total:empty, #skim:not(.live) .sk-bar { display: none; }
+#pops { position: absolute; right: 0; top: calc(100% + 10px); display: flex; flex-direction: column-reverse; align-items: flex-end; gap: 6px; }
+.pop { font-size: clamp(15px, 1.1vw, 19px); font-weight: 700; white-space: nowrap; color: #fff; padding: 5px 11px; border-radius: 8px; background: rgba(8, 11, 14, 0.72); border: 1px solid rgba(255, 177, 59, 0.5);
+  animation: popIn 1.9s ease-out forwards; }
+.pop.mult { color: var(--amber); font-size: 20px; font-style: italic; }
+.pop.banked { color: #3ddc84; border-color: rgba(61, 220, 132, 0.5); }
+.pop.lost { color: #ff6b5b; border-color: rgba(255, 77, 61, 0.5); }
+.pop.roll, .pop.loop, .pop.inverted { color: #5ad1ff; border-color: rgba(90, 209, 255, 0.5); }
+@keyframes popIn { 0% { opacity: 0; transform: translateX(20px) scale(0.9); } 10% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; transform: translateY(-14px); } }
+#missionList .btn.hot { border-color: rgba(255, 177, 59, 0.45); }
+
 /* ---------- real world: menu column, location screen, loading, goal card, attribution */
 .menu-panel { width: min(1180px, 96vw); padding-top: clamp(14px, 2.6svh, 22px); padding-bottom: clamp(14px, 2.6svh, 22px); }
 .menu-cols { grid-template-columns: 1.55fr 1fr; }

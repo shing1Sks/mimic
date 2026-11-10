@@ -1,0 +1,44 @@
+# Gradle / Android build outputs
+.gradle/
+.kotlin/
+build/
+captures/
+*.apk
+*.aab
+*.ap_
+*.dex
+output-metadata.json
+
+# Local machine config
+local.properties
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Signing material and secrets: never commit
+*.keystore
+*.jks
+keystore.properties
+signing.properties
+*.p12
+*.pem
+.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+
+# Tools and agent scratch
+.superpowers/
+windows/out/
+
+# Play recordings written by tools/serve.py (video + controller input)
+recordings/
+
+# Internal planning and agent notes: kept locally, never published
+docs/superpowers/
+docs/design.md
+games/dino/BUILD-NOTES.md

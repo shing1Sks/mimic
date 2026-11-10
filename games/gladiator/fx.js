@@ -86,6 +86,7 @@
     fx.blood = new Particles(scene, 600, { gravity: 9.8, size: 0.06, additive: false, drag: 0.6, soft: true, floorHit: (x, z) => decal(x, z) });
     fx.dust = new Particles(scene, 200, { gravity: -0.15, size: 0.5, additive: false, drag: 2.5, soft: true });
     fx.dust.mat.opacity = 0.35;
+    fx.chip = new Particles(scene, 300, { gravity: 7, size: 0.035, additive: false, drag: 1.2 });
     const c1 = new T.Color(), tmp = new T.Vector3();
 
     /** Sparks flying from p, biased along dir (Vector3, optional). */
@@ -98,14 +99,22 @@
         fx.sparks.emit(p, tmp, c1, 0.25 + Math.random() * 0.35);
       }
     };
-    /** Blood spray from p, thrown along dir (the cut's motion). */
-    fx.bleed = (p, strength, dir) => {
+    // versus: blood thrown off a player's own body stays out of that player's eyes (layer = what only the other sees)
+    const layered = {};
+    const bloodOn = layer => {
+      if (!layer) return fx.blood;
+      if (!layered[layer]) { layered[layer] = new Particles(scene, 300, { gravity: 9.8, size: 0.06, additive: false, drag: 0.6, soft: true, floorHit: (x, z) => decal(x, z) }); layered[layer].points.layers.set(layer); }
+      return layered[layer];
+    };
+    /** Blood spray from p, thrown along dir (the cut's motion). layer: see bloodOn. */
+    fx.bleed = (p, strength, dir, layer) => {
+      const sys = bloodOn(layer);
       const n = Math.round(14 + 50 * strength);
       for (let k = 0; k < n; k++) {
         tmp.set(Math.random() - 0.5, Math.random() * 0.8, Math.random() - 0.5).multiplyScalar(1.2 + 2.2 * strength);
         if (dir) tmp.addScaledVector(dir, 1 + Math.random() * 2.5 * strength);
         const d = 0.25 + Math.random() * 0.3; c1.setRGB(d, 0.01, 0.01);
-        fx.blood.emit(p, tmp, c1, 1.6);
+        sys.emit(p, tmp, c1, 1.6);
       }
       for (let k = 0; k < 3; k++) { lastDecal = 0; decal(p.x + (Math.random() - 0.5) * 0.5, p.z + (Math.random() - 0.5) * 0.5, 0.05 + 0.1 * strength * Math.random()); }
     };
@@ -116,7 +125,17 @@
         fx.dust.emit(new T.Vector3(p.x + tmp.x * 0.2, 0.08, p.z + tmp.z * 0.2), tmp, c1, 1.2);
       }
     };
-    fx.update = dt => { fx.sparks.update(dt); fx.blood.update(dt); fx.dust.update(dt); };
+    /** Chips that do not bleed: straw from a training post, bone from the dead. color: THREE.Color-like {r,g,b}. */
+    fx.chips = (p, strength, dir, color) => {
+      const n = Math.round(10 + 30 * strength);
+      for (let k = 0; k < n; k++) {
+        tmp.set(Math.random() - 0.5, Math.random() * 0.9, Math.random() - 0.5).multiplyScalar(1 + 2 * strength);
+        if (dir) tmp.addScaledVector(dir, 1 + Math.random() * 2 * strength);
+        const v = 0.8 + Math.random() * 0.4; c1.setRGB(color.r * v, color.g * v, color.b * v);
+        fx.chip.emit(p, tmp, c1, 0.9 + Math.random() * 0.6);
+      }
+    };
+    fx.update = dt => { fx.sparks.update(dt); fx.blood.update(dt); fx.dust.update(dt); fx.chip.update(dt); for (const k in layered) layered[k].update(dt); };
     fx.clearDecals = () => decals.forEach(d => { d.visible = false; });
     return fx;
   }

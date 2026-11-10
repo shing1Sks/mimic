@@ -19,6 +19,13 @@ Updated just before each approved release, not on every change.
   without a signaling relay show no QR that could not connect.
 - **Every local play is recorded:** on this machine's server each play saves the game video and every
   input (no prompt), so feedback can point at a real session; `?rec=0` turns it off.
+- **Iron Ludus: real swordplay.** The sword is a 3D blade driven 1:1 by the phone; blocking and
+  parrying mean meeting his blade with yours (no shield button, sidestep or thrust button). Damage from
+  contact speed, edge vs flat vs thrust and hit location, with lasting wounds (disarm, shield drop,
+  kneel, limp, daze). Opponents telegraph with their bodies, feint, read repeated lines and punish a
+  missed full swing; stamina and the rushed / waggle / tired penalties are gone. Why: replaying the
+  player's session, 74% of real swings were scored as glances and big swings averaged 0.11 power.
+  New training post, rebuilt split-screen versus, swing / hit / parry logging.
 - **Willowlight (new):** two-phone floodlit cricket in Grip. One phone bowls a real overarm action (pace
   from arm speed, length from release timing, line from the swing plane, spin from wrist twist, swing
   from the seam), the other bats with the phone as the handle (timing, swing path, straight or cross

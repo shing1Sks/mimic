@@ -25,13 +25,32 @@ kbd { font-family: var(--sans); font-size: 0.82em; background: rgba(255, 240, 21
 .bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; background: linear-gradient(180deg, #d23a2a, #8f1a14); transition: width 0.12s; }
 .bar b { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; background: rgba(255, 220, 160, 0.5); transition: width 0.7s 0.25s; z-index: -0; }
 .bar.hp i { z-index: 1; }
-.bar.st { height: 10px; }
-.bar.st i { background: linear-gradient(180deg, #f0d27a, #b8862f); }
-.bar.st.low i { background: linear-gradient(180deg, #8a8a8a, #555); }
 .bar.poise { height: 10px; }
 .bar.poise i { background: linear-gradient(180deg, #cfd6de, #7d8894); }
 #foe .bar i, #foe .bar b { left: auto; right: 0; }
 .lbl { display: flex; justify-content: space-between; font-size: 11px; letter-spacing: 0.18em; opacity: 0.78; }
+.p-row { display: flex; gap: 12px; align-items: center; }
+.p-col { flex: 1; min-width: 0; }
+/* wound doll: each part darkens as it is cut; a dropped sword, shield or a knee down shows dashed */
+.doll { width: 30px; height: 48px; flex: none; overflow: visible; }
+.doll circle, .doll rect { fill: rgba(244, 234, 214, 0.18); stroke: rgba(244, 234, 214, 0.75); stroke-width: 1.6; }
+.doll path { fill: none; stroke: rgba(244, 234, 214, 0.7); stroke-width: 4; stroke-linecap: round; }
+.doll .w1 { stroke: #f0c060; fill: rgba(240, 192, 96, 0.35); }
+.doll .w2 { stroke: #f07a3a; fill: rgba(240, 122, 58, 0.45); }
+.doll .w3 { stroke: #e3321f; fill: rgba(227, 50, 31, 0.55); }
+.doll path.w1, .doll path.w2, .doll path.w3 { fill: none; }
+.doll .gone { stroke-dasharray: 2 3; opacity: 0.6; }
+#readout { position: absolute; bottom: 70px; left: 50%; transform: translateX(-50%); display: flex; gap: 14px; align-items: baseline; padding: 7px 18px; background: var(--shadow); border: 1px solid rgba(230, 192, 102, 0.3); border-radius: 3px; font-size: 13px; letter-spacing: 0.12em; white-space: nowrap; }
+#readout .k { font-family: var(--serif); color: var(--gold); letter-spacing: 0.18em; }
+#readout b { font-family: var(--serif); font-size: 18px; color: var(--bone); letter-spacing: 0; }
+#readout.good { border-color: rgba(230, 192, 102, 0.7); box-shadow: 0 0 18px rgba(230, 192, 102, 0.18); }
+#readout .d b { color: #ffb199; }
+#practice { top: auto; bottom: 22px; left: 18px; min-width: 0; display: flex; gap: 18px; padding: 8px 16px; }
+#practice div { text-align: center; }
+#practice b { display: block; font-family: var(--serif); font-size: 20px; color: var(--gold); }
+#practice span { font-size: 10px; letter-spacing: 0.16em; opacity: 0.7; }
+.vs-w { font-size: 11px; letter-spacing: 0.14em; opacity: 0.8; min-height: 14px; }
+.vs-w b { color: #ff9d7a; font-weight: 600; }
 #hint { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); font-size: 15px; letter-spacing: 0.06em; padding: 8px 18px; background: var(--shadow); border-radius: 3px; border: 1px solid rgba(230, 192, 102, 0.25); max-width: 80vw; text-align: center; transition: opacity 0.3s; }
 #hint:empty { opacity: 0; }
 #ctrl-pill { position: absolute; bottom: 22px; right: 18px; font-size: 12px; padding: 6px 12px; background: var(--shadow); border-radius: 20px; display: flex; gap: 8px; align-items: center; }

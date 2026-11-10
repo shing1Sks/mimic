@@ -16,21 +16,26 @@
 <!-- ============ HUD ============ -->
 <div id="hud" class="hidden">
   <div id="me" class="panel">
-    <div class="who">YOU <span class="hp-num" id="me-hp">100</span></div>
-    <div class="bar hp"><i></i><b></b></div>
-    <div class="bar st"><i></i></div>
-    <div class="lbl"><span>HEALTH</span><span>STAMINA</span></div>
+    <div class="p-row"><svg class="doll" id="me-doll" viewBox="0 0 40 64" aria-hidden="true"><circle class="z-head" cx="20" cy="8" r="6"/><rect class="z-torso" x="13" y="16" width="14" height="21" rx="3"/><path class="z-off" d="M11 18 L5 34"/><path class="z-arm" d="M29 18 L35 34"/><path class="z-legs" d="M16 40 L14 61 M24 40 L26 61"/></svg><div class="p-col">
+      <div class="who">YOU <span class="hp-num" id="me-hp">100</span></div>
+      <div class="bar hp"><i></i><b></b></div>
+      <div class="lbl"><span>HEALTH</span><span>WOUNDS</span></div>
+    </div></div>
   </div>
   <div id="bout" class="panel center">
     <div id="bout-title">BOUT I</div>
     <div id="fame">FAME <b>0</b></div>
   </div>
   <div id="foe" class="panel right">
-    <div class="who" id="foe-name">CASSIA</div>
-    <div class="bar hp foe"><i></i><b></b></div>
-    <div class="bar poise"><i></i></div>
-    <div class="lbl"><span>HEALTH</span><span>POISE</span></div>
+    <div class="p-row"><div class="p-col">
+      <div class="who" id="foe-name">CASSIA</div>
+      <div class="bar hp foe"><i></i><b></b></div>
+      <div class="bar poise"><i></i></div>
+      <div class="lbl"><span>WOUNDS</span><span>HEALTH &middot; BALANCE</span></div>
+    </div><svg class="doll" id="foe-doll" viewBox="0 0 40 64" aria-hidden="true"><circle class="z-head" cx="20" cy="8" r="6"/><rect class="z-torso" x="13" y="16" width="14" height="21" rx="3"/><path class="z-arm" d="M11 18 L5 34"/><path class="z-off" d="M29 18 L35 34"/><path class="z-legs" d="M16 40 L14 61 M24 40 L26 61"/></svg></div>
   </div>
+  <div id="readout" class="hidden"></div>
+  <div id="practice" class="panel hidden"><div><b id="pr-hits">0</b><span>HITS</span></div><div><b id="pr-best">0</b><span>FASTEST M/S</span></div><div><b id="pr-dmg">0</b><span>BEST HIT</span></div><div><b id="pr-par">0</b><span>PARRIES</span></div></div>
   <div id="hint"></div>
   <div id="ctrl-pill"><i></i><span>Using mouse</span></div>
 </div>
@@ -51,6 +56,7 @@
       <button class="mi" data-act="practice">PRACTICE <small>no death</small></button>
       <button class="mi" data-act="versus">VERSUS <small>two phones</small></button>
       <button class="mi opt" data-act="hand">SWORD HAND <b id="opt-hand">RIGHT</b></button>
+      <button class="mi opt" data-act="assist">READ ASSIST <b class="opt-assist">OFF</b></button>
       <button class="mi opt" data-act="sound">VOLUME <b class="opt-vol">100%</b></button>
     </div>
     <div class="t-connect">
@@ -61,24 +67,23 @@
   <div class="t-right">
     <h3>HOW TO PLAY</h3>
     <ul class="howto">
-      <li><svg viewBox="0 0 24 24"><path d="M12 2v13M8 15h8M12 15v7"/><path d="M10 2h4"/></svg><b>Hold it like a sword</b><span>Top of the phone is the tip</span></li>
-      <li><svg viewBox="0 0 24 24"><path d="M4 20L20 4"/><path d="M14 4h6v6"/></svg><b>Swing to cut</b><span>Faster cuts hit harder</span></li>
-      <li><svg viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M5 8c3 0 5 2 5 4s-2 4-5 4"/><path d="M19 8c-3 0-5 2-5 4s2 4 5 4" opacity=".45"/></svg><b>Cut around their blade</b><span>Show one side, cut the other</span></li>
-      <li><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/><path d="M3 21L21 3"/></svg><b>Parry late</b><span>Blade on the red zone as it closes</span></li>
-      <li><svg viewBox="0 0 24 24"><path d="M5 3h14v8c0 5-3 8-7 10-4-2-7-5-7-10z"/></svg><b>Raise the shield</b><span>Heavy blows break it: sidestep</span></li>
-      <li><svg viewBox="0 0 24 24"><rect x="3" y="8" width="16" height="8" rx="1.5"/><path d="M21 11v2"/><path d="M6 11v2M9 11v2"/></svg><b>Mind your stamina</b><span>Every swing costs. Rest to refill</span></li>
+      <li><svg viewBox="0 0 24 24"><path d="M12 2v13M8 15h8M12 15v7"/><path d="M10 2h4"/></svg><b>The phone is the hilt</b><span>Your blade follows it exactly</span></li>
+      <li><svg viewBox="0 0 24 24"><path d="M4 20L20 4"/><path d="M14 4h6v6"/></svg><b>Swing through him</b><span>Speed is damage. Lead with the edge</span></li>
+      <li><svg viewBox="0 0 24 24"><path d="M4 4l16 16"/><path d="M20 4L4 20"/><circle cx="12" cy="12" r="2.5"/></svg><b>Meet his blow</b><span>In its path blocks. Into it parries</span></li>
+      <li><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.5"/><path d="M12 8v7M8 22l4-7 4 7"/><path d="M12 10l6-4"/><path d="M12 10L7 13"/></svg><b>Read his body</b><span>His hand draws back where it comes from</span></li>
+      <li><svg viewBox="0 0 24 24"><path d="M3 12h13"/><path d="M12 7l5 5-5 5"/><path d="M20 5v14"/></svg><b>Push to lunge</b><span>Shove the phone forward, point first</span></li>
+      <li><svg viewBox="0 0 24 24"><path d="M12 3v6M9 21l3-7 3 7"/><path d="M6 10h12"/><path d="M17 15l3 3M20 15l-3 3"/></svg><b>Wounds matter</b><span>Legs slow him, a cut arm drops the sword</span></li>
     </ul>
     <div class="t-keys">
       <span></span><b class="c-wand">WAND</b><b class="c-grip">GRIP</b>
-      <span>Shield</span><span>hold <kbd>A</kbd></span><span data-web="hold <kbd>HOLD</kbd>">hold <kbd>Vol Down</kbd></span>
-      <span>Sidestep</span><span><kbd>B</kbd></span><span data-web="tap <kbd>B</kbd>">tap <kbd>Vol Up</kbd></span>
-      <span>Thrust</span><span>jab or <kbd>1</kbd></span><span data-web="jab or <kbd>SWITCH</kbd>">jab or double-tap <kbd>Vol Up</kbd></span>
-      <span>Align</span><span><kbd>Center</kbd></span><span data-web="<kbd>CENTRE</kbd>">hold <kbd>Vol Up</kbd></span>
+      <span>Swing, block, parry</span><span>the phone</span><span>the phone</span>
+      <span>Lunge, thrust</span><span>push forward</span><span>push forward</span>
+      <span>Line up</span><span><kbd>Center</kbd></span><span data-web="<kbd>CENTRE</kbd>">hold <kbd>Vol Up</kbd></span>
       <span>Pause</span><span><kbd>+</kbd> / <kbd>Home</kbd></span><span data-web="blade down, hold <kbd>HOLD</kbd>">blade down, hold <kbd>Vol Down</kbd></span>
     </div>
     <details class="t-more"><summary>More</summary>
-      <p>Cut the same side twice and they read it. A hard hit on a raised blade beats it aside. Quick waggles are weak: pause between cuts. Menus: point and press <kbd data-w="a">A</kbd>, <kbd data-w="b">B</kbd> goes back.</p>
-      <p>Mouse (testing): move to aim, flick to cut, hold left for shield, right click to sidestep, <kbd>F</kbd> thrust, <kbd>Esc</kbd> pause.</p>
+      <p>Line up holding the phone the way you hold a sword hilt, pointing at him: that grip sets where your edges are. A heavy blow drives through a blade held still or caught near its tip: meet it near your hilt, moving into it. A full swing at nothing pulls you off balance, and he punishes it. Menus: point and press <kbd data-w="a">A</kbd>, <kbd data-w="b">B</kbd> goes back.</p>
+      <p>Mouse (testing): move to aim, flick to cut, <kbd>F</kbd> lunges, <kbd>C</kbd> lines up, <kbd>Esc</kbd> pause.</p>
     </details>
   </div>
 </div>
@@ -92,7 +97,7 @@
     <div id="ladder" class="ladder"></div>
     <div id="card-stats" class="stats"></div>
     <div class="menu row" id="card-menu"><button class="mi primary" data-act="continue">FIGHT</button></div>
-    <p class="hint" id="card-hint">Point at the screen, <kbd data-w="center">Center</kbd> to line up, then <kbd data-w="a">A</kbd>.</p>
+    <p class="hint" id="card-hint"></p>
   </div>
 </div>
 
@@ -103,15 +108,16 @@
     <div class="menu" id="pause-menu">
       <button class="mi primary" data-act="resume">RESUME</button>
       <button class="mi" data-act="restart" id="restart-label">RESTART BOUT</button>
+      <button class="mi opt" data-act="assist">READ ASSIST <b class="opt-assist">OFF</b></button>
       <button class="mi opt" data-act="sound">VOLUME <b class="opt-vol">100%</b></button>
       <button class="mi" data-act="quit">MAIN MENU</button>
     </div>
     <p class="why hidden" id="pause-why"></p>
     <div class="pause-ctl">
-      <div><span>Align</span><b>point, <kbd data-w="center">Center</kbd></b></div>
-      <div><span>Shield</span><b>hold <kbd data-w="a">A</kbd></b></div>
-      <div><span>Sidestep</span><b>tap <kbd data-w="b">B</kbd></b></div>
-      <div><span>Thrust</span><b>jab forward</b></div>
+      <div><span>Line up</span><b>point, <kbd data-w="center">Center</kbd></b></div>
+      <div><span>Block, parry</span><b>blade in his path</b></div>
+      <div><span>Lunge</span><b>push forward</b></div>
+      <div><span>Cut</span><b>edge first, fast</b></div>
     </div>
   </div>
 </div>
@@ -142,7 +148,7 @@
     </div>
     <div id="lobby-go" class="lobby-go hidden"><div class="go-bar"><i id="lobby-go-fill"></i></div></div>
     <p class="hint" id="lobby-hint"></p>
-    <p class="hint small">Best of three, 90-second rounds. Ladder rules.</p>
+    <p class="hint small">Best of three, 90-second rounds. Real blades: meet theirs to parry, cut through to wound.</p>
     <div class="menu row">
       <button class="mi" data-act="vs-mouse" id="lobby-mouse">JOIN WITH MOUSE</button>
       <button class="mi" data-act="vs-go">BEGIN</button>
@@ -158,12 +164,12 @@
   <div class="panel vs-p t0" id="vs-p0">
     <div class="who">P1 &middot; RED <span class="hp-num">100</span><span class="pips"><i></i><i></i></span></div>
     <div class="bar hp"><i></i><b></b></div>
-    <div class="bar st"><i></i></div>
+    <div class="vs-w"></div>
   </div>
   <div class="panel vs-p t1 right" id="vs-p1">
     <div class="who"><span class="pips"><i></i><i></i></span><span class="hp-num">100</span> P2 &middot; BLUE</div>
     <div class="bar hp"><i></i><b></b></div>
-    <div class="bar st"><i></i></div>
+    <div class="vs-w"></div>
   </div>
   <div class="panel center vs-clock"><div id="vs-round">ROUND 1</div><div id="vs-time">1:30</div></div>
 </div>

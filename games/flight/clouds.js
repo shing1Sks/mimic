@@ -191,5 +191,11 @@ void main() {
     this.u.uFrame.value = (this.u.uFrame.value + 1) % 64;
   };
 
-  window.Clouds = { create: scene => new Clouds(scene), U, CLOUD_GLSL, makeNoise };
+  /** Which optional shader paths the ground compiles in (Performance compiles neither). */
+  const flags = { clouds: false, shadow: false };
+  const STUB = 'float cloudShadow(vec3 p) { return 1.0; }';
+  const groundGLSL = () => flags.clouds ? CLOUD_GLSL : STUB;
+  const key = () => (flags.clouds ? 'c' : '') + (flags.shadow ? 's' : '');
+
+  window.Clouds = { create: scene => new Clouds(scene), U, CLOUD_GLSL, makeNoise, flags, groundGLSL, key };
 })();

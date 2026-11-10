@@ -196,7 +196,7 @@ uniform sampler2D tOsm; uniform vec4 uOsmRect; uniform float uOsmOn;
 uniform float uTime; uniform vec3 uZen, uHor, uSunColor, uDeep;
 uniform sampler2D uShadowMap; uniform mat4 uShadowMatrix; uniform float uShadowOn;
 float unpackShadowDepth(vec4 v) { return dot(v, (255.0 / 256.0) / vec4(16777216.0, 65536.0, 256.0, 1.0)); }
-float sunShadow(vec3 P) {
+${window.Clouds && Clouds.flags.shadow ? `float sunShadow(vec3 P) {
   if (uShadowOn < 0.5) return 1.0;
   vec4 sc = uShadowMatrix * vec4(P, 1.0); sc.xyz /= sc.w;
   if (sc.x < 0.0 || sc.x > 1.0 || sc.y < 0.0 || sc.y > 1.0 || sc.z > 1.0) return 1.0;
@@ -209,8 +209,8 @@ float sunShadow(vec3 P) {
   // fade out toward the edge of the shadowed area
   vec2 e = min(sc.xy, 1.0 - sc.xy);
   return mix(1.0, s * 0.25, smoothstep(0.0, 0.08, min(e.x, e.y)));
-}
-${window.Clouds ? Clouds.CLOUD_GLSL : 'float cloudShadow(vec3 p) { return 1.0; }'}
+}` : 'float sunShadow(vec3 P) { return 1.0; }'}
+${window.Clouds ? Clouds.groundGLSL() : 'float cloudShadow(vec3 p) { return 1.0; }'}
 // water (the sea, and lakes and rivers from the map overlay): the island's wave set, fresnel sky
 // reflection and sun glitter, so real coasts look like the island's sea
 vec2 wv(vec2 p, vec2 d, float f, float a, float s) { float ph = dot(p, d) * f + uTime * s; return d * (a * f * cos(ph)); }
@@ -334,7 +334,7 @@ vec3 waterColour(vec3 P) {
         // per-tile map overlay (osm-layer.js fills it in); the program is shared, the uniforms are not
         mat.userData.osm = { tOsm: { value: placeholder }, uOsmRect: { value: new THREE.Vector4(0, 0, 1, 1) }, uOsmOn: { value: 0 } };
         mat.onBeforeCompile = sh => { detailPatch(sh); Object.assign(sh.uniforms, mat.userData.osm); };
-        mat.customProgramCacheKey = () => 'rw-terrain';
+        mat.customProgramCacheKey = () => 'rw-terrain' + (window.Clouds ? Clouds.key() : '');
         n.mesh = new THREE.Mesh(g, mat);
         n.mesh.position.set(cx, 0, cz); n.mesh.matrixAutoUpdate = false; n.mesh.updateMatrix();
         terrainG.add(n.mesh);

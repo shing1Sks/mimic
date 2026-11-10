@@ -145,7 +145,26 @@
     const dark = new THREE.MeshStandardMaterial({ color: lin('#2a2d31'), roughness: 0.6, metalness: 0.2 });
     const tire = new THREE.MeshStandardMaterial({ color: lin('#1a1a1a'), roughness: 0.9 });
     const chrome = new THREE.MeshStandardMaterial({ color: lin('#c9ccd0'), roughness: 0.25, metalness: 0.8 });
-    const glassMat = new THREE.MeshStandardMaterial({ color: lin('#1c2a33'), roughness: 0.05, metalness: 0.3, transparent: true, opacity: 0.55 });
+    // canopy: clear enough to see the pilot inside, with a sharp sky reflection on top
+    const glassMat = new THREE.MeshPhysicalMaterial({ color: lin('#26343d'), roughness: 0.03, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.03, transparent: true, opacity: 0.3, depthWrite: false });
+    // panel seams and rivet lines on the skin: frames along the fuselage, ribs across wings and tail,
+    // kept hairline-thin with screen-space derivatives and faded with distance (no shimmer)
+    const panelPatch = sh => {
+      sh.vertexShader = 'varying vec3 vObj;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvObj = position;');
+      sh.fragmentShader = 'varying vec3 vObj;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+      {
+        vec3 q = vObj;
+        float lz = abs(fract(q.z / 0.62 + 0.5) - 0.5) * 0.62, lx = abs(fract(q.x / 0.74 + 0.5) - 0.5) * 0.74;
+        float wz = max(fwidth(q.z) * 1.1, 0.0035), wx = max(fwidth(q.x) * 1.1, 0.0035);
+        float seam = max(1.0 - smoothstep(0.0, wz, lz), (1.0 - smoothstep(0.0, wx, lx)) * step(0.75, abs(q.x)));
+        // rivets: a dotted row 3 cm beside each frame
+        float rz = abs(lz - 0.03), dots = step(0.55, fract((q.x + q.y) / 0.045));
+        float riv = (1.0 - smoothstep(0.0, wz * 1.5, rz)) * dots * 0.6;
+        float fade = 1.0 - smoothstep(18.0, 60.0, length(vViewPosition));
+        diffuseColor.rgb *= 1.0 - (0.28 * seam + 0.18 * riv) * fade;
+      }`);
+    };
+    for (const m of [paint, white, tailMat]) { m.onBeforeCompile = panelPatch; m.customProgramCacheKey = () => 'gw-panels'; }
     const accent = new THREE.MeshStandardMaterial({ color: lin(scheme.accent), roughness: 0.4 });
 
     // ---------- fuselage (superellipse sections)
@@ -178,7 +197,15 @@
     spinner.position.set(0, 0.04, -2.27); root.add(spinner);
     const prop = new THREE.Group(); prop.position.set(0, 0.04, -2.1); root.add(prop);
     for (const sgn of [1, -1]) {
-      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.92, 0.03).translate(0, 0.52, 0), dark);
+      // a real blade shape: tapered toward the tip and twisted (steep at the root, flat at the tip)
+      const bg = new THREE.BoxGeometry(0.15, 0.92, 0.028, 1, 10, 1).translate(0, 0.52, 0), bp = bg.attributes.position;
+      for (let i = 0; i < bp.count; i++) {
+        const y = bp.getY(i), t = Math.min(1, Math.max(0, (y - 0.06) / 0.92)), tw = 0.55 - 0.5 * t;
+        const x = bp.getX(i) * (1 - 0.42 * t * t), z = bp.getZ(i) * (1 - 0.5 * t);
+        bp.setXYZ(i, x * Math.cos(tw) - z * Math.sin(tw), y, x * Math.sin(tw) + z * Math.cos(tw));
+      }
+      bg.computeVertexNormals();
+      const blade = new THREE.Mesh(bg, dark);
       blade.rotation.z = sgn > 0 ? 0 : Math.PI; blade.rotation.y = 0.35 * sgn;
       const tip = new THREE.Mesh(new THREE.BoxGeometry(0.121, 0.1, 0.031).translate(0, 0.93, 0), accent);
       blade.add(tip); prop.add(blade);
@@ -294,6 +321,30 @@
       parts.spot = spot;
     }
 
+    // ---------- the cabin as seen from outside: seats, the panel hood and a pilot with a headset
+    const cabin = new THREE.Group();
+    {
+      const seatM = new THREE.MeshStandardMaterial({ color: lin('#2b2a2c'), roughness: 0.8 });
+      const suit = new THREE.MeshStandardMaterial({ color: lin('#3c4a5a'), roughness: 0.85 });
+      const skin = new THREE.MeshStandardMaterial({ color: lin('#c89b7b'), roughness: 0.7 });
+      const head = new THREE.MeshStandardMaterial({ color: lin('#1d1e20'), roughness: 0.5 });
+      for (const x of [-0.27, 0.27]) {
+        const back = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.46, 0.08), seatM); back.position.set(x * 0.74, 0.66, 0.5); back.rotation.x = -0.18; cabin.add(back);
+        const rest = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.11, 0.07), seatM); rest.position.set(x * 0.74, 0.9, 0.55); rest.rotation.x = -0.18; cabin.add(rest);
+      }
+      const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 0.4, 12), suit); torso.position.set(-0.2, 0.56, 0.32); torso.rotation.x = -0.15; cabin.add(torso);
+      const face = new THREE.Mesh(new THREE.SphereGeometry(0.085, 16, 12), skin); face.scale.set(0.9, 1.1, 1); face.position.set(-0.2, 0.85, 0.22); cabin.add(face);
+      const hair = new THREE.Mesh(new THREE.SphereGeometry(0.089, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), head); hair.scale.set(0.9, 1.1, 1); hair.position.copy(face.position); cabin.add(hair);
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.011, 6, 20, Math.PI), head); band.position.set(-0.2, 0.87, 0.22); band.rotation.y = Math.PI / 2; cabin.add(band);
+      for (const sx of [-1, 1]) { const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.038, 0.035, 12).rotateZ(Math.PI / 2), head); cup.position.set(-0.2 + sx * 0.085, 0.84, 0.22); cabin.add(cup); }
+      const hood = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.06, 0.26), seatM); hood.position.set(0, 0.68, -0.5); cabin.add(hood);
+      cabin.traverse(m => { if (m.isMesh) { m.castShadow = false; m.receiveShadow = false; } });
+    }
+    root.add(cabin);
+    // small external details: a whip antenna behind the canopy, a pitot tube under the left wing
+    const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.012, 0.5, 6), dark); antenna.position.set(0, 0.95, 1.6); antenna.rotation.x = 0.35; root.add(antenna);
+    const pitot = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.36, 6).rotateX(Math.PI / 2), chrome); pitot.position.set(-3.6, -0.36, -0.95); root.add(pitot);
+
     // ---------- cockpit interior: an empty group that cockpit.js fills (seen only from the pilot's seat)
     const cockpit = new THREE.Group();
     cockpit.visible = false;
@@ -307,7 +358,7 @@
 
     // merge the static skin (fuselage, fixed wing and tail panels, fairings) into one mesh per material
     {
-      const keep = new Set([canopy, frame, frame2, disc]);
+      const keep = new Set([canopy, frame, frame2, disc, cabin]);
       const statics = root.children.filter(o => o.isMesh && !keep.has(o));
       const tmpRoot = new THREE.Group();
       statics.forEach(o => { root.remove(o); tmpRoot.add(o); });
@@ -358,7 +409,7 @@
       if (parts.spot) parts.spot.intensity = landOn ? 5 * night : 0;
     }
 
-    return { root, parts, update, setCockpit(v) { cockpit.visible = v; canopy.visible = !v; frame.visible = frame2.visible = !v; if (parts.skin) parts.skin.visible = !v; } };
+    return { root, parts, update, setCockpit(v) { cockpit.visible = v; canopy.visible = !v; cabin.visible = !v; frame.visible = frame2.visible = !v; if (parts.skin) parts.skin.visible = !v; } };
   }
 
   /** Merge a posed, static aircraft into one mesh per material (parked aircraft: ~8 draws, not ~70). */

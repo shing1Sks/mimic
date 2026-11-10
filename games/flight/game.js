@@ -101,6 +101,13 @@
     if (osm) osm.setQuality(settings.quality, settings.mapDetail);
     if (post) post.level = QUAL[settings.quality][2];
     if (clouds) { clouds.setLevel(QUAL[settings.quality][2]); world.clouds.visible = QUAL[settings.quality][2] < 2; }
+    // compile the ground's cloud-shadow and Ultra-shadow paths only on the tiers that use them
+    const fc = QUAL[settings.quality][2] >= 2, fs = settings.quality >= 3;
+    if (Clouds.flags.clouds !== fc || Clouds.flags.shadow !== fs) {
+      Clouds.flags.clouds = fc; Clouds.flags.shadow = fs;
+      if (world && world.terrainMat) world.terrainMat.needsUpdate = true;
+      if (rw) rw.forEachNode(n => { n.mesh.material.needsUpdate = true; });
+    }
   }
   function onResize() { applyQuality(); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); hud.resize(); }
   addEventListener('resize', onResize);
@@ -960,7 +967,7 @@
 
   // ---------------------------------------------------------------- Ultra: shadows over the whole city around the aircraft
   const SH_NEAR = 28, SH_WIDE = 1100;
-  let shadowWide = false;
+  let shadowWide = false, shadowWasOn = false;
   function wideShadow(on) {
     const sun = world.sun, sc = sun.shadow.camera;
     if (on !== shadowWide) {
@@ -979,7 +986,9 @@
       sun.position.copy(sun.target.position).addScaledVector(ld, 4000);
       sun.target.updateMatrixWorld();
     }
-    if (rw) rw.setShadows(on, sun);
+    // (the terrain's shadow flags only change with the mode; the uniforms follow every frame while on)
+    if (rw && (on || shadowWasOn)) rw.setShadows(on, sun);
+    shadowWasOn = on;
   }
 
   // ---------------------------------------------------------------- camera

@@ -33,7 +33,7 @@
     RW.group.add(terrainG); RW.group.add(runwayG);
     const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
     let S = 32, RADIUS = 46000, SPLIT = 1.6;
-    RW.setDetail = q => { S = q === 0 ? 24 : q === 2 ? 40 : 32; RADIUS = q === 0 ? 36000 : 46000; sharedIndex = null; };
+    RW.setDetail = q => { S = q === 0 ? 24 : q >= 2 ? 40 : 32; RADIUS = q === 0 ? 36000 : 46000; sharedIndex = null; };
 
     // ------------------------------------------------------------------ fetching + caches
     const cacheP = (typeof caches !== 'undefined') ? caches.open(CACHE).catch(() => null) : Promise.resolve(null);
@@ -173,6 +173,8 @@
     // the terrain is lit in its own small shader (sun + sky): a MeshBasicMaterial has a fraction of
     // a Lambert's uniforms, and with ~150 tiles each on its own texture that is most of the CPU cost
     const lightU = { uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color(1, 1, 1) }, uSkyCol: { value: new THREE.Color(0.4, 0.45, 0.5) }, uGndCol: { value: new THREE.Color(0.2, 0.2, 0.15) }, uNight: { value: 0 } };
+    // the water shares the island sea's live uniforms (time, sky colours, sun glitter colour)
+    for (const k of ['uTime', 'uZen', 'uHor', 'uSunColor', 'uDeep']) lightU[k] = (world.waterU && world.waterU[k]) || { value: k === 'uTime' ? 0 : new THREE.Color(0.1, 0.2, 0.3) };
     if (window.World && World.loadTex) World.loadTex('assets/tex/aerial_grass_rock_diff.jpg', maxAniso, (t, mean) => { detailU.tDetail.value = t; detailU.uDetailMean.value = (mean.r + mean.g + mean.b) / 3; detailU.uDetailOn.value = 1; });
     function detailPatch(sh) {
       Object.assign(sh.uniforms, detailU, lightU);
@@ -182,18 +184,44 @@ vDWorld = (modelMatrix * vec4(transformed, 1.0)).xyz; vNW = normal;`);
       sh.fragmentShader = `uniform sampler2D tDetail; uniform float uDetailOn, uDetailMean; varying vec3 vDWorld; varying vec3 vNW;
 uniform vec3 uSunDir, uSunCol, uSkyCol, uGndCol; uniform float uNight;
 uniform sampler2D tOsm; uniform vec4 uOsmRect; uniform float uOsmOn;
+uniform float uTime; uniform vec3 uZen, uHor, uSunColor, uDeep;
+// water (the sea, and lakes and rivers from the map overlay): the island's wave set, fresnel sky
+// reflection and sun glitter, so real coasts look like the island's sea
+vec2 wv(vec2 p, vec2 d, float f, float a, float s) { float ph = dot(p, d) * f + uTime * s; return d * (a * f * cos(ph)); }
+vec3 waterColour(vec3 P) {
+  vec2 p = P.xz, g = vec2(0.0);
+  g += wv(p, vec2(0.96, 0.28), 0.055, 0.28, 0.9); g += wv(p, vec2(-0.37, 0.93), 0.1, 0.13, 1.4);
+  g += wv(p, vec2(0.66, -0.75), 0.21, 0.05, 2.1); g += wv(p, vec2(-0.98, -0.2), 0.47, 0.022, 3.0);
+  g += wv(p, vec2(0.2, 0.98), 1.1, 0.008, 4.2);
+  float dist = length(cameraPosition - P);
+  vec3 n = normalize(vec3(-g.x, 1.0, -g.y));
+  n = normalize(mix(n, vec3(0.0, 1.0, 0.0), smoothstep(600.0, 9000.0, dist) * 0.85));
+  vec3 v = normalize(cameraPosition - P);
+  float fres = 0.02 + 0.98 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
+  vec3 r = reflect(-v, n);
+  // the sky a ripple sees is mostly above the pale horizon band; cap the mirror at grazing angles
+  vec3 sky = mix(uHor * 0.55, uZen * 0.85, pow(clamp(r.y, 0.0, 1.0), 0.3));
+  vec3 body = vec3(0.012, 0.04, 0.05) * (0.35 + 0.65 * clamp(length(uHor) * 1.2, 0.0, 1.0));
+  vec3 col = mix(body, sky, min(fres, 0.42));
+  float sp = max(dot(r, uSunDir), 0.0);
+  return col + uSunColor * (pow(sp, 420.0) * 6.0 + pow(sp, 40.0) * 0.12);
+}
 ` + sh.fragmentShader.replace('vec3 outgoingLight = reflectedLight.indirectDiffuse;', `vec3 nW = normalize(vNW);
   vec3 outgoingLight = diffuseColor.rgb * (uSunCol * max(dot(nW, uSunDir), 0.0) + mix(uGndCol, uSkyCol, 0.5 * nW.y + 0.5));
+  if (osmWater > 0.001) outgoingLight = mix(outgoingLight, waterColour(vDWorld), osmWater);
   // city lights at night: street and roof pixels of the map overlay glow in scattered points
   float sparkle = step(0.72, fract(sin(dot(floor(vDWorld.xz / 4.0), vec2(12.9898, 78.233))) * 43758.5453));
-  outgoingLight += vec3(1.0, 0.68, 0.36) * osmLit * uNight * (0.06 + 0.85 * sparkle);`).replace('#include <map_fragment>', `#include <map_fragment>
+  outgoingLight += vec3(1.0, 0.68, 0.36) * osmLit * uNight * (0.025 + 0.6 * sparkle);`).replace('#include <map_fragment>', `#include <map_fragment>
         float osmLit = 0.0;
+        // the sea: the DEM puts it at or just under 0 m, dead flat (beaches and ports rise above it)
+        float osmWater = (1.0 - smoothstep(0.05, 0.3, vDWorld.y)) * smoothstep(0.9975, 0.9995, normalize(vNW).y);
         if (uOsmOn > 0.5) {
           // the OpenStreetMap overlay for this tile: roads, water, land use, airfields, footprints
           vec2 ou = (vDWorld.xz - uOsmRect.xy) / uOsmRect.zw;
           vec4 o = texture2D(tOsm, clamp(ou, 0.0, 1.0));
           diffuseColor.rgb = mix(diffuseColor.rgb, o.rgb, o.a * uOsmOn);
           osmLit = step(0.8, o.a) * (1.0 - step(0.05, o.b - o.r)) * uOsmOn;
+          osmWater = max(osmWater, smoothstep(0.78, 0.88, o.a) * step(0.1, o.b - o.r) * uOsmOn);
         }
         if (uDetailOn > 0.5) {
           float fd = 1.0 - smoothstep(250.0, 2500.0, length(vDWorld - cameraPosition));
@@ -441,7 +469,8 @@ uniform sampler2D tOsm; uniform vec4 uOsmRect; uniform float uOsmOn;
         // (a Lambert surface would come out ~3x brighter and wash the desert at Leh to white)
         const K = 1 / 2.9;
         lightU.uSunCol.value.copy(world.sun.color).multiplyScalar(world.sun.intensity * K);
-        if (world.hemi) { lightU.uSkyCol.value.copy(world.hemi.color).multiplyScalar(world.hemi.intensity * K); lightU.uGndCol.value.copy(world.hemi.groundColor).multiplyScalar(world.hemi.intensity * K); }
+        // (the sky light a little stronger than a Lambert surface's: low sun no longer leaves the land black)
+        if (world.hemi) { lightU.uSkyCol.value.copy(world.hemi.color).multiplyScalar(world.hemi.intensity * K * 1.45); lightU.uGndCol.value.copy(world.hemi.groundColor).multiplyScalar(world.hemi.intensity * K * 1.2); }
         lightU.uNight.value = world.night || 0;
       }
       lodT -= dt;

@@ -137,9 +137,11 @@
     const scheme = SCHEMES[schemeName || 'hero'];
     const root = new THREE.Group();
     const parts = {};
-    const paint = new THREE.MeshStandardMaterial({ map: liveryTexture(scheme), roughness: 0.42, metalness: 0.08 });
-    const white = new THREE.MeshStandardMaterial({ color: lin(scheme.base), roughness: 0.45, metalness: 0.05 });
-    const tailMat = new THREE.MeshStandardMaterial({ color: lin(scheme.tail), roughness: 0.45, metalness: 0.05 });
+    // a clear-coated paint: a sharp sky reflection over the colour, like a polished airframe
+    const coat = { clearcoat: 0.85, clearcoatRoughness: 0.12, envMapIntensity: 1.1 };
+    const paint = new THREE.MeshPhysicalMaterial(Object.assign({ map: liveryTexture(scheme), roughness: 0.42, metalness: 0.08 }, coat));
+    const white = new THREE.MeshPhysicalMaterial(Object.assign({ color: lin(scheme.base), roughness: 0.45, metalness: 0.05 }, coat));
+    const tailMat = new THREE.MeshPhysicalMaterial(Object.assign({ color: lin(scheme.tail), roughness: 0.45, metalness: 0.05 }, coat));
     const dark = new THREE.MeshStandardMaterial({ color: lin('#2a2d31'), roughness: 0.6, metalness: 0.2 });
     const tire = new THREE.MeshStandardMaterial({ color: lin('#1a1a1a'), roughness: 0.9 });
     const chrome = new THREE.MeshStandardMaterial({ color: lin('#c9ccd0'), roughness: 0.25, metalness: 0.8 });

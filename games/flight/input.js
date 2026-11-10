@@ -125,10 +125,19 @@
         elev += se; ail += sa; rud += sr;
         if (Math.abs(sa) > Math.abs(rawAil)) rawAil = sa;
         if (Math.abs(se) > Math.abs(rawElev)) rawElev = se;
-        thrRate += (r2 - l2) * 0.6;
+        thrRate += (r2 - l2) * 0.9;
+        // A and B: "go" and "slow" (the user's recording: A pressed seven times in flight expecting
+        // power, which used to lower the flaps a notch each time). B also brakes on the ground.
+        // A only counts once it has been let go after the menu press that started the flight.
+        if (!b(0)) st.aArmed = true;
+        if (b(0) && st.aArmed && flying) thrRate += 0.9;
+        if (b(1) && flying) thrRate -= 0.9;
         // D-pad: standard pads use buttons 12-15; the Mimic Pad sends a hat on axis 9 (and its
         // button 12 is Home, not a direction)
         const hd = mimicPad ? hatDirs(p.axes[9]) : { up: b(12), down: b(13), left: b(14), right: b(15) };
+        // what the hand is doing, raw, for the on-screen controller guide (guide.js)
+        if (Math.abs(lx) + Math.abs(ly) > 0.05 || l2 > 0.05 || r2 > 0.05 || p.buttons.some(x => x.pressed) || !this.raw || this.raw.index === p.index)
+          this.raw = { index: p.index, lx, ly, rx, l2, r2, a: b(0), b: b(1), x: b(2), y: b(3), l1: b(4), r1: b(5), hat: hd, t: this.time };
         const ph = st.prevHat || {};
         if (hd.up) thrRate += 0.45;
         if (hd.down) thrRate -= 0.45;
@@ -143,15 +152,14 @@
         if (bp(8)) actions.add('center');
         if (hd.up && !ph.up) actions.add('navUp');
         if (hd.down && !ph.down) actions.add('navDown');
-        if (hd.left && !ph.left) actions.add('navLeft');
-        if (hd.right && !ph.right) actions.add('navRight');
+        if (hd.left && !ph.left) { actions.add('navLeft'); if (flying) actions.add('flapsUp'); }
+        if (hd.right && !ph.right) { actions.add('navRight'); if (flying) actions.add('flapsDown'); }
         st.prevHat = hd;
         // stick flicks navigate menus
         const ny = ly < -0.6 ? -1 : ly > 0.6 ? 1 : 0, nx = lx < -0.6 ? -1 : lx > 0.6 ? 1 : 0;
         if (ny !== (st.ny || 0) && ny) actions.add(ny < 0 ? 'navUp' : 'navDown');
         if (nx !== (st.nx || 0) && nx) actions.add(nx < 0 ? 'navLeft' : 'navRight');
         st.ny = ny; st.nx = nx;
-        this._flapButton(st, b(0), actions);
         if (Math.abs(lx) + Math.abs(ly) > 0.3 || p.buttons.some(x => x.pressed)) this.lastSource = mimicPad ? 'Mimic Pad' : 'gamepad';
         st.prev = p.buttons.map(x => x.pressed);
       }
@@ -177,23 +185,10 @@
     /** Forget button presses in progress (a menu-confirming A must not become a flap tap on release). */
     resetHolds() {
       this.aHold.wand = this.aHold.wand > 0 ? 0 : -1;
-      this.padState.forEach(st => { st.aHold = st.aHold > 0 ? 0 : -1; });
+      this.padState.forEach(st => { st.aHold = st.aHold > 0 ? 0 : -1; st.aArmed = false; });
       this.queue.length = 0;
     }
 
-    /** A: tap = flaps down one notch, hold half a second = flaps up one notch. */
-    _flapButton(key, down, actions) {
-      const st = typeof key === 'string' ? this.aHold : key;
-      const id = typeof key === 'string' ? key : 'aHold';
-      const t = st[id] === undefined ? -1 : st[id];
-      if (down) {
-        if (t < 0) st[id] = this.time;
-        else if (t > 0 && this.time - t > 0.5) { actions.add('flapsUp'); st[id] = 0; }
-      } else {
-        if (t > 0 && this.time - t <= 0.5) actions.add('flapsDown');
-        st[id] = -1;
-      }
-    }
   }
 
   /**
@@ -233,14 +228,14 @@
    * Stunt gesture: a double flick of an axis to full (out, back under half, out again the same way
    * within `win` s). A held stick or key never fires, so a long turn stays a turn.
    */
-  function Flick(win) { this.win = win || 0.45; this.t = 0; this.ax = { a: 0, at: -9, dir: 0 }; this.el = { a: 0, at: -9, dir: 0 }; }
+  function Flick(win) { this.win = win || 0.35; this.t = 0; this.ax = { a: 0, at: -9, dir: 0 }; this.el = { a: 0, at: -9, dir: 0 }; }
   Flick.prototype.axis = function (st, v) {
     const dir = v > 0.9 ? 1 : v < -0.9 ? -1 : 0;
     let fired = 0;
     if (dir && !st.a) {
       if (st.dir === dir && this.t - st.at < this.win) { fired = dir; st.at = -9; } else st.at = this.t;
       st.dir = dir; st.a = 1;
-    } else if (!dir && Math.abs(v) < 0.5) st.a = 0;
+    } else if (!dir && Math.abs(v) < 0.3) st.a = 0;
     return fired;
   };
   Flick.prototype.update = function (dt, ail, elev) { this.t += dt; return { roll: this.axis(this.ax, ail), loop: this.axis(this.el, elev) }; };

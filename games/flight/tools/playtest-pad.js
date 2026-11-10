@@ -21,6 +21,7 @@
     if (now - P.fpsT >= 1000) { if (P.fpsT) P.fps.push(P.frames * 1000 / (now - P.fpsT)); P.fpsT = now; P.frames = 0; }
     const gw = window.__gyrowing; if (!gw || !gw.G || !gw.G.s) return;
     const G = gw.G, s = G.s;
+    if (P.mode === 'hands') return;   // the test script moves the sticks and triggers itself
     if (G.state !== 'fly' || P.mode === 'idle') { pad.axes[0] = pad.axes[1] = 0; pad.axes[3] = pad.axes[4] = -1; return; }
     const att = gw.FM.attitude(s), kt = s.airspeed * 1.944;
     let thr = 0.75, tPitch = 3, tBank = 0;

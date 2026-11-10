@@ -244,6 +244,40 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0f13; col
 .mimic-hint kbd { font: 700 11px/1 Bahnschrift, "DIN Alternate", "Segoe UI", system-ui, sans-serif; letter-spacing: 0.1em; text-transform: uppercase; color: #0b0d10;
   background: #e9edf2; border-radius: 4px; padding: 4px 6px 3px; }
 .island-grid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(5px, 1.1svh, 8px); }
+.island-grid .btn.learn { grid-column: 1 / -1; }
+
+/* ---------- controller guide (bottom left) and the first-flight lesson card (top centre) */
+#guide { position: fixed; left: 14px; bottom: 14px; z-index: 4; width: clamp(230px, 19vw, 300px); pointer-events: none; padding: 8px 10px 10px; border-radius: 14px;
+  background: rgba(8, 11, 14, 0.66); border: 1px solid var(--line); }
+#guide .g-dev { font-size: 10px; letter-spacing: 0.16em; color: var(--dim); text-transform: uppercase; margin: 0 0 4px 2px; }
+#guide svg { display: block; width: 100%; height: auto; }
+#guide .g-body { fill: rgba(255, 255, 255, 0.04); stroke: rgba(255, 255, 255, 0.22); stroke-width: 2; }
+#guide .g-key, #guide .g-kk rect { fill: rgba(255, 255, 255, 0.08); stroke: rgba(255, 255, 255, 0.28); stroke-width: 1.5; transition: fill 0.08s; }
+#guide .g-stick { fill: rgba(255, 255, 255, 0.05); }
+#guide .g-dot { fill: #e8edf0; }
+#guide text { fill: #c9d0d6; font: 700 11px var(--font); text-anchor: middle; pointer-events: none; }
+#guide .g-small { font-size: 8px; fill: var(--dim); letter-spacing: 0.08em; }
+#guide .g-arrow { fill: rgba(255, 255, 255, 0.12); }
+#guide .on, #guide .g-kk.on rect { fill: rgba(255, 255, 255, 0.55) !important; }
+#guide .hl, #guide .g-kk.hl rect { stroke: var(--amber) !important; stroke-width: 3 !important; animation: ghl 1s ease-in-out infinite; }
+#guide .g-arrow.hl { fill: var(--amber); stroke: none !important; }
+@keyframes ghl { 50% { filter: drop-shadow(0 0 6px rgba(255, 177, 59, 0.9)); } }
+#guide .g-cap { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; font-size: 12px; }
+#guide .g-cap b { display: inline-block; width: 50px; font-size: 10px; letter-spacing: 0.12em; color: var(--dim); }
+#guide .g-cap i { font-style: normal; color: #fff; }
+#guide .g-pow { display: flex; align-items: center; gap: 6px; }
+#guide .g-pow em { flex: 1; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+#guide .g-pow u { display: block; height: 100%; background: #3ddc84; transform-origin: 0 50%; }
+#guide .g-pow i { width: 36px; text-align: right; }
+#tutorial { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 5; width: min(560px, 60vw); pointer-events: none; padding: 12px 18px 14px; border-radius: 14px;
+  background: rgba(8, 11, 14, 0.8); border: 1px solid rgba(255, 177, 59, 0.45); box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45); }
+#tutorial .tu-k { font-size: 11px; letter-spacing: 0.16em; color: var(--amber); text-transform: uppercase; }
+#tutorial .tu-t { font-size: 24px; font-weight: 700; margin-top: 2px; }
+#tutorial .tu-x { font-size: 16px; color: #dfe5ea; margin-top: 4px; line-height: 1.35; }
+#tutorial .tu-bar { height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); margin-top: 10px; overflow: hidden; }
+#tutorial .tu-bar i { display: block; height: 100%; background: var(--amber); transform-origin: 0 50%; transform: scaleX(0); transition: transform 0.12s linear; }
+#tutorial.ok { border-color: rgba(61, 220, 132, 0.8); }
+#tutorial.ok .tu-bar i { background: #3ddc84; }
 /* menus clear the Mimic badge (top right) and the hint bar (bottom centre) */
 #menu, #options, #pause, #crash, #result, #place, #rwload { justify-content: center; padding: 54px 16px 60px; }
 body:has(#attrib:not(.hidden)) .mimic-hint { bottom: 52px; }

@@ -24,7 +24,8 @@
   const QUAL = [
     { full: 1300, lod: 2600, tree: 1500, trees: 500, ov14: 512, ov13: 256, ovFar: 6000 },
     { full: 1900, lod: 3800, tree: 2200, trees: 900, ov14: 1024, ov13: 512, ovFar: 9000 },
-    { full: 2600, lod: 5200, tree: 3000, trees: 1400, ov14: 1024, ov13: 512, ovFar: 12000 },
+    { full: 2200, lod: 5000, tree: 2800, trees: 1400, ov14: 1024, ov13: 512, ovFar: 12000 },
+    { full: 2800, lod: 6500, tree: 3400, trees: 2000, ov14: 1024, ov13: 1024, ovFar: 16000 },
   ];
 
   function create(RW, renderer, world) {
@@ -62,8 +63,16 @@
     }
 
     // ---- materials: facades with windows (lit ones glow at night), trees
-    const facade = facadeTextures();
-    const buildMat = new THREE.MeshLambertMaterial({ vertexColors: true, map: facade.day, emissiveMap: facade.lit, emissive: 0x000000 });
+    // two looks for each facade: Lambert on the lower tiers, physically based on High and Ultra
+    // (windows and curtain walls reflect the sky through the scene's environment map)
+    const facade = facadeTextures(), glassTex = glassTextures();
+    const mats = {
+      lambert: { masonry: new THREE.MeshLambertMaterial({ vertexColors: true, map: facade.day, emissiveMap: facade.lit, emissive: 0x000000 }),
+        glass: new THREE.MeshLambertMaterial({ vertexColors: true, map: glassTex.day, emissiveMap: glassTex.lit, emissive: 0x000000 }) },
+      pbr: { masonry: new THREE.MeshStandardMaterial({ vertexColors: true, color: 0xcfcfcf, map: facade.day, roughnessMap: facade.rough, roughness: 1, metalness: 0, emissiveMap: facade.lit, emissive: 0x000000, envMapIntensity: 0.9 }),
+        glass: new THREE.MeshStandardMaterial({ vertexColors: true, map: glassTex.day, roughnessMap: glassTex.rough, roughness: 1, metalness: 0.55, emissiveMap: glassTex.lit, emissive: 0x000000, envMapIntensity: 1.25 }) },
+    };
+    let cur = mats.lambert;
     const treeGeo = treeGeometry(), treeMat = new THREE.MeshLambertMaterial({ vertexColors: true });
 
     function get(z, x, y) {
@@ -80,6 +89,7 @@
     function dispose(t) {
       if (t.ovTex) { t.ovTex.dispose(); t.ovTex = null; }
       if (t.mesh) { group.remove(t.mesh); t.mesh.geometry.dispose(); t.mesh = null; }
+      if (t.glass) { group.remove(t.glass); t.glass.geometry.dispose(); t.glass = null; }
       if (t.trees) { group.remove(t.trees); t.trees.dispose(); t.trees = null; }
     }
 
@@ -88,7 +98,7 @@
       if (!RW.active || !RW.F) return;
       if (locRef !== RW.loc) { clearAll(); locRef = RW.loc; }
       const night = world.night || 0;
-      buildMat.emissive.setRGB(1, 0.82, 0.56).multiplyScalar(night * 1.25);
+      for (const set of [mats.lambert, mats.pbr]) { set.masonry.emissive.setRGB(1, 0.82, 0.56).multiplyScalar(night * 1.25); set.glass.emissive.setRGB(1, 0.86, 0.66).multiplyScalar(night * 1.1); }
       for (const t of tiles.values()) if (t.fade < 1 && (t.ovTex || t.mesh)) { t.fade = Math.min(1, t.fade + dt * 1.5); if (t.mesh) t.mesh.material.opacity = 1; }
       applyOverlays();
       if (!L.level || !L.ok || !template) return;
@@ -112,7 +122,8 @@
         if (d > R) continue;
         const t = get(14, tx, ty);
         mark(t, d);
-        t.wantMode = d < Q.full * kLight ? 'full' : 'lod';
+        // three rings: full detail, no sheds and flat roofs, and only the big and tall far out
+        t.wantMode = d < Q.full * kLight ? 'full' : d < Q.lod * kLight * 0.6 ? 'lod' : 'far';
         t.treesWant = d < Q.tree * kLight ? Math.round(Q.trees * kLight) : 0;
       }
       // overlays: the terrain tiles of zoom 13-14 in view
@@ -131,6 +142,7 @@
         if (t.want === tick) continue;
         if (t.want < tick - 8 || (t.want < tick - 2 && t.state !== 'ok')) { dispose(t); tiles.delete(k); continue; }
         if (t.mesh && t.want < tick - 2) { group.remove(t.mesh); t.mesh.geometry.dispose(); t.mesh = null; t.mode = null; }
+        if (t.glass && t.want < tick - 2) { group.remove(t.glass); t.glass.geometry.dispose(); t.glass = null; }
         if (t.trees && t.want < tick - 2) { group.remove(t.trees); t.trees.dispose(); t.trees = null; }
       }
       // what the ready tiles still need from the worker
@@ -205,16 +217,17 @@
         t.ovTex = tex; t.ovSize = m.overlay.width; t.fade = 0;
       }
       if (m.mesh) {
-        if (t.mesh) { group.remove(t.mesh); t.mesh.geometry.dispose(); t.mesh = null; }
-        if (m.mesh.pos.length) {
+        for (const [slot, arr, kind] of [['mesh', m.mesh, 'masonry'], ['glass', m.glass, 'glass']]) {
+          if (t[slot]) { group.remove(t[slot]); t[slot].geometry.dispose(); t[slot] = null; }
+          if (!arr || !arr.pos.length) continue;
           const g = new THREE.BufferGeometry();
-          g.setAttribute('position', new THREE.BufferAttribute(m.mesh.pos, 3));
-          g.setAttribute('normal', new THREE.BufferAttribute(m.mesh.nor, 3));
-          g.setAttribute('color', new THREE.BufferAttribute(m.mesh.col, 3));
-          g.setAttribute('uv', new THREE.BufferAttribute(m.mesh.uv, 2));
+          g.setAttribute('position', new THREE.BufferAttribute(arr.pos, 3));
+          g.setAttribute('normal', new THREE.BufferAttribute(arr.nor, 3));
+          g.setAttribute('color', new THREE.BufferAttribute(arr.col, 3));
+          g.setAttribute('uv', new THREE.BufferAttribute(arr.uv, 2));
           g.computeBoundingSphere();
-          const mesh = new THREE.Mesh(g, buildMat); mesh.matrixAutoUpdate = false;
-          group.add(mesh); t.mesh = mesh;
+          const mesh = new THREE.Mesh(g, cur[kind]); mesh.matrixAutoUpdate = false; mesh.userData.kind = kind;
+          group.add(mesh); t[slot] = mesh;
         }
         t.mode = m.mode; t.nb = m.buildings;
       }
@@ -256,7 +269,9 @@
 
     /** Graphics quality (0..2) and map detail (0 off, 1 light, 2 full). */
     L.setQuality = function (q, level) {
-      L.q = Math.max(0, Math.min(2, q | 0));
+      L.q = Math.max(0, Math.min(QUAL.length - 1, q | 0));
+      cur = L.q >= 2 ? mats.pbr : mats.lambert;
+      for (const t of tiles.values()) for (const m of [t.mesh, t.glass]) if (m) m.material = cur[m.userData.kind];
       if (level !== undefined && level !== L.level) { L.level = level; if (!level) clearAll(); }
       group.visible = !!L.level;
     };
@@ -269,7 +284,8 @@
    * version has a third of the windows warm (for night). Wall colour comes from vertex colours. */
   function facadeTextures() {
     const S = 256, mk = () => { const c = document.createElement('canvas'); c.width = c.height = S; return c; };
-    const day = mk(), lit = mk(), d = day.getContext('2d'), l = lit.getContext('2d');
+    const day = mk(), lit = mk(), rough = mk(), d = day.getContext('2d'), l = lit.getContext('2d'), rr = rough.getContext('2d');
+    rr.fillStyle = '#e6e6e6'; rr.fillRect(0, 0, S, S);
     d.fillStyle = '#ffffff'; d.fillRect(0, 0, S, S);
     for (let i = 0; i < 9000; i++) { d.fillStyle = Math.random() < 0.5 ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)'; d.fillRect(Math.random() * S, Math.random() * S, 2, 2); }
     l.fillStyle = '#000'; l.fillRect(0, 0, S, S);
@@ -279,12 +295,34 @@
       d.fillStyle = 'rgba(0,0,0,0.18)'; d.fillRect(x - 3, y - 3, w + 6, h + 6);
       const g = d.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#3b4a57'); g.addColorStop(0.55, '#5f7383'); g.addColorStop(1, '#2c3843');
       d.fillStyle = g; d.fillRect(x, y, w, h);
+      rr.fillStyle = '#262626'; rr.fillRect(x, y, w, h);
       d.fillStyle = 'rgba(255,255,255,0.55)'; d.fillRect(x, y + h, w, 3);
       if (rnd() < 0.36) { l.fillStyle = rnd() < 0.7 ? '#ffcf8a' : '#fff1d6'; l.fillRect(x + 2, y + 2, w - 4, h - 4); }
     }
     d.fillStyle = '#ffffff'; d.fillRect(0, 0, S, 8); l.fillStyle = '#000'; l.fillRect(0, 0, S, 8);
-    const T = c => { const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; return t; };
-    return { day: T(day), lit: T(lit) };
+    const T = (c, srgb = true) => { const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; if (srgb) t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; return t; };
+    return { day: T(day), lit: T(lit), rough: T(rough, false) };
+  }
+  /** Curtain wall: 3 m x 3.5 m glass panels on thin mullions, a little variation panel to panel;
+   * the lit version warms about a quarter of them; roughness: glass glossy, mullions matte. */
+  function glassTextures() {
+    const S = 256, mk = () => { const c = document.createElement('canvas'); c.width = c.height = S; return c; };
+    const day = mk(), lit = mk(), rough = mk(), d = day.getContext('2d'), l = lit.getContext('2d'), r = rough.getContext('2d');
+    l.fillStyle = '#000'; l.fillRect(0, 0, S, S); r.fillStyle = '#9a9a9a'; r.fillRect(0, 0, S, S);
+    d.fillStyle = '#c9d0d6'; d.fillRect(0, 0, S, S);
+    let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const cw = S / 4, ch = S / (12 / 3.5);
+    for (let y = 0; y < S; y += ch) for (let x = 0; x < S; x += cw) {
+      const k = 0.85 + rnd() * 0.25;
+      const g = d.createLinearGradient(x, y, x + cw, y + ch);
+      g.addColorStop(0, `rgb(${70 * k | 0},${92 * k | 0},${110 * k | 0})`); g.addColorStop(1, `rgb(${46 * k | 0},${62 * k | 0},${78 * k | 0})`);
+      d.fillStyle = g; d.fillRect(x + 2, y + 2, cw - 4, ch - 4);
+      r.fillStyle = '#1a1a1a'; r.fillRect(x + 2, y + 2, cw - 4, ch - 4);
+      if (rnd() < 0.27) { l.fillStyle = rnd() < 0.6 ? '#ffe2b0' : '#f2f6ff'; l.fillRect(x + 3, y + 3, cw - 6, ch - 6); }
+    }
+    d.fillStyle = '#d6d9dc'; d.fillRect(0, 0, S, 8); l.fillStyle = '#000'; l.fillRect(0, 0, S, 8); r.fillStyle = '#cccccc'; r.fillRect(0, 0, S, 8);
+    const T = (c, srgb) => { const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; if (srgb) t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; return t; };
+    return { day: T(day, true), lit: T(lit, true), rough: T(rough, false) };
   }
   /** A small broadleaf-and-conifer-ish tree: trunk and two blobs, vertex coloured (1 unit tall). */
   function treeGeometry() {

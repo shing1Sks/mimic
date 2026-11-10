@@ -11,7 +11,7 @@
 
   // ---------------------------------------------------------------- settings
   const DEFAULTS = { sens: 1.0, expo: 0.25, invert: false, twist: true, autoRudder: true, assist: 'steady',
-    tod: 1, timeSpeed: 1, wind: 1, volume: 8, quality: 1, mapDetail: 2, showControls: false, showFps: false };
+    tod: 1, timeSpeed: 1, wind: 1, volume: 8, quality: 1, mapDetail: 2, guide: 1, showFps: false };
   const settings = Object.assign({}, DEFAULTS);
   let savedSettings = {};
   try { savedSettings = JSON.parse(localStorage.getItem('gyrowing.settings') || '{}'); Object.assign(settings, savedSettings); } catch (e) { /* storage blocked */ }
@@ -26,7 +26,8 @@
   // turbulence only where it is announced: the Gusty setting and the missions that say so
   const WINDS = [['Calm', 0, 0], ['Light breeze', 3, 0], ['Gusty, turbulent', 7, 0.4]];
   const ASSISTS = [['steady', 'Steady: holds attitude'], ['leveller', 'Wing leveller'], ['off', 'Off (raw)']];
-  const QUAL = [['Performance', 0.8], ['Balanced', 1], ['Sharp', 1.5]];
+  // graphics tiers: name, render-scale cap, post-processing level (post.js)
+  const QUAL = [['Performance', 0.8, 0], ['Balanced', 1, 1], ['High', 1.25, 2], ['Ultra', 1.75, 3]];
   const MAPDETAIL = ['Off (satellite only)', 'Light', 'Full'];
 
   const OPTIONS = [
@@ -41,7 +42,7 @@
     { key: 'volume', label: 'Volume', fmt: v => v * 10 + '%', step: (v, d) => clamp(v + d, 0, 10) },
     { key: 'quality', label: 'Graphics', fmt: v => QUAL[v][0], step: (v, d) => (v + d + QUAL.length) % QUAL.length },
     { key: 'mapDetail', label: 'Real-world map detail', fmt: v => MAPDETAIL[v], step: (v, d) => (v + d + 3) % 3 },
-    { key: 'showControls', label: 'Show input monitor', fmt: v => v ? 'On' : 'Off', step: v => !v },
+    { key: 'guide', label: 'Controller guide', fmt: v => ['Off', 'First 30 s', 'Always'][v], step: (v, d) => (v + d + 3) % 3 },
     { key: 'showFps', label: 'Frame rate counter', fmt: v => v ? 'On' : 'Off', step: v => !v },
   ];
 
@@ -69,6 +70,7 @@
   const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.3, 60000);
   let T, world, plane, env, puffs, life, cockpit, missionDefs, markers, speedfx;
   let islandT = null, islandExtra = [], rw = null, rwT = null, DB = null, dbP = null, osm = null;
+  const post = new Post(renderer);
   // adaptive resolution: the render scale drops (to 0.6) while the frame rate is under 45 and climbs
   // back to the quality setting's cap when there is room, so a laptop GPU stays smooth
   let dynScale = 1, dynT = 0;
@@ -91,11 +93,12 @@
     if (world) {
       world.setDetail(settings.quality);
       // the shadow only covers the aircraft and the ground near it: 1024 is plenty on Performance
-      const sm = settings.quality === 0 ? 1024 : 2048, sh = world.sun.shadow;
+      const sm = [1024, 2048, 2048, 4096][settings.quality], sh = world.sun.shadow;
       if (sh.mapSize.x !== sm) { sh.mapSize.set(sm, sm); if (sh.map) { sh.map.dispose(); sh.map = null; } }
     }
     if (rw) rw.setDetail(settings.quality);
     if (osm) osm.setQuality(settings.quality, settings.mapDetail);
+    if (post) post.level = QUAL[settings.quality][2];
   }
   function onResize() { applyQuality(); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); hud.resize(); }
   addEventListener('resize', onResize);
@@ -273,6 +276,10 @@
     input.throttle = G.s.trim.throttle + 0.15; input.trim = G.s.trim.trim; G.ctl.flaps = 0; G.ctl.gear = false;
   }
   const MODES = {
+    tutorial: { name: 'Learn to fly', start() {
+      G.s = FM.trimState({ speed: 50, gamma: 0, alt: T.AIRPORT.elev + 620, x: -4200, z: 1600, heading: 65, gear: false });
+      input.throttle = 0.5; input.trim = G.s.trim.trim; G.ctl.flaps = 0; G.ctl.gear = false;
+    } },
     lowpass: { name: 'Low pass', start() {
       const st = missionDefs.rings.start;
       lowpassStart(T, st.x, st.z, st.hdg);
@@ -329,6 +336,8 @@
       markers.setMission(def);
     } else { MODES[m].start(); markers.setMission(null); }
     G.skim = Skim.create(); speedfx.reset();
+    G.tutorial = m === 'tutorial' ? Tutorial.create(deviceKind()) : null; G.tutorialEnd = 0;
+    $('tutorial').classList.toggle('hidden', !G.tutorial);
     if (m === 'lowpass' || (m === 'rw' && G.rw.ch.skimStart)) G.skim.armed = true;   // already up and running
     G.lowpass = (m === 'lowpass' || (m === 'rw' && G.rw.ch.skimStart)) ? { t: LOWPASS_T, done: false } : null;
     G.ctl = Object.assign(FM.controls(), { flaps: G.ctl.flaps, gear: G.ctl.gear });
@@ -342,8 +351,8 @@
     plane.root.visible = true;
     hideScreens();
     G.state = 'fly';
-    G.legend = true; G.legendT = 14;
-    $('legend').classList.remove('hidden');
+    G.legend = !G.tutorial; G.legendT = G.tutorial ? -2 : 14;
+    $('legend').classList.toggle('hidden', !!G.tutorial);
     updateLegend();
     G.flyT = 0; G.coachId = '';
     if (m === 'rw') showGoal(G.rwDef.name, G.rwDef.goal, G.rw.loc.name);
@@ -564,7 +573,7 @@
     }
     if (act === 'rwCancel') { toMenu(); return; }
     switch (act) {
-      case 'runway': case 'air': case 'landing': case 'lowpass': G.pending = act; openCalib(); break;
+      case 'runway': case 'air': case 'landing': case 'lowpass': case 'tutorial': G.pending = act; openCalib(); break;
       case 'options': openOptions('menu'); break;
       case 'rumble': mc.enableRumble({ ask: true }).then(ok => { paintMenu(); toast(ok ? 'Phone vibration on' : 'Vibration not available (Chrome + WebHID needed)'); }); break;
       case 'back': if (G.screen === 'options') { if (optionsBack === 'pause') show('pause'); else show('menu'); } else if (G.screen === 'place' || G.screen === 'rwload') toMenu(); break;
@@ -576,7 +585,11 @@
       case 'retry': startMode(G.mode); break;
     }
   }
-  function toMenu() { G.state = 'menu'; window.onbeforeunload = null; $('goalCard').classList.add('hidden'); $('attrib').classList.toggle('hidden', !G.rwMode); $('legend').classList.add('hidden'); $('objective').classList.add('hidden'); markers.setMission(null); paintMenu(); show('menu'); }
+  function toMenu() { G.state = 'menu'; window.onbeforeunload = null; $('goalCard').classList.add('hidden'); $('attrib').classList.toggle('hidden', !G.rwMode); $('legend').classList.add('hidden'); $('objective').classList.add('hidden'); markers.setMission(null); paintMenu(); show('menu');
+    // never flown the lesson: the cursor starts on it
+    let done = false; try { done = !!localStorage.getItem('gyrowing.tutorialDone'); } catch (e) { /* ignore */ }
+    if (!done) { const f = focusables(), i = f.findIndex(e => e.dataset.act === 'tutorial'); if (i >= 0) { G.focus = i; refreshFocus(); } }
+  }
   function paintMenu() {
     const pad = mimicPadConnected();
     const wrong = !pad && motionPhoneConnected();
@@ -668,8 +681,8 @@
   function updateLegend() {
     const pad = /pad/i.test(input.lastSource) || mimicPadConnected();
     const rows = pad ? [
-      ['Left stick', 'pitch and roll'], ['Right stick ← →', 'rudder'], ['R2 / L2', 'throttle up / down'],
-      ['A', 'flaps down (hold: up)'], ['B hold', 'brakes'], ['X', 'gear'], ['L1 / R1', 'trim'],
+      ['Left stick', 'pitch and roll'], ['R2 or A (hold)', 'more power'], ['L2 or B (hold)', 'less power, brakes'],
+      ['D-pad ◀ ▶', 'flaps up / down'], ['X', 'gear'], ['Right stick ← →', 'rudder'], ['L1 / R1', 'trim'],
       ['Flick stick twice', 'barrel roll / loop'], ['Y', 'camera'], ['START', 'pause'],
     ] : [
       ['W S / ↑ ↓', 'pitch'], ['A D / ← →', 'roll'], ['Q E', 'rudder'], ['Shift / Ctrl', 'throttle'],
@@ -910,6 +923,38 @@
     el.querySelector('.sk-total').textContent = sk.active && sk.total ? 'total ' + Math.round(sk.total).toLocaleString('en-US') : '';
   }
 
+  // ---------------------------------------------------------------- the controller guide and the first flight
+  const guide = new Guide($('guide'));
+  /** Which picture to show: the Mimic Pad, a standard gamepad, or the keyboard. */
+  function deviceKind() { return mimicPadConnected() ? 'pad' : /gamepad|pad/i.test(input.lastSource) ? 'gamepad' : 'kbm'; }
+  function tutorialTick(s, inp, dt) {
+    const tu = G.tutorial; if (!tu) return;
+    const att = FM.attitude(s);
+    tu.device = Tutorial.WORDS[deviceKind()] ? deviceKind() : tu.device;
+    const ev = Tutorial.update(tu, { thr: G.ctl.throttle, sx: inp.aileron, sy: inp.elevator, vsFpm: s.vel.y * 196.85, bank: att.bank, hdg: att.heading, aglFt: s.agl * 3.281, skim: G.skim && G.skim.active }, dt);
+    for (const e of ev) {
+      if (e.type === 'step') { AudioFX.chime(); rumble(0.5, 90, 0); G.tuFlash = 0.6; }
+      if (e.type === 'done') { G.tutorialEnd = 7; try { localStorage.setItem('gyrowing.tutorialDone', '1'); } catch (er) { /* ignore */ } }
+    }
+    const v = Tutorial.view(tu), el = $('tutorial');
+    G.tuFlash = Math.max(0, (G.tuFlash || 0) - dt);
+    el.classList.toggle('ok', G.tuFlash > 0 || tu.done);
+    el.querySelector('.tu-k').textContent = tu.done ? 'First flight · done' : 'First flight · step ' + (v.index + 1) + ' of ' + v.total;
+    el.querySelector('.tu-t').textContent = v.title;
+    el.querySelector('.tu-x').textContent = v.text;
+    el.querySelector('.tu-bar i').style.transform = 'scaleX(' + v.progress.toFixed(3) + ')';
+    G.guideShow = v.show;
+    if (tu.done && (G.tutorialEnd -= dt) <= 0) { G.tutorial = null; el.classList.add('hidden'); toast('Free flight: the island is yours. Pause for the menu', 4); }
+  }
+  let guideT = 0;
+  function paintGuide(dt, flying, inp) {
+    const on = flying && (G.tutorial || settings.guide === 2 || (settings.guide === 1 && (G.flyT || 0) < 30));
+    $('guide').classList.toggle('hidden', !on);
+    if (!on) return;
+    guideT -= dt; if (guideT > 0) return; guideT = 1 / 30;
+    guide.update({ device: deviceKind(), raw: input.raw, keys: input.keys, thr: G.ctl.throttle, elev: inp.elevator, ail: inp.aileron, show: G.tutorial ? G.guideShow : [] });
+  }
+
   // ---------------------------------------------------------------- camera
   const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3(), upV = new THREE.Vector3(0, 1, 0), tmpE = new THREE.Euler(0, 0, 0, 'YXZ'), tmpQ2 = new THREE.Quaternion();
   function updateCamera(dt) {
@@ -1060,6 +1105,7 @@
       missionTick(s, dt);
       skimTick(s, dt);
       lowpassTick(dt);
+      tutorialTick(s, inp, dt);
       const L = G.landing;
       if (L && L.first && !L.done) {
         if (!s.onGround && s.agl > 1.5) L.airborneAgain = true;
@@ -1123,7 +1169,8 @@
     markers.update(G.state === 'fly' || G.state === 'pause' ? G.mission : null, G.time);
     puffs.update(dt);
     if (G.state !== 'pause') speedfx.update(camera.position, tmpV.set(s.vel.x, s.vel.y, s.vel.z), G.state === 'fly' ? G.feel : 0, dt, world.night);
-    renderer.render(scene, camera);
+    const sd = world.sunDir;
+    post.render(scene, camera, sd, { night: world.night > 0.5, warm: sd ? clamp(1.1 - sd.y * 2.2, 0.25, 1) : 0.5 });
 
     // ---- warnings + sound
     const air = s && !s.onGround && !s.crashed;
@@ -1163,7 +1210,7 @@
         throttle: G.ctl.throttle, rpm: s.rpm, trim: inp.trim, trimming: inp.trimming, flapCmd: G.ctl.flaps, flapPos: s.flap,
         gear: s.gear, brake: inp.brake > 0 && s.onGround, gload: s.onGround ? 1 : s.gload,
         stall: G.warn.stall, gearWarn: G.warn.gear, terrain: G.warn.terrain, overspeed: s.airspeed * 1.944 > 160, gearBlocked: G.warn.blockT > 0,
-        showControls: settings.showControls, sourceLabel: phone ? (input.phone.calibrated ? 'PHONE' : 'PHONE: TAP CENTER') : input.lastSource.toUpperCase(), phone: phone && input.phone.calibrated, phonePitch: input.phone.pitch, phoneRoll: input.phone.roll,
+        showControls: false, sourceLabel: phone ? (input.phone.calibrated ? 'PHONE' : 'PHONE: TAP CENTER') : input.lastSource.toUpperCase(), phone: phone && input.phone.calibrated, phonePitch: input.phone.pitch, phoneRoll: input.phone.roll,
         elevator: G.ctl.elevator, aileron: G.ctl.aileron, rudder: G.ctl.rudder,
         approach,
       };
@@ -1171,7 +1218,7 @@
       G.hudAcc = (G.hudAcc || 0) + dt;
       if (G.hudAcc >= 1 / 31) { hud.draw(hd, G.hudAcc); G.hudAcc = 0; }
       if (G.view === 'cockpit') cockpit.update(Object.assign(hd, { turnRate: s.omega.z / DEG, night: world.night }), dt);
-      paintObjective(obj, dt);
+      if (!G.tutorial) paintObjective(obj, dt); else $('objective').classList.add('hidden');
       paintSkim(dt, true);
       // ---- coach: the one next thing to do
       G.flyT = (G.flyT || 0) + dt;
@@ -1184,7 +1231,7 @@
       if (c.id !== G.coachId) { G.coachId = c.id; G.coachT = 0; }
       G.coachT += dt;
       ce.querySelector('span').textContent = c.text;
-      ce.classList.toggle('hidden', c.id === 'free' && G.coachT > 20);
+      ce.classList.toggle('hidden', (c.id === 'free' && G.coachT > 20) || !!G.tutorial);
       ce.classList.toggle('quiet', c.id === 'free' && G.coachT > 8);
     } else { hud.draw({ panel: false }, dt); paintSkim(1, false); $('coach').classList.add('hidden'); if (G.state !== 'pause') $('objective').classList.add('hidden'); }
     if (G.goalT > 0) { G.goalT -= dt; if (G.goalT <= 0 || (G.state !== 'fly' && G.state !== 'pause')) { $('goalCard').classList.add('hidden'); G.goalT = 0; } }
@@ -1198,11 +1245,13 @@
     $('fps').textContent = Math.round(fps) + ' fps' + (dynScale < 0.999 ? ' · ' + Math.round(dynScale * 100) + '%' : '');
     $('fps').classList.toggle('hidden', !settings.showFps);
     $('attrib').classList.toggle('fly', G.state === 'fly' || G.state === 'crashing');
+    paintGuide(dt, G.state === 'fly', inp);
+    if (G.state !== 'fly' && G.state !== 'pause') $('tutorial').classList.add('hidden');
     window.__gw = G;
   }
 
   window.addEventListener('gamepadconnected', e => { toast((/mimic/i.test(e.gamepad.id) ? 'Mimic connected: ' : 'Controller connected: ') + e.gamepad.id.slice(0, 40)); updateLegend(); });
-  window.__gyrowing = { G, settings, FM, input, get rw() { return rw; }, get osm() { return osm; }, get DB() { return DB; }, openPlace, beginLoading, menuAction, show, showResult, toMenu, showGoal, toast, get world() { return world; }, get T() { return T; }, get life() { return life; }, get missions() { return missionDefs; }, startMode, camera, scene, renderer, hud };
+  window.__gyrowing = { G, settings, FM, input, post, get rw() { return rw; }, get osm() { return osm; }, get DB() { return DB; }, openPlace, beginLoading, menuAction, show, showResult, toMenu, showGoal, toast, get world() { return world; }, get T() { return T; }, get life() { return life; }, get missions() { return missionDefs; }, startMode, camera, scene, renderer, hud };
 
   buildOptions();
   // the airport search box: live suggestions while typing, Enter goes

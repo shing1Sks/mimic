@@ -488,7 +488,7 @@ void main(){
     }));
     water.position.y = 0;
     scene.add(water);
-    W.water = water;
+    W.water = water; W.waterU = waterU;
 
     // ---------------- sky
     const sky = Atmos.createSky();

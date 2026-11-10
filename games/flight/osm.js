@@ -237,20 +237,20 @@
 
   /** A growable set of mesh arrays. */
   function MeshBuf() { this.pos = []; this.nor = []; this.col = []; this.uv = []; }
-  MeshBuf.prototype.tri = function (a, b, c, col, ua, ub, uc) {
+  MeshBuf.prototype.tri = function (a, b, c, col, ua, ub, uc, cols) {
     // face it the way its own normal says (counter-clockwise from the outside)
     const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
     let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
     const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
     this.pos.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
-    for (let k = 0; k < 3; k++) { this.nor.push(nx, ny, nz); this.col.push(col[0], col[1], col[2]); }
+    for (let k = 0; k < 3; k++) { const q = cols ? cols[k] : col; this.nor.push(nx, ny, nz); this.col.push(q[0], q[1], q[2]); }
     this.uv.push(ua[0], ua[1], ub[0], ub[1], uc[0], uc[1]);
   };
   /** A triangle whose winding is chosen so its normal points along `want` ([x, y, z]). */
-  MeshBuf.prototype.triFacing = function (a, b, c, want, col, ua, ub, uc) {
+  MeshBuf.prototype.triFacing = function (a, b, c, want, col, ua, ub, uc, cols) {
     const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
     const d = (uy * vz - uz * vy) * want[0] + (uz * vx - ux * vz) * want[1] + (ux * vy - uy * vx) * want[2];
-    if (d >= 0) this.tri(a, b, c, col, ua, ub, uc); else this.tri(a, c, b, col, ua, uc, ub);
+    if (d >= 0) this.tri(a, b, c, col, ua, ub, uc, cols); else this.tri(a, c, b, col, ua, uc, ub, cols && [cols[0], cols[2], cols[1]]);
   };
   const ROOF_UV = [0.5, 0.985];   // a solid strip at the top of the facade texture
 
@@ -261,7 +261,8 @@
    * Returns { pos, nor, col, uv (Float32Array), count (buildings), tris }.
    */
   function buildBuildings(feats, o) {
-    const M = new MeshBuf(), mpu = o.metresPerUnit, WIN = 1 / 12;   // facade texture: 12 m a repeat
+    // two meshes: masonry facades, and glass curtain walls for towers (each its own material)
+    const Mm = new MeshBuf(), Mg = new MeshBuf(), mpu = o.metresPerUnit, WIN = 1 / 12;   // facade texture: 12 m a repeat
     let count = 0;
     for (const f of feats) {
       if (f.type !== 3 || f.props.hide_3d) continue;
@@ -278,6 +279,9 @@
         const base = minH > 0 ? gC + minH : gMin - 1.0, top = gC + h;
         if (top - base < 1) continue;
         const C = buildingColours(f.props, h, cx, cz);
+        const glass = h > 30 && !f.props.colour, M = glass ? Mg : Mm;
+        // sky occlusion: walls darken toward the street (the light a real street gets)
+        const aoLow = h > 20 ? 0.72 : 0.6, wallLow = C.wall.map(v => v * aoLow);
         const kind = o.simple || minH > 0 ? 'flat' : roofKind(outer, areaM2, h);
         const roofH = kind === 'flat' ? 0 : clamp(Math.sqrt(areaM2) * 0.32, 1.5, 5);
         const eave = top - roofH;
@@ -295,8 +299,8 @@
             const want = [-dz * s, 0, dx * s];
             const a = [p[0], base, p[1]], b = [q[0], base, q[1]], c = [q[0], eave, q[1]], d = [p[0], eave, p[1]];
             const u0 = u * WIN, u1 = (u + len) * WIN, v0 = (base - gC) * WIN, v1 = (eave - gC) * WIN;
-            M.triFacing(a, b, c, want, C.wall, [u0, v0], [u1, v0], [u1, v1]);
-            M.triFacing(a, c, d, want, C.wall, [u0, v0], [u1, v1], [u0, v1]);
+            M.triFacing(a, b, c, want, C.wall, [u0, v0], [u1, v0], [u1, v1], [wallLow, wallLow, C.wall]);
+            M.triFacing(a, c, d, want, C.wall, [u0, v0], [u1, v1], [u0, v1], [wallLow, C.wall, C.wall]);
             u += len;
           }
         }
@@ -317,7 +321,11 @@
         count++;
       }
     }
-    return { pos: new Float32Array(M.pos), nor: new Float32Array(M.nor), col: new Float32Array(M.col), uv: new Float32Array(M.uv), count, tris: M.pos.length / 9 };
+    const pack = M => ({ pos: new Float32Array(M.pos), nor: new Float32Array(M.nor), col: new Float32Array(M.col), uv: new Float32Array(M.uv) });
+    const out = pack(Mm), g = pack(Mg);
+    // the merged arrays (tests and simple callers), plus the glass part on its own
+    const cat = (a, b) => { const r = new Float32Array(a.length + b.length); r.set(a); r.set(b, a.length); return r; };
+    return { pos: cat(out.pos, g.pos), nor: cat(out.nor, g.nor), col: cat(out.col, g.col), uv: cat(out.uv, g.uv), masonry: out, glass: g, count, tris: (Mm.pos.length + Mg.pos.length) / 9 };
   }
   /** A gabled roof over a four-corner footprint, ridge along the long axis, gable ends in wall colour. */
   function gable(M, q, eave, roofH, C) {

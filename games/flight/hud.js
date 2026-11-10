@@ -17,7 +17,9 @@
   HUD.prototype.resize = function () {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.c.width = Math.round(innerWidth * dpr); this.c.height = Math.round(innerHeight * dpr);
-    this.c.style.width = innerWidth + 'px'; this.c.style.height = innerHeight + 'px';
+    // one pixel short of the 3D canvas, so the session recorder (which films the largest canvas)
+    // picks the 3D view, not this overlay
+    this.c.style.width = innerWidth + 'px'; this.c.style.height = (innerHeight - 1) + 'px';
     this.dpr = dpr; this.w = innerWidth; this.h = innerHeight;
     this.s = clamp(Math.min(this.w / 1600, this.h / 900), 0.6, 1.6);   // instruments stay legible on 1366x768 laptops
   };

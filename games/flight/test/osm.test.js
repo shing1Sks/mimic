@@ -135,6 +135,20 @@ const t = {
     let bottom = 1e9; for (let i = 1; i < m.pos.length; i += 3) bottom = Math.min(bottom, m.pos[i]);
     assert.ok(bottom <= 99, 'the low side is still in the ground: ' + bottom);
   },
+  towersGoToTheGlassMeshAndWallsDarkenAtTheFoot() {
+    const feats = O.decodeTile(tile({ building: [
+      { type: 3, props: { render_height: 90 }, rings: [sq(0, 0, 40)] },
+      { type: 3, props: { render_height: 12 }, rings: [sq(200, 0, 60)] },
+    ] })).building.features;
+    const m = O.buildBuildings(feats, opts());
+    assert.ok(m.glass.pos.length > 0 && m.masonry.pos.length > 0, 'one tower in glass, one block in masonry');
+    let maxY = -1; for (let i = 1; i < m.glass.pos.length; i += 3) maxY = Math.max(maxY, m.glass.pos[i]);
+    assert.strictEqual(maxY, 190, 'the 90 m tower is the glass one');
+    // a wall's bottom corners are darker than its top corners
+    const c = m.masonry.col, p = m.masonry.pos; let lo = 0, hi = 0;
+    for (let v = 0; v < p.length / 3; v++) { const y = p[v * 3 + 1], l = c[v * 3] + c[v * 3 + 1] + c[v * 3 + 2]; if (y < 100) lo = Math.max(lo, l); else if (y > 109 && y < 113) hi = Math.max(hi, l); }
+    assert.ok(lo > 0 && hi > lo, 'sky occlusion at the street: ' + lo.toFixed(2) + ' < ' + hi.toFixed(2));
+  },
   coloursComeFromTheTagOrTheHeight() {
     const own = O.buildingColours({ colour: '#ff0000' }, 10, 0, 0).wall;
     assert.ok(own[0] > 0.99 && own[1] < 0.4);

@@ -19,6 +19,8 @@
 </div>
 <div id="coach" class="hidden"><b>NEXT</b><span></span></div>
 <div id="turbChip" class="hidden">TURBULENCE</div>
+<div id="guide" class="hidden"></div>
+<div id="tutorial" class="hidden"><div class="tu-k"></div><div class="tu-t"></div><div class="tu-x"></div><div class="tu-bar"><i></i></div></div>
 <div id="skim" class="hidden"><div class="sk-mult">SKIM</div><div class="sk-pts">0</div><div class="sk-sub">total</div><div class="sk-bar"><i></i></div><div class="sk-total"></div><div id="pops"></div></div>
 <div id="goalCard" class="hidden"><div class="gc-k">YOUR GOAL</div><div class="gc-t"></div><div class="gc-s"></div></div>
 <div id="attrib" class="hidden"><span class="short">&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors &middot; &copy; OpenMapTiles &middot; OpenFreeMap &middot; Sentinel-2 by EOX &middot; Mapzen &middot; OurAirports</span><span class="long">Imagery <a href="https://s2maps.eu" target="_blank" rel="noopener">Sentinel-2 cloudless 2016</a> by EOX (CC BY 4.0, modified Copernicus data) &middot; Elevation <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank" rel="noopener">Mapzen Terrain Tiles</a> &middot; Map &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors (ODbL), <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">&copy; OpenMapTiles</a>, <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> &middot; Airports <a href="https://ourairports.com/data/" target="_blank" rel="noopener">OurAirports</a> &middot; full credits in CREDITS.md</span></div>
@@ -57,7 +59,8 @@
         <div class="ap-search"><input id="apCode" type="text" placeholder="Any airport: KJFK, LHR, Paro" maxlength="40" autocomplete="off" spellcheck="false"><button class="btn slim" data-act="apGo">Go</button><div id="apHits"></div></div>
         <div class="col-h">The island <span class="col-sub">offline, always ready</span></div>
         <div class="island-grid">
-          <button class="btn primary" data-act="runway"><b>Takeoff</b><span>Runway 09, engine idling</span></button>
+          <button class="btn primary learn" data-act="tutorial"><b>Learn to fly</b><span>Two minutes, step by step, with your controller</span></button>
+          <button class="btn" data-act="runway"><b>Takeoff</b><span>Runway 09, engine idling</span></button>
           <button class="btn" data-act="air"><b>Air start</b><span>2,000 ft, trimmed for cruise</span></button>
           <button class="btn" data-act="landing"><b>Landing challenge</b><span>Scored final. Best: <em id="bestScore"></em></span></button>
           <button class="btn" data-act="options"><b>Options</b><span>Controls, assists, time, wind</span></button>
@@ -149,10 +152,13 @@
 <script src="coach.js"></script>
 <script src="missions.js"></script>
 <script src="skim.js"></script>
+<script src="tutorial.js"></script>
+<script src="guide.js"></script>
 <script src="fx.js"></script>
 <script src="life.js"></script>
 <script src="cockpit.js"></script>
 <script src="hud.js"></script>
+<script src="post.js"></script>
 <script src="game.js"></script>
 </body>
 </html>

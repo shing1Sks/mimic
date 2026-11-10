@@ -7,7 +7,7 @@
  *        ground heights over the rect), n, overlay (px, 0 = none), build ('full' | 'lod' | null),
  *        trees (count) }
  * Out: { id, key, miss? (decoded tile was evicted: send buf again), overlay (ImageBitmap),
- *        mesh { pos, nor, col, uv }, buildings, trees (Float32Array x, y, z, scale) }
+ *        mesh, glass ({ pos, nor, col, uv } each), buildings, trees (Float32Array x, y, z, scale) }
  */
 'use strict';
 importScripts('osm.js');
@@ -73,10 +73,9 @@ self.onmessage = e => {
     const toLocal = (px, py) => [r.x0 + px / ext * W, r.z0 + py / ext * D];
     if (m.build && T.building && ground) {
       const b = OSM.buildBuildings(T.building.features, { extent: ext, toLocal, groundAt: ground, metresPerUnit: W / ext,
-        minArea: m.build === 'lod' ? 180 : 0, simple: m.build === 'lod' });
-      for (let i = 0; i < b.col.length; i++) b.col[i] = toLin(b.col[i]);
-      out.mesh = { pos: b.pos, nor: b.nor, col: b.col, uv: b.uv }; out.buildings = b.count; out.mode = m.build;
-      transfer.push(b.pos.buffer, b.nor.buffer, b.col.buffer, b.uv.buffer);
+        minArea: m.build === 'far' ? 700 : m.build === 'lod' ? 180 : 0, simple: m.build !== 'full' });
+      for (const part of [b.masonry, b.glass]) { for (let i = 0; i < part.col.length; i++) part.col[i] = toLin(part.col[i]); transfer.push(part.pos.buffer, part.nor.buffer, part.col.buffer, part.uv.buffer); }
+      out.mesh = b.masonry; out.glass = b.glass; out.buildings = b.count; out.mode = m.build;
     }
     if (m.trees && ground) {
       const pts = OSM.treePoints(T, m.trees, m.seed || 1), arr = new Float32Array(pts.length * 4);

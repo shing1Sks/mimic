@@ -108,6 +108,29 @@ const tests = {
     assert(small > 240, 'most are ordinary: ' + small);
     assert.strictEqual(L.stars(0.9), 3); assert.strictEqual(L.stars(0.05), 1);
   },
+  aQuietFloatGetsAVisitor() {
+    const rng = L.rng32(9);
+    const near = L.spawnFish(rng, { species: 'bass', x: 8, z: -22, id: 4 });
+    const l = lure({ age: 5 });
+    const r = L.directBite([near], l, rng);
+    assert(r.fish === near && near.state === 'approach' && l.claimed === 4);
+    // and it reaches the float and bites within a few seconds
+    const ev = sim([near], [l], 12, rng, e => e.type === 'strike' || e.type === 'nibble');
+    assert(ev.some(e => e.type === 'nibble' || e.type === 'strike'), ev.map(e => e.type).join(','));
+  },
+  emptyWaterSpawnsAFishBeyondTheFloat() {
+    const rng = L.rng32(3);
+    const r = L.directBite([], lure(), rng);
+    const d = Math.hypot(r.spawn.x - 0, r.spawn.z + 20);
+    assert(d >= 7 && d <= 10.5 && r.spawn.z < -3, JSON.stringify(r));
+  },
+  theDirectorIgnoresFishRightUnderTheFloatOrBusy() {
+    const rng = L.rng32(3);
+    const under = L.spawnFish(rng, { species: 'perch', x: 0.5, z: -20, id: 1 });
+    const busy = L.spawnFish(rng, { species: 'perch', x: 6, z: -20, id: 2 }); busy.state = 'flee';
+    const r = L.directBite([under, busy], lure(), rng);
+    assert(r.spawn, 'spawned instead');
+  },
   theLegendOnlyComesWhenCalled() {
     const rng = L.rng32(4);
     for (let i = 0; i < 300; i++) assert.notStrictEqual(L.spawnFish(rng).sp.id, 'grouper');

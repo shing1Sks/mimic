@@ -220,6 +220,18 @@
       this.env(og, t, 0.002, 0.18, 0.5);
       o.connect(lp); lp.connect(og); og.connect(this.sfxBus); o.start(t); o.stop(t + 0.6);
     }
+    /** The rod groaning under load (the danger zone). */
+    creak(level) {
+      if (!this.ctx) return;
+      const c = this.ctx, t = c.currentTime, s = this.noise(0.25), bp = c.createBiquadFilter(), g = c.createGain();
+      bp.type = 'bandpass'; bp.Q.value = 9; bp.frequency.setValueAtTime(220 + Math.random() * 60, t); bp.frequency.linearRampToValueAtTime(160, t + 0.2);
+      this.env(g, t, 0.02, 0.5 * level, 0.2);
+      s.connect(bp); bp.connect(g); g.connect(this.sfxBus);
+      const o = c.createOscillator(), og = c.createGain();
+      o.type = 'triangle'; o.frequency.setValueAtTime(1800 + level * 900, t);
+      this.env(og, t, 0.005, 0.03 * level, 0.08);
+      o.connect(og); og.connect(this.sfxBus); o.start(t); o.stop(t + 0.1);
+    }
     slip() {
       if (!this.ctx) return;
       const c = this.ctx, t = c.currentTime, o = c.createOscillator(), g = c.createGain();

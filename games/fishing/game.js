@@ -136,12 +136,30 @@
   function spawnFree(opts) {
     const f = L.spawnFish(Math.random, Object.assign({ id: ++sess.fishId }, opts || {}));
     f.shadow = W.makeShadow();
+    addModel(f);
     sess.fish.push(f);
     return f;
   }
+  /** The fish itself, seen through the clear water near the dock (its shadow carries further). */
+  function addModel(f) {
+    f.model = W.makeFish(f.sp, true); f.model.scale.setScalar(f.cm / 100); f.model.rotation.order = 'YXZ';
+    f.model.traverse(o => { o.castShadow = false; });
+    W.scene.add(f.model);
+  }
+  function dropModel(f) { if (f.model) { W.scene.remove(f.model); f.model = null; } }
   function removeFree(f) {
     sess.fish = sess.fish.filter(x => x !== f);
     if (f.shadow) { W.scene.remove(f.shadow); f.shadow = null; }
+    dropModel(f);
+  }
+  const _m = new T.Vector3();
+  function swimModel(f, x, z, hdg, t, depth, speed) {
+    const m = f.model; if (!m) return;
+    m.visible = W.camera.position.distanceTo(_m.set(x, 0, z)) < 40;
+    if (!m.visible) return;
+    m.position.set(x, -(depth === undefined ? 0.35 + f.sp.depth * 0.22 : depth), z);
+    m.rotation.set(0, -hdg + Math.sin(t * (3 + speed * 4)) * 0.08, 0);
+    m.userData.tail.rotation.y = Math.sin(t * (6 + speed * 9) + f.id) * 0.4;
   }
   function fishPop() { return 8 + (sess ? sess.players.length * 2 : 0); }
 
@@ -153,7 +171,7 @@
       i, mc: ctrl, kind, color: COLORS[i], name: 'P' + (i + 1), x, a, hand: hand || (cfg.hand ? 'left' : 'right'),
       st: 'wait', stT: 0, armed: false, crank: L.createCrank(), jerk: [], prS: 0, jerkCool: 0, strikeT: -9,
       lure: { id: i + 1, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, inWater: false, age: 0, twitch: 99, moving: 0, claimed: -1 },
-      castHold: false, peak: null, fight: null, fish: null, holder: null, dip: 0, pop: 0, clickAcc: 0, dragAcc: 0, tickAcc: 0, fxT: 0,
+      castHold: false, caster: L.createCaster(), waitT: 0, directAt: 4, biteSoft: false, missAt: -9, dangerT: 0, creakT: 0, fight: null, fish: null, holder: null, dip: 0, pop: 0, clickAcc: 0, dragAcc: 0, tickAcc: 0, fxT: 0,
       catches: [], casts: 0, longest: 0, snaps: 0, escapes: 0, rumbleNext: 0, card: null, said: {}, lastFish: null, prevFish: null,
     };
     setPlayerHand(p, p.hand);
@@ -167,7 +185,11 @@
     p.mc.rumble(s, ms, pat);
   }
   const base = p => ({ x: p.x, z: 0.1 });
-  function setSt(p, st) { p.st = st; p.stT = 0; }
+  function setSt(p, st) {
+    p.st = st; p.stT = 0;
+    if (st === 'ready') { p.caster = L.createCaster(); p.armed = false; }   // A must come up once before a cast
+    if (st !== 'ready') W.aim(p.a, 0, false);
+  }
 
   // ------------------------------------------------------------------ sessions
   function startSession(mode, entries, opts) {
@@ -189,7 +211,8 @@
   function endSession() {
     if (!sess) return;
     sess.players.forEach(p => { W.removeAngler(p.a); if (p.holder) W.scene.remove(p.holder); if (p.fish && p.fish.shadow) W.scene.remove(p.fish.shadow); });
-    sess.fish.forEach(f => f.shadow && W.scene.remove(f.shadow));
+    sess.fish.forEach(f => { if (f.shadow) W.scene.remove(f.shadow); dropModel(f); });
+    sess.players.forEach(p => { if (p.fish) dropModel(p.fish); });
     sess = null;
     synth.strain(0);
     clearFloats();
@@ -218,14 +241,14 @@
 
   // ------------------------------------------------------------------ casting
   const _f = new T.Vector3(), _av = new T.Vector3(), _t = new T.Vector3(), _bt = new T.Vector3();
-  function release(p, f, av) {
-    p.castHold = false; p.peak = null;
-    const ln = L.castLaunch(f, av);
-    if (ln.speed === 0) { float(p, p.a.tip, 'Flick harder', 'and let go mid-swing', 'bad'); return; }
+  /** A cast decided by the stroke detector (logic.js stepCaster). */
+  function startCast(p, ln) {
+    p.castHold = false;
+    if (ln.fail === 'weak') { float(p, p.a.tip, 'Flick it!', 'swing the rod over your shoulder and snap it forward', 'bad'); return; }
     p.casts++;
-    if (ln.backward) {
+    if (ln.fail === 'backward') {
       setSt(p, 'snag'); p.lure.inWater = false;
-      float(p, p.a.tip, 'Snagged behind you', 'let go as the rod comes forward', 'bad');
+      float(p, p.a.tip, 'Tangled behind you', 'finish the flick forward, then let go', 'bad');
       synth.slip(); rumble(p, 0.6, 120, 3, true);
       rec('cast', { p: p.i, backward: true });
       return;
@@ -234,9 +257,9 @@
     l.x = p.a.tip.x; l.y = p.a.tip.y; l.z = p.a.tip.z; l.vx = ln.v.x; l.vy = ln.v.y; l.vz = ln.v.z;
     l.inWater = false; l.claimed = -1; l.launch = ln;
     setSt(p, 'flight');
-    synth.whoosh(Math.min(1, ln.speed / 40));
-    rumble(p, 0.25 + 0.5 * Math.min(1, ln.speed / 40), 70, 2, true);
-    rec('cast', { p: p.i, speed: +ln.speed.toFixed(2), heading: +ln.heading.toFixed(3), elev: +ln.elev.toFixed(3) });
+    synth.whoosh(0.3 + ln.power * 0.7);
+    rumble(p, 0.3 + 0.6 * ln.power, 90, 2, true);
+    rec('cast', { p: p.i, speed: +ln.speed.toFixed(2), heading: +ln.heading.toFixed(3), elev: +ln.elev.toFixed(3), power: +ln.power.toFixed(2), timing: ln.timing, dt: +ln.dt.toFixed(3) });
   }
   function land(p) {
     const l = p.lure, b = base(p);
@@ -250,7 +273,9 @@
     synth.splash(0.15, d > 25);
     rumble(p, 0.25, 30, 0, true);
     for (const f of sess.fish.slice()) L.splashNear(f, l.x, l.z, Math.random, false);
-    float(p, new T.Vector3(l.x, 0.4, l.z), Math.round(d) + ' m', L.castWord(l.launch.elev));
+    float(p, new T.Vector3(l.x, 0.4, l.z), Math.round(d) + ' m', L.castWord(l.launch), 'cast');
+    W.ripple(l.x, l.z, 1.6, 2.2);
+    p.waitT = 0; p.directAt = (sess.mode === 'calm' ? 2.2 : 3.2) + Math.random() * 1.6;
     rec('land', { p: p.i, d: +d.toFixed(1), x: +l.x.toFixed(2), z: +l.z.toFixed(2) });
   }
 
@@ -263,7 +288,7 @@
     const b = base(p), l = p.lure;
     const d = Math.max(3, Math.hypot(l.x - b.x, l.z - b.z)), phi = Math.atan2(l.x - b.x, -(l.z - b.z));
     p.fish = f; p.fight = L.createFight(f, d, phi, q, Math.random);
-    f.shadow = W.makeShadow();
+    f.shadow = W.makeShadow(); addModel(f);
     p.holder = new T.Group(); W.scene.add(p.holder);
     const m = W.makeFish(f.sp); const s = f.cm / 100; m.scale.setScalar(s); m.rotation.order = 'YXZ';
     p.fishMesh = m; p.holder.add(m); p.holder.visible = false;
@@ -293,19 +318,21 @@
       setSt(p, 'catch');
       p.holder.visible = true; p.holder.scale.setScalar(1);
       if (f.shadow) { W.scene.remove(f.shadow); f.shadow = null; }
+      dropModel(f);
       W.splash(at.x, at.z, 0.6); synth.splash(0.5, false);
       synth.fanfare(stars); rumble(p, 0.9, 250, 2, true);
       W.sparkle(p.a.tip.clone().add(new T.Vector3(0, -0.4, 0)));
       if (sess.players.length === 1) { $('flash').classList.remove('go'); void $('flash').offsetWidth; $('flash').classList.add('go'); showCatchCard(p, c); }
       else showPartyCatch(p, c);
-      rec('landed', { p: p.i, sp: f.sp.id, kg: f.kg, t: +fs.t.toFixed(1) });
+      rec('landed', { p: p.i, sp: f.sp.id, kg: f.kg, secs: +fs.t.toFixed(1) });
     } else {
       setSt(p, 'lost');
       W.scene.remove(p.holder); p.holder = null;
       if (how === 'snap') {
         p.snaps++; synth.snap(); rumble(p, 1, 255, 0, true); W.shake(0.6);
-        float(p, p.a.tip, 'Snap!', 'the line broke', 'bad');
+        float(p, p.a.tip, 'Snap!', 'the line was screaming: ease off when it runs', 'bad');
         if (f.shadow) { W.scene.remove(f.shadow); f.shadow = null; }
+        dropModel(f);
       } else {
         p.escapes++; synth.slip(); rumble(p, 0.5, 90, 3, true);
         float(p, at.clone().setY(0.5), 'It got away', fs.slackT > 0.5 ? 'too much slack' : 'thrown on the jump', 'bad');
@@ -346,17 +373,10 @@
       case 'wait': case 'done':
         break;
       case 'ready': {
-        if (cfg.release === 0) {
-          if (aPress) p.castHold = true;
-          if (p.castHold && aRel) release(p, f, av);
-          else if (p.castHold && !aDown) p.castHold = false;
-        } else {
-          // snap: the line flies at the peak of a forward flick
-          const ln = L.castLaunch(f, av);
-          if (!ln.backward && ln.tip > 9) { if (!p.peak || ln.tip > p.peak.tip) p.peak = { tip: ln.tip, f: { x: f.x, y: f.y, z: f.z }, av: { x: av.x, y: av.y, z: av.z } }; }
-          if (p.peak && ln.tip < p.peak.tip * 0.75) release(p, p.peak.f, p.peak.av);
-          else if (p.peak && ln.tip < 3) p.peak = null;
-        }
+        p.castHold = aHeld;
+        const ln = L.stepCaster(p.caster, { t: nowS, f: { x: f.x, y: f.y, z: f.z }, a: aHeld }, cfg.release ? 'snap' : 'thumb');
+        if (ln) { startCast(p, ln); break; }
+        W.aim(p.a, Math.atan2(f.x, -f.z), Math.abs(pitch) < 1.15 && f.z < 0.2, aHeld ? 1 : 0.5 + 0.5 * Math.sin(nowS * 3));
         break;
       }
       case 'flight': {
@@ -381,10 +401,27 @@
           l.inWater = false; setSt(p, 'ready'); break;
         }
         const biter = sess.fish.find(fi => fi.lure === l.id);
+        if (p.st === 'drift') {
+          // nobody biting: send a fish (its shadow is seen closing on the float)
+          p.waitT += dt;
+          // a fish that dawdles on its way is sent off and another called
+          if (l.claimed >= 0) { p.claimT = (p.claimT || 0) + dt; if (p.claimT > 9 && biter && biter.state === 'approach') { L.flee(biter, l.x, l.z); l.claimed = -1; p.claimT = 0; p.directAt = p.waitT + 0.5; } }
+          else p.claimT = 0;
+          if (l.claimed < 0 && p.waitT > p.directAt) {
+            const r = L.directBite(sess.fish, l, Math.random);
+            if (r.spawn) L.sendToLure(spawnFree({ x: r.spawn.x, z: r.spawn.z }), l);
+            p.directAt = p.waitT + 10;
+          }
+          if (jerk && jerk.kind === 'strike' && nowS - p.missAt < 0.9) {
+            float(p, new T.Vector3(l.x, 0.5, l.z), 'Late by ' + (nowS - p.missAt + 0.1).toFixed(1) + ' s', 'strike the moment it thumps', 'bad');
+            p.missAt = -9;
+          }
+        }
         if (p.st === 'bite') {
           bend = 0.35;
           const strike = (jerk && jerk.kind === 'strike') || (cfg.strike === 1 && aPress);
           if (strike) { hook(p, jerk && jerk.kind === 'strike' ? jerk.strength : 0.55); break; }
+          if (jerk && jerk.kind === 'twitch') p.biteSoft = true;
         } else if (jerk && jerk.kind === 'strike' && nowS - p.strikeT > 0.5) {
           p.strikeT = nowS; p.jerkCool = 0.4;
           if (biter && biter.state === 'nibble') {
@@ -403,12 +440,12 @@
         const m = p.crank.m || f;
         const reel = L.reelSpeed(tps, aHeld);
         const line0 = fs.line;
-        const ev = L.stepFight(fs, { reel, rodDir: m, pitch: Math.asin(clamp(m.y, -1, 1)), pitchRate: p.prS }, dt, Math.random);
+        const ev = L.stepFight(fs, { reel, rodDir: m, pitch: Math.asin(clamp(m.y, -1, 1)) }, dt, Math.random);
         fightFx(p, fs, ev, reel, line0, dt, nowS);
         if (fs.over) { endFight(p, fs.over); break; }
         const fp = fishPos(p, _t);
         l.x = fp.x; l.z = fp.z;
-        bend = Math.min(1, fs.T * 0.95 + 0.05);
+        bend = Math.min(1.1, fs.T * 1.05 + 0.05);
         sag = Math.max(0, fs.line - fs.d) * 0.35 + Math.max(0, 0.6 - fs.T) * 0.02 * fs.d;
         break;
       }
@@ -450,7 +487,7 @@
     if (p.st === 'catch') { p.holder.position.copy(p.a.tip).add(new T.Vector3(0, -0.12, 0)); lineTo = p.holder.position; }
     if (p.st === 'ready' || p.st === 'wait' || p.st === 'done') { _bt.copy(p.a.tip).add(new T.Vector3(Math.sin(nowS * 1.7 + p.i) * 0.03, -0.55, 0)); lineTo = _bt; }
     if (p.st === 'fight' && p.fight && p.fight.air) lineTo = p.holder.position;
-    W.drawLine(p.a, lineTo || p.a.tip, sag, showLine && !!lineTo);
+    W.drawLine(p.a, lineTo || p.a.tip, sag, showLine && !!lineTo, p.st === 'fight' && p.fight ? p.fight.T : p.st === 'bite' ? 0.5 : 0);
     p.a.bob.visible = showBob && !!lineTo && p.st !== 'bite';
     if (lineTo && p.a.bob.visible) {
       p.a.bob.position.copy(lineTo);
@@ -463,7 +500,11 @@
       const dCam = W.camera.position.distanceTo(p.a.bob.position);
       mk.position.set(l.x, 0.35 + dCam * 0.02, l.z); mk.scale.setScalar(0.22 + dCam * 0.012);
     }
-    p.a.bob.scale.setScalar(1 + Math.max(0, W.camera.position.distanceTo(p.a.bob.position) - 6) * 0.075);
+    p.a.bob.scale.setScalar(1 + Math.max(0, W.camera.position.distanceTo(p.a.bob.position) - 6) * 0.1);
+    // the halo: soft while waiting, flashes on a nibble, flares on the strike
+    p.halo = Math.max(0, (p.halo || 0) - dt * 2.5);
+    p.a.halo.material.opacity = (p.st === 'drift' ? 0.32 : 0.15) + p.halo * 0.8;
+    p.a.halo.scale.setScalar(0.45 + p.halo * 0.9);
   }
 
   /**
@@ -510,9 +551,15 @@
     }
     p.clickAcc += reel * dt * 7;
     while (p.clickAcc > 1) { p.clickAcc--; synth.click(0.5); }
-    // the line in your hand
-    if (fs.T > 0.92) rumble(p, 1, 110, 3);
-    else if (fs.T > 0.15) rumble(p, 0.1 + 0.75 * Math.pow(fs.T, 1.3), 150, 1);
+    // the line in your hand: a hum that rises with the load, hammering pulses in the danger zone
+    if (fs.danger) rumble(p, 1, 120, 3);
+    else if (fs.T > 0.15) rumble(p, 0.1 + 0.75 * Math.pow(fs.T, 1.3), 140, 1);
+    if (fs.danger) {
+      if (!p.inDanger) { p.inDanger = true; if (nowS - p.dangerT > 4) { p.dangerT = nowS; float(p, at.clone().setY(0.9), 'Line screaming!', fs.slipping ? 'stop reeling, raise the rod off the fish' : 'ease off', 'bad'); } }
+      p.creakT -= dt;
+      if (p.creakT <= 0) { p.creakT = 0.32 - Math.min(0.2, fs.strain * 0.2); synth.creak(Math.min(1, 0.5 + fs.strain)); }
+    } else p.inDanger = false;
+    if (fs.slipping) { p.dragAcc += dt * 26; while (p.dragAcc > 1) { p.dragAcc--; synth.drag(1); } }
     // the water: head-shakes splash, runs leave a wake, and the leap
     p.fxT -= dt;
     const vis = W.camera.position.distanceTo(at) < 70;
@@ -530,6 +577,7 @@
       sh.material.opacity = fs.air ? 0.12 : 0.5; sh.visible = true;
     }
     p.prevFish = at.clone();
+    if (p.fish.model) { p.fish.model.visible = !fs.air; if (!fs.air) swimModel(p.fish, at.x, at.z, p.fishHdg || 0, nowS, 0.3, fs.phase === 'run' || fs.phase === 'thrash' ? 1.5 : 0.6); }
     // airborne: the fish arcs out of the water
     if (p.holder) {
       p.holder.visible = !!fs.air;
@@ -584,6 +632,7 @@
         const len = Math.max(0.6, f.cm / 100 * 1.6) * (1 + dCam / 40);
         f.shadow.position.set(f.x, 0.03, f.z); f.shadow.scale.setScalar(len);
         f.shadow.rotation.y = -f.h + Math.sin(f.phase) * 0.12;
+        swimModel(f, f.x, f.z, f.h, nowS, undefined, f.v);
         f.shadow.material.opacity = (f.state === 'strike' ? 0.62 : 0.46) * clamp(1.3 - dCam / 70, 0.2, 1);
       }
       // fish give themselves away: a ring of nervous water now and then, rarely a leap
@@ -628,18 +677,23 @@
     const l = p.lure;
     if (e.type === 'nibble') {
       if (p.st !== 'drift') return;
-      p.dip = 1; synth.plip(0.8); W.ripple(l.x, l.z, 0.25, 0.9);
-      rumble(p, 0.3, 30, 0, true);
+      p.dip = 1; p.halo = 0.6; synth.plip(0.8); W.ripple(l.x, l.z, 0.3, 0.9);
+      rumble(p, 0.18, 25, 0, true);
       rec('nibble', { p: p.i, sp: e.fish.sp.id });
     } else if (e.type === 'strike') {
       if (p.st !== 'drift') { e.fish.state = 'wander'; l.claimed = -1; e.fish.lure = -1; return; }
-      setSt(p, 'bite'); p.biteFish = e.fish;
-      synth.strike(); rumble(p, 1, 240, 3, true);
-      W.splash(l.x, l.z, 0.3);
+      setSt(p, 'bite'); p.biteFish = e.fish; p.biteSoft = false; p.halo = 1.4;
+      synth.strike(); rumble(p, 1, 255, 1, true);
+      setTimeout(() => { if (p.st === 'bite') rumble(p, 1, 220, 3, true); }, 270);
+      W.splash(l.x, l.z, 0.55); W.ripple(l.x, l.z, 1.2, 1.4);
       float(p, new T.Vector3(l.x, 0.6, l.z), '!', '', 'big');
       rec('strike', { p: p.i, sp: e.fish.sp.id, window: e.fish.sp.window });
     } else if (e.type === 'miss') {
-      if (p.st === 'bite') { setSt(p, 'drift'); p.biteFish = null; float(p, new T.Vector3(l.x, 0.5, l.z), 'Missed it', 'jerk up on the thump', 'bad'); W.ripple(l.x, l.z, 0.4, 1); }
+      if (p.st === 'bite') {
+        setSt(p, 'drift'); p.biteFish = null; p.missAt = performance.now() / 1000; p.waitT = 0; p.directAt = 3;
+        float(p, new T.Vector3(l.x, 0.5, l.z), p.biteSoft ? 'Too soft!' : 'Missed it', p.biteSoft ? 'snap the rod up, hard and fast' : 'jerk the rod up the moment it thumps', 'bad');
+        W.ripple(l.x, l.z, 0.4, 1);
+      }
     }
   }
   function finishSession() {
@@ -671,7 +725,7 @@
     switch (p.st) {
       case 'wait': return { what: 'Get ready', hint: 'Point the rod out to sea · ' + kbd(K(c, 'center')) + ' aligns' };
       case 'ready': return { what: p.castHold ? 'Thumb on the spool...' : 'Ready to cast', cls: p.castHold ? 'hot' : '',
-        hint: cfg.release ? 'Flick the rod forward to cast' : p.castHold ? 'Flick over your shoulder, let go of ' + kbd(a) + ' as it comes forward' : 'Hold ' + kbd(a) + ', flick, let go' };
+        hint: cfg.release ? 'Swing the rod back and snap it forward: harder goes further' : p.castHold ? 'Swing back, snap it forward, let go: harder goes further' : 'Point where you want it, hold ' + kbd(a) + ', flick, let go' };
       case 'flight': return { what: 'Line out...', hint: '' };
       case 'drift': {
         const d = Math.hypot(p.lure.x - p.x, p.lure.z);
@@ -680,10 +734,11 @@
       case 'bite': return { what: 'STRIKE!', cls: 'hot', hint: 'Jerk the rod up now' + (cfg.strike ? ' (or ' + kbd(a) + ')' : '') };
       case 'fight': {
         let hint = 'Reel when it rests · lean the rod against its runs', cls = '';
-        if (fs.T > 0.9) { hint = 'Too tight! Stop reeling, ease the rod'; cls = 'bad'; }
+        if (fs.danger) { hint = fs.slipping ? 'Line screaming! Stop reeling, lift the rod off the fish' : 'Too tight! Ease off'; cls = 'bad'; }
         else if (fs.air) { hint = 'Jump! Lower the rod'; cls = 'hot'; }
         else if (fs.slackT > 0.4) { hint = 'Slack line! Reel in'; cls = 'bad'; }
-        else if (fs.phase === 'run' || fs.phase === 'burst') hint = "It's running: stop reeling, rod up and to the side";
+        else if (fs.phase === 'run' || fs.phase === 'burst') hint = "It's running: let it, rod up and to the side";
+        else if (fs.phase === 'rest') hint = 'It rests: reel, or pump the rod back and reel down';
         else if (fs.phase === 'charge') hint = 'Coming at you: reel fast';
         else if (fs.phase === 'thrash') hint = 'Head-shakes: keep it steady';
         return { what: fishWord(p.fish.kg) + ' · ' + Math.round(fs.d) + ' m', cls, hint, bars: true };
@@ -720,6 +775,10 @@
       const html = `<div class="br" style="--c:${COLORS[0]}"><b>&#9733;</b><span>Heaviest today</span><em>${best.toFixed(2)} kg</em><small>Your record: ${(store.derbyBest || 0).toFixed(2)} kg</small></div>`;
       if ($('board').dataset.k !== html) { $('board').innerHTML = html; $('board').dataset.k = html; }
     } else if ($('board').dataset.k !== 'calm') { $('board').innerHTML = ''; $('board').dataset.k = 'calm'; }
+    // the danger zone pulses red at the screen's edge (solo: the whole screen is yours)
+    let danger = 0;
+    for (const p of S.players) if (p.fight && p.fight.danger) danger = Math.max(danger, 0.35 + p.fight.strain * 0.65);
+    $('strain').style.opacity = (danger * (S.players.length > 1 ? 0.45 : 1) * (0.7 + 0.3 * Math.sin(performance.now() / 70))).toFixed(2);
     // cards
     for (const p of S.players) {
       const cs = cardState(p);
@@ -821,7 +880,7 @@
     $('journalSub').textContent = n + ' of ' + L.SPECIES.length + ' species';
     $('keys').innerHTML = keyRows(mc);
     const a = mc.connected ? K(mc, 'a') : 'A';
-    $('howCast').innerHTML = cfg.release ? 'Flick the rod over your shoulder and forward; the line flies at the snap.' : 'Hold ' + kbd(a) + ', flick the rod over your shoulder, let go of ' + kbd(a) + ' as it comes forward.';
+    $('howCast').innerHTML = cfg.release ? 'Swing the rod back over your shoulder and snap it forward; harder goes further.' : 'Hold ' + kbd(a) + ', swing back, snap the rod forward and let go. Harder goes further; aim with where the rod stops.';
     $('howReel').innerHTML = 'Circle the rod tip like a crank, or hold ' + kbd(a) + '.';
     renderRumble();
   }
@@ -1106,6 +1165,49 @@
     $('pauseTip').innerHTML = ph ? 'Rod drifted off the sea? Point it out and press ' + kbd(mc.keyName('center')) + '.' : 'The mouse plays the rod: hold the left button, flick, let go.';
   }
 
+  // ------------------------------------------------------------------ the camera director (solo)
+  // Follows the cast out, settles on the float, pushes in when a fish comes to it and harder on the
+  // strike, frames the line and the fish through the fight, and holds the catch up for a close-up.
+  // Dock Party keeps one wide shared view.
+  const shot = { pos: new T.Vector3(), look: new T.Vector3(), key: null, fov: 0, speed: 2 };
+  const _k = new T.Vector3(), _F = new T.Vector3();
+  function cameraShot() {
+    if (!sess || sess.over || sess.players.length !== 1) return null;
+    const p = sess.players[0], V = W.view, base = W.baseFov, l = p.lure;
+    shot.key = null; shot.fov = base; shot.speed = 2; shot.pos.copy(V.pos); shot.look.copy(V.look);
+    if (p.st === 'catch' && p.holder) {
+      const len = p.lastCatch.cm / 100, d = 0.8 + len * 1.5;
+      _F.copy(p.holder.position); _F.y -= len / 2;
+      shot.pos.set(_F.x - d * 0.55, _F.y + d * 0.12, _F.z + d * 0.85); shot.look.copy(_F);
+      shot.key = _k.set(_F.x - d * 0.4, _F.y + 0.3, _F.z + d * 0.6); shot.speed = 2.5;
+    } else if (p.st === 'flight') {
+      shot.look.lerp(_F.set(l.x, l.y, l.z), 0.55); shot.pos.y += 0.5; shot.speed = 3;
+    } else if (p.st === 'drift' || p.st === 'bite') {
+      _F.set(l.x, 0, l.z);
+      const dF = W.camera.position.distanceTo(_F), bite = p.st === 'bite', near = l.claimed >= 0;
+      shot.look.lerp(_F, bite ? 0.95 : near ? 0.85 : 0.6);
+      shot.fov = bite ? Math.max(16, base * 14 / Math.max(14, dF)) : near ? Math.max(20, base * 20 / Math.max(20, dF)) : Math.max(30, base * 30 / Math.max(30, dF));
+      shot.speed = bite ? 4 : near ? 1.4 : 1.1;
+    } else if (p.st === 'fight' && p.fight) {
+      fishPos(p, _F);
+      const dF = W.camera.position.distanceTo(_F);
+      shot.look.copy(p.a.tip).lerp(_F, 0.72); shot.look.y = Math.min(shot.look.y, 0.8);
+      shot.fov = Math.min(base, Math.max(38, base * 26 / Math.max(26, dF * 0.9)));
+      shot.pos.x += Math.sin(p.fight.phi) * 0.8; shot.pos.y += 0.4;
+      shot.speed = 1.6;
+    } else return null;
+    return shot;
+  }
+  let perfT = 0, perfN = 0, perfSum = 0;
+  /** Frame rate into the play recording every 10 s, so a session can be judged afterwards. */
+  function perfLog(dt) {
+    if (state !== 'play') return;
+    perfT += dt; perfN++; perfSum += dt;
+    if (perfT < 10) return;
+    rec('perf', { fps: +(perfN / perfSum).toFixed(1), pr: +dyn.pr.toFixed(2), q: dyn.q });
+    perfT = perfN = perfSum = 0;
+  }
+
   // ------------------------------------------------------------------ main loop
   let last = performance.now(), titleT = 0;
   function frame(now) {
@@ -1128,14 +1230,9 @@
       updateDemo(titleT);
       W.frameFor(0);
     }
-    // camera: solo eases toward a landed fish held up at the dock
-    let focus = null, amt = 0;
-    if (sess && sess.players.length === 1) {
-      const p = sess.players[0];
-      if (p.st === 'catch' && p.holder) { focus = p.holder.position.clone().add(new T.Vector3(0, -p.lastCatch.cm / 200, 0)); focus.size = p.lastCatch.cm / 100; amt = Math.min(1, p.stT * 1.5) * 0.9; }
-    }
     W.update(state === 'pause' ? 0 : dt);
-    W.updateCamera(dt, focus, amt);
+    W.updateCamera(state === 'pause' ? 0 : dt, cameraShot());
+    perfLog(dt);
     updateFloats(dt);
     W.render();
   }
@@ -1169,7 +1266,7 @@
     castAt(i, d, heading) {   // drop the float at d metres, heading rad (as if cast)
       const p = sess.players[i || 0];
       const l = p.lure; l.x = p.x + Math.sin(heading || 0) * d; l.z = 0.1 - Math.cos(heading || 0) * d; l.y = 0;
-      l.launch = { elev: 0.66 }; land(p);
+      l.launch = { timing: 'clean', power: 0.6 }; land(p);
     },
   };
 })();

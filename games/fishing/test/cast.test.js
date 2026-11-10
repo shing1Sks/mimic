@@ -1,77 +1,89 @@
 // Run: node games/fishing/test/cast.test.js
-// Casting from the rod's real motion: release timing sets the elevation, wrist speed the distance,
-// the tip's path the direction. No aim assist: the same motion always lands in the same place.
+// Casting from the rod's real stroke: how hard you flick sets the distance, where the rod stops
+// sets the direction, release timing nudges the arc inside a wide window.
 'use strict';
 const assert = require('assert');
 const L = require('../logic.js');
 const D = Math.PI / 180;
 
-/** Overhead cast: rod pitched thDeg above the horizon toward the sea (yawDeg right), turning
- *  forward (tip coming down) at w rad/s about the horizontal axis across the rod. */
-function overhead(thDeg, w, yawDeg) {
-  const th = thDeg * D, yw = (yawDeg || 0) * D;
-  const rod = { x: Math.cos(th) * Math.sin(yw), y: Math.sin(th), z: -Math.cos(th) * Math.cos(yw) };
-  const axis = { x: Math.cos(yw), y: 0, z: Math.sin(yw) };   // the rod's right-hand axis
-  return L.castLaunch(rod, { x: -w * axis.x, y: 0, z: -w * axis.z });
+/** Synthetic overhead stroke sampled at 60 Hz: rod from pitch 160 deg (behind) over the top to
+ *  15 deg in front, peak turn rate ~w rad/s, rotated yawDeg right. A held until relT (s from the peak). */
+function stroke(w, yawDeg, relT) {
+  const out = [], dt = 1 / 60, total = (160 - 15) * D, dur = total / (w * 0.64);
+  const yw = (yawDeg || 0) * D;
+  const dir = th => ({ x: Math.cos(th) * Math.sin(yw), y: Math.sin(th), z: -Math.cos(th) * Math.cos(yw) });
+  let t = 0;
+  for (; t < 0.4; t += dt) out.push({ t, f: dir(160 * D), a: true });            // loaded behind
+  const t0 = t;
+  for (; t < t0 + dur; t += dt) { const k = (t - t0) / dur; out.push({ t, f: dir((160 * D) - total * (k * k * (3 - 2 * k))), a: true }); }
+  for (const s of out) s.peak = t0 + dur / 2;
+  for (let e = t + 0.6; t < e; t += dt) out.push({ t, f: dir(15 * D), a: true });
+  const peak = t0 + dur / 2;
+  for (const s of out) if (s.t >= peak + relT) s.a = false;
+  return out;
 }
-const H = 3.6;
-const dist = l => L.landing(l, H).dist;
+function cast(samples, mode) {
+  const c = L.createCaster();
+  for (const s of samples) { const r = L.stepCaster(c, s, mode || 'thumb'); if (r) return r; }
+  return null;
+}
+const dist = l => L.landing(l, 3.6).dist;
 
 const tests = {
-  releaseAtVerticalLeavesAtTheLagAngle() {
-    const l = overhead(90, 10);
-    assert(Math.abs(l.heading) < 1e-6, 'straight out: ' + l.heading);
-    assert(Math.abs(l.elev - L.CAST.LAG) < 1e-6, 'elev ' + l.elev / D);
+  aCleanFlickCastsStraightOut() {
+    const l = cast(stroke(20, 0, 0.08));
+    assert(l && !l.fail, JSON.stringify(l));
+    assert(Math.abs(l.heading) < 2 * D, 'heading ' + l.heading / D);
+    assert.strictEqual(l.timing, 'clean');
   },
-  releaseTimingMovesTheElevation() {
-    const early = overhead(125, 10), mid = overhead(90, 10), late = overhead(55, 10);
-    assert(early.elev > mid.elev && mid.elev > late.elev, [early.elev, mid.elev, late.elev].map(e => (e / D).toFixed(0)).join(' '));
-    assert.strictEqual(L.castWord(mid.elev), 'clean release');
-    assert.strictEqual(L.castWord(early.elev), 'sky-high');
-    assert(['slapped down', 'a touch late'].includes(L.castWord(late.elev)));
-  },
-  aCleanReleaseGoesFurthest() {
-    const best = dist(overhead(90, 10));
-    assert(best > dist(overhead(130, 10)) + 10, 'early release should balloon short');
-    assert(best > dist(overhead(50, 10)) + 8, 'late release should slap down short');
-  },
-  fasterWristCastsFurther() {
-    const d = [5, 8, 11, 14].map(w => dist(overhead(90, w)));
+  harderFlicksGoFurther() {
+    const d = [6, 10, 15, 20, 27].map(w => dist(cast(stroke(w, 0, 0.05))));
     for (let i = 1; i < d.length; i++) assert(d[i] > d[i - 1] + 3, d.map(x => x.toFixed(1)).join(' '));
-    assert(d[0] > 12 && d[0] < 28, 'a gentle flick lands near: ' + d[0].toFixed(1));
-    assert(d[2] > 40 && d[2] < 65, 'a good flick reaches the far fish: ' + d[2].toFixed(1));
+    assert(d[0] > 5 && d[0] < 20, 'a gentle flick lands near: ' + d[0].toFixed(1));
+    assert(d[4] > 40 && d[4] < 55, 'a full flick reaches the far fish: ' + d[4].toFixed(1));
   },
-  speedIsCappedByTheLine() {
-    assert(overhead(90, 60).speed <= L.CAST.MAX_SPEED);
-    assert(dist(overhead(90, 60)) < 80);
+  theReleaseWindowIsWideAndForgiving() {
+    // anywhere from just before the peak to the end of the follow-through is a clean cast
+    const ref = dist(cast(stroke(18, 0, 0.05)));
+    for (const rel of [-0.04, 0, 0.1, 0.2]) {
+      const l = cast(stroke(18, 0, rel));
+      assert.strictEqual(l.timing, 'clean', 'release at ' + rel);
+      assert(Math.abs(dist(l) - ref) < ref * 0.12, rel + ': ' + dist(l).toFixed(1) + ' vs ' + ref.toFixed(1));
+    }
   },
-  aLimpReleaseJustDropsTheRig() {
-    assert.strictEqual(overhead(90, 1).speed, 0);
+  timingStillMatters() {
+    const early = cast(stroke(18, 0, -0.25)), clean = cast(stroke(18, 0, 0.05)), late = cast(stroke(18, 0, 0.3));
+    assert(early.elev > clean.elev && late.elev < clean.elev);
+    assert(dist(early) < dist(clean) && dist(late) < dist(clean));
+    assert(/early/.test(L.castWord(early)) && /late/.test(L.castWord(late)));
   },
-  theTipsPathSetsTheDirection() {
-    const r = overhead(90, 10, 25), l = overhead(90, 10, -25);
-    assert(Math.abs(r.heading - 25 * D) < 1e-6 && Math.abs(l.heading + 25 * D) < 1e-6, r.heading / D + ' ' + l.heading / D);
-    const pr = L.landing(r, H), pl = L.landing(l, H);
+  whereTheRodStopsIsWhereItGoes() {
+    const r = cast(stroke(20, 25, 0.05)), l = cast(stroke(20, -25, 0.05));
+    assert(Math.abs(r.heading - 25 * D) < 2 * D && Math.abs(l.heading + 25 * D) < 2 * D, r.heading / D + ' ' + l.heading / D);
+    const pr = L.landing(r, 3.6), pl = L.landing(l, 3.6);
     assert(Math.abs(pr.x + pl.x) < 1e-6 && Math.abs(pr.z - pl.z) < 1e-6, 'mirror casts mirror');
   },
-  sidearmFlingsAlongTheSweep() {
-    // rod level, pointing 45 deg right, sweeping left (turning about +Y): the tip moves forward-left
-    const rod = { x: Math.SQRT1_2, y: 0, z: -Math.SQRT1_2 };
-    const l = L.castLaunch(rod, { x: 0, y: 10, z: 0 });
-    assert(l.heading < 0 && l.heading > -60 * D, 'heads left of straight: ' + (l.heading / D).toFixed(1));
-    assert(Math.abs(l.elev - L.CAST.LAG) < 1e-6, 'flat sweep leaves at the lag angle');
-    assert(!l.backward);
+  snapModeCastsWithoutAButton() {
+    const s = stroke(20, 0, 0).map(x => Object.assign({}, x, { a: false }));
+    const l = cast(s, 'snap');
+    assert(l && !l.fail && l.timing === 'clean', JSON.stringify(l));
   },
-  aBackswingReleaseGoesBehind() {
-    const l = overhead(90, -10);   // tip moving back over the shoulder
-    assert(l.backward, 'heading ' + (l.heading / D).toFixed(0));
+  aBackswingAloneIsATangle() {
+    // rod swung from in front to behind, then let go: no forward stroke to cast with
+    const s = [], dt = 1 / 60;
+    const dir = th => ({ x: 0, y: Math.sin(th), z: -Math.cos(th) });
+    for (let t = 0; t < 0.3; t += dt) s.push({ t, f: dir(15 * D), a: true });
+    for (let k = 0; k <= 12; k++) s.push({ t: 0.3 + k * dt, f: dir((15 + 145 * k / 12) * D), a: true });
+    for (let t = 0.3 + 13 * dt; t < 1.4; t += dt) s.push({ t, f: dir(160 * D), a: t < 0.6 });
+    const r = cast(s);
+    assert(r && r.fail === 'backward', JSON.stringify(r));
   },
-  twistingTheRodDoesNotCast() {
-    const l = L.castLaunch({ x: 0, y: 0.5, z: -0.866 }, { x: 0, y: 5, z: -8.66 });   // spin about its own axis
-    assert.strictEqual(l.speed, 0);
+  noStrokeNoCast() {
+    const s = []; for (let t = 0; t < 1.5; t += 1 / 60) s.push({ t, f: { x: 0, y: 0.5, z: -0.866 }, a: t < 0.8 });
+    assert.deepStrictEqual(cast(s), { fail: 'weak' });
   },
   flightIsDeterministic() {
-    const a = L.landing(overhead(95, 9.3, 7), H), b = L.landing(overhead(95, 9.3, 7), H);
+    const a = L.landing(cast(stroke(17, 7, 0.05)), 3.6), b = L.landing(cast(stroke(17, 7, 0.05)), 3.6);
     assert.deepStrictEqual(a, b);
   },
 };

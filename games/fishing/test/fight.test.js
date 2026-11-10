@@ -35,7 +35,7 @@ const tally = (id, policy, n) => {
 
 const tests = {
   pointingTheRodAtTheFishHasNoCushion() {
-    assert(L.cushion(0) > 1.3 && L.cushion(1.5) < 0.8 && L.cushion(0.3) > L.cushion(0.9));
+    assert(L.cushion(0) > 1.5 && L.cushion(1.5) < 0.8 && L.cushion(0.3) > L.cushion(0.9));
   },
   aGoodAnglerLandsEverySpecies() {
     for (const sp of L.SPECIES) {
@@ -44,10 +44,49 @@ const tests = {
     }
   },
   crankingThroughEveryRunSnapsTheBigOnes() {
-    for (const id of ['bass', 'snapper', 'ray', 'tarpon', 'grouper']) {
+    for (const id of ['ray', 'tarpon']) {
       const t = tally(id, () => ({ reel: 2, pitch: 0.6, yaw: 0 }), 20);
-      assert(t.snap >= 18, id + ' ' + JSON.stringify(t));
+      assert(t.snap >= 16, id + ' ' + JSON.stringify(t));
     }
+    for (const id of ['bass', 'snapper', 'grouper']) {
+      const t = tally(id, () => ({ reel: 2, pitch: 0.6, yaw: 0 }), 20);
+      assert(t.snap >= 7, id + ' often: ' + JSON.stringify(t));
+    }
+  },
+  aSnapAlwaysComesAfterAWarning() {
+    // the old fight snapped a 3 kg snapper with no felt warning: now the danger zone lasts first
+    let snaps = 0;
+    for (const id of ['bass', 'snapper', 'ray', 'tarpon', 'grouper']) {
+      for (let s = 1; s <= 10; s++) {
+        const h = hooked(id, s);
+        let dangerFor = 0;
+        while (!h.fs.over) {
+          L.stepFight(h.fs, { reel: 2, rodDir: rodAt(0.6, 0), pitch: 0.6 }, 1 / 60, h.rng);
+          dangerFor = h.fs.danger ? dangerFor + 1 / 60 : 0;
+          if (h.fs.t > 200) break;
+        }
+        if (h.fs.over === 'snap') { snaps++; assert(dangerFor >= 0.9, id + ' snapped after only ' + dangerFor.toFixed(2) + ' s of warning'); }
+      }
+    }
+    assert(snaps > 10, 'snaps ' + snaps);
+  },
+  anOverloadSlipsTheDragFirst() {
+    const h = hooked('tarpon', 2);
+    const l0 = h.fs.line;
+    for (let i = 0; i < 30; i++) L.stepFight(h.fs, { reel: 1.8, rodDir: rodAt(0.6, 0), pitch: 0.6 }, 1 / 60, h.rng);
+    assert(h.fs.slipping && h.fs.line > l0 && !h.fs.over, JSON.stringify({ slip: h.fs.slipping, l0, l: h.fs.line }));
+  },
+  pumpingTheRodDragsTheFishIn() {
+    const h = hooked('bass', 6);
+    L.beginPhase(h.fs, 'rest', h.rng); h.fs.pDur = 99;
+    for (let i = 0; i < 10; i++) L.stepFight(h.fs, { reel: 0, rodDir: rodAt(0.1, 0), pitch: 0.1 }, 1 / 60, h.rng);
+    const d0 = h.fs.d;
+    for (let i = 0; i <= 30; i++) { const p = 0.1 + 1.1 * i / 30; L.stepFight(h.fs, { reel: 0, rodDir: rodAt(p, 0), pitch: p }, 1 / 60, h.rng); }
+    assert(h.fs.d < d0 - 1.2, 'pump gained ' + (d0 - h.fs.d).toFixed(2) + ' m');
+    // dropping the rod back gives that as slack, which you reel down
+    const slack0 = h.fs.line - h.fs.d;
+    for (let i = 0; i <= 20; i++) { const p = 1.2 - 1.1 * i / 20; L.stepFight(h.fs, { reel: 0, rodDir: rodAt(p, 0), pitch: p }, 1 / 60, h.rng); }
+    assert(h.fs.line - h.fs.d > slack0 + 1, 'lowering gives slack');
   },
   smallFishCanJustBeCrankedIn() {
     const t = tally('perch', () => ({ reel: 2, pitch: 0.6, yaw: 0 }), 20);
@@ -67,9 +106,12 @@ const tests = {
     for (let i = 0; i < 60; i++) L.stepFight(h.fs, { reel: 0, rodDir: rodAt(0.6, 0), pitch: 0.6 }, 1 / 60, h.rng);
     assert(h.fs.line > d0 + 1.5, 'line ' + d0 + ' -> ' + h.fs.line.toFixed(2));
   },
-  pointingAtABigFishSnapsIt() {
-    const t = tally('grouper', fs => ({ reel: running(fs) ? 0 : 1.6, pitch: -0.15, yaw: fs.phi }), 15);
-    assert(t.snap >= 13, JSON.stringify(t));
+  pointingTheRodAtABigFishIsDangerous() {
+    // no cushion: the line sits in the danger zone through the runs and tires the fish slower
+    const dz = pol => { let t = 0; for (let s = 1; s <= 10; s++) { const h = hooked('grouper', s); for (let i = 0; i < 1200 && !h.fs.over; i++) { const p = pol(h.fs); L.stepFight(h.fs, { reel: p.reel, rodDir: rodAt(p.pitch, p.yaw), pitch: p.pitch }, 1 / 60, h.rng); if (h.fs.danger) t += 1 / 60; } } return t; };
+    const point = dz(fs => ({ reel: running(fs) ? 0 : 1.6, pitch: -0.15, yaw: fs.phi }));
+    const up = dz(fs => ({ reel: running(fs) ? 0 : 1.6, pitch: 0.7, yaw: fs.phi - Math.sign(fs.w) * 0.6 }));
+    assert(point > up * 3 + 5, 'danger seconds pointing ' + point.toFixed(1) + ' vs rod up ' + up.toFixed(1));
   },
   slackAfterAChargeThrowsTheHook() {
     const h = hooked('mackerel', 4);

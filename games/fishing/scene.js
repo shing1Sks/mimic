@@ -22,9 +22,9 @@
 
   // ------------------------------------------------------------------ palettes: golden hour -> dusk
   const PAL = [
-    { at: 0, top: '#24407e', mid: '#f0904e', hor: '#ffc46e', sun: '#ffe2a0', sunI: 2.4, deep: '#0c2638', shallow: '#17414f', fog: '#f1a466', hemi: '#8fa6d6', ground: '#6a4434', amb: 0.6 },
-    { at: 0.55, top: '#1e2f6a', mid: '#e86f45', hor: '#ffa45a', sun: '#ffc888', sunI: 1.9, deep: '#0b2133', shallow: '#153848', fog: '#e9855a', hemi: '#7c84c0', ground: '#5a3430', amb: 0.5 },
-    { at: 1, top: '#141a48', mid: '#a84a62', hor: '#f27c52', sun: '#ff8a56', sunI: 0.9, deep: '#09192a', shallow: '#132e40', fog: '#8e4a5c', hemi: '#555a98', ground: '#3a2830', amb: 0.4 },
+    { at: 0, top: '#24407e', mid: '#f0904e', hor: '#ffc46e', sun: '#ffe2a0', sunI: 2.4, deep: '#0c2638', shallow: '#17414f', fog: '#f1a466', hemi: '#8fa6d6', ground: '#6a4434', amb: 0.6, cLit: '#ffd7a0', cDark: '#7a5a7e' },
+    { at: 0.55, top: '#1e2f6a', mid: '#e86f45', hor: '#ffa45a', sun: '#ffc888', sunI: 1.9, deep: '#0b2133', shallow: '#153848', fog: '#e9855a', hemi: '#7c84c0', ground: '#5a3430', amb: 0.5, cLit: '#ffb27a', cDark: '#5e4470' },
+    { at: 1, top: '#141a48', mid: '#a84a62', hor: '#f27c52', sun: '#ff8a56', sunI: 0.9, deep: '#09192a', shallow: '#132e40', fog: '#8e4a5c', hemi: '#555a98', ground: '#3a2830', amb: 0.4, cLit: '#ff9a6a', cDark: '#3a2c50' },
   ];
   function palAt(t) {
     let a = PAL[0], b = PAL[PAL.length - 1];
@@ -60,15 +60,22 @@
     scene.add(sun, sun.target);
     const fill = new T.DirectionalLight(0xbfd0ff, 0.35); fill.position.set(-3, 6, 12); scene.add(fill);
     const key = new T.PointLight(0xfff0dc, 0, 6, 1.5); scene.add(key);   // lights a landed fish for its close-up
-    scene.fog = new T.Fog(0xf1a466, 90, 700);
+    scene.fog = new T.Fog(0xf1a466, 140, 1500);
 
-    // ---------------------------------------------------------------- sky
-    const skyU = { top: { value: col('#3b4f86') }, mid: { value: col('#e7a06a') }, hor: { value: col('#ffd49a') }, sunDir: { value: sunDir }, sunCol: { value: col('#fff0c8') }, glow: { value: 1 } };
-    const sky = new T.Mesh(new T.SphereGeometry(900, 32, 16), new T.ShaderMaterial({
+    // ---------------------------------------------------------------- sky: gradient, sun, and a cloud deck lit from below
+    const skyU = { top: { value: col('#3b4f86') }, mid: { value: col('#e7a06a') }, hor: { value: col('#ffd49a') }, sunDir: { value: sunDir }, sunCol: { value: col('#fff0c8') },
+      glow: { value: 1 }, uTime: { value: 0 }, cLit: { value: col('#ffd9a8') }, cDark: { value: col('#6a4a72') } };
+    const NOISE = `
+        float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float noise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y); }
+        float fbm(vec2 p){ float v = 0.0, a = 0.5; for (int i = 0; i < 4; i++) { v += a * noise(p); p = p * 2.03 + vec2(1.7, 9.2); a *= 0.5; } return v; }`;
+    const sky = new T.Mesh(new T.SphereGeometry(900, 48, 24), new T.ShaderMaterial({
       side: T.BackSide, depthWrite: false, fog: false, uniforms: skyU,
       vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
       fragmentShader: `
-        uniform vec3 top, mid, hor, sunDir, sunCol; uniform float glow; varying vec3 vP;
+        uniform vec3 top, mid, hor, sunDir, sunCol, cLit, cDark; uniform float glow, uTime; varying vec3 vP;
+        ${NOISE}
         void main(){
           float h = vP.y;
           vec3 c = mix(hor, mid, smoothstep(0.0, 0.16, h));
@@ -76,7 +83,21 @@
           c = mix(c, hor * 0.82, smoothstep(0.0, -0.08, h));
           float s = max(dot(vP, sunDir), 0.0);
           float disk = smoothstep(0.99955, 0.99975, s);
-          c += sunCol * (disk * 9.0 + pow(s, 600.0) * 1.6 + pow(s, 24.0) * 0.35 * glow + pow(s, 4.0) * 0.12 * glow);
+          vec3 sunL = sunCol * (pow(s, 600.0) * 1.6 + pow(s, 24.0) * 0.35 * glow + pow(s, 4.0) * 0.12 * glow);
+          // clouds: a stretched fbm deck on a high plane, dark on top, blazing at the edges toward the sun
+          float cov = 0.0, n = 0.0;
+          if (h > 0.0) {
+            vec2 cp = vP.xz / (h + 0.08);
+            cp = vec2(cp.x * 0.28 + uTime * 0.004, cp.y * 0.9);
+            n = fbm(cp * 1.4);
+            float band = smoothstep(0.01, 0.07, h) * (1.0 - smoothstep(0.32, 0.7, h));
+            cov = smoothstep(0.5, 0.74, n) * band;
+          }
+          float edge = 1.0 - smoothstep(0.5, 0.7, n);
+          vec3 cc = mix(cDark, cLit, clamp(0.15 + pow(s, 5.0) * 1.3 + edge * 0.35 - h * 0.6, 0.0, 1.0));
+          cc += sunCol * pow(s, 18.0) * edge * 1.4;
+          c = mix(c + sunL, cc, cov * 0.94);
+          c += sunCol * disk * 9.0 * (1.0 - cov * 0.85);
           gl_FragColor = vec4(c, 1.0);
           #include <tonemapping_fragment>
           #include <encodings_fragment>
@@ -85,46 +106,56 @@
     sky.renderOrder = -10;
     scene.add(sky);
 
-    // clouds: soft streaks lit from below by the low sun
-    const cloudTex = canvasTex(512, 128, (g, w, h) => {
-      for (let i = 0; i < 26; i++) {
-        const rx = 30 + Math.random() * 70, ry = 6 + Math.random() * 12;
-        const x = rx + 4 + Math.random() * (w - 2 * rx - 8), y = h * (0.4 + Math.random() * 0.2);
-        const gr = g.createRadialGradient(x, y, 0, x, y, rx);
-        gr.addColorStop(0, 'rgba(255,255,255,0.42)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
-        g.save(); g.translate(x, y); g.scale(1, ry / rx); g.translate(-x, -y);
-        g.fillStyle = gr; g.beginPath(); g.arc(x, y, rx, 0, Math.PI * 2); g.fill(); g.restore();
+    // ---------------------------------------------------------------- the seabed and what grows by the dock
+    const bedGeo = new T.PlaneGeometry(240, 200, 60, 50); bedGeo.rotateX(-Math.PI / 2);
+    {
+      const pos = bedGeo.attributes.position, colr = [];
+      const sand = col('#7d7a5c'), deep = col('#1f3a40'), weed = col('#34503a');
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i), z = pos.getZ(i) - 60;
+        const y = -2.2 - Math.max(0, -z) * 0.09 - Math.sin(x * 0.21) * Math.cos(z * 0.17) * 0.35;
+        pos.setXYZ(i, x, y, z);
+        const k = Math.min(1, Math.max(0, -z / 45));
+        const c = sand.clone().lerp(deep, k).lerp(weed, 0.35 * Math.max(0, Math.sin(x * 0.5 + z * 0.3)));
+        colr.push(c.r, c.g, c.b);
       }
-    });
-    const clouds = [];
-    for (let i = 0; i < 11; i++) {
-      const m = new T.SpriteMaterial({ map: cloudTex, transparent: true, depthWrite: false, fog: false, color: 0xffd2b0, opacity: 0.8 });
-      const s = new T.Sprite(m);
-      const a = (i / 11 - 0.5) * 2.4 + (Math.random() - 0.5) * 0.2;
-      s.position.set(Math.sin(a) * 700, 55 + Math.random() * 110, -Math.cos(a) * 700);
-      const sc = 260 + Math.random() * 260; s.scale.set(sc, sc * 0.22, 1);
-      s.userData.drift = 0.6 + Math.random();
-      scene.add(s); clouds.push(s);
+      bedGeo.setAttribute('color', new T.Float32BufferAttribute(colr, 3));
+      bedGeo.computeVertexNormals();
+    }
+    const seabed = new T.Mesh(bedGeo, new T.MeshLambertMaterial({ vertexColors: true }));
+    scene.add(seabed);
+    const kelpMat = new T.MeshLambertMaterial({ color: 0x3d5a2e, side: T.DoubleSide });
+    const kelps = [];
+    for (let i = 0; i < 26; i++) {
+      const h = 1 + Math.random() * 1.2, g = new T.PlaneGeometry(0.16, h, 1, 4); g.translate(0, h / 2, 0);
+      const m = new T.Mesh(g, kelpMat);
+      m.position.set((Math.random() - 0.5) * 14, -2.3, -1 - Math.random() * 8); m.rotation.y = Math.random() * 3;
+      m.userData.ph = Math.random() * 6; scene.add(m); kelps.push(m);
     }
 
-    // ---------------------------------------------------------------- sea
+    // ---------------------------------------------------------------- sea: see-through near the dock, a mirror far out
+    const PILES = [[-5.4, -0.45], [-2.7, -0.45], [0, -0.45], [2.7, -0.45], [5.4, -0.45], [-5.4, 6.1], [-2.7, 6.1], [0, 6.1], [2.7, 6.1], [5.4, 6.1]];
     const waterU = {
       uTime: { value: 0 }, uSun: { value: sunDir }, uSunCol: { value: col('#fff0c8') }, uSkyTop: { value: col('#24407e') }, uSkyMid: { value: col('#f0904e') }, uSkyHor: { value: col('#ffc46e') },
       uDeep: { value: col('#173847') }, uShallow: { value: col('#2f6268') }, uFog: { value: col('#f1a466') }, uFogNear: { value: 120 }, uFogFar: { value: 900 }, uDetail: { value: 1 },
+      uPiles: { value: PILES.map(p => new T.Vector2(p[0], p[1])) },
     };
     const water = new T.Mesh(new T.PlaneGeometry(2400, 2400), new T.ShaderMaterial({
-      uniforms: waterU, fog: false,
+      uniforms: waterU, fog: false, transparent: true, depthWrite: false,
       vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix*vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix*viewMatrix*w; }',
       fragmentShader: `
-        uniform float uTime, uFogNear, uFogFar, uDetail; uniform vec3 uSun, uSunCol, uSkyTop, uSkyMid, uSkyHor, uDeep, uShallow, uFog; varying vec3 vW;
-        vec2 wv(vec2 p, vec2 d, float f, float sp, float a){ float ph = dot(p, d) * f + uTime * sp; return d * (a * f * cos(ph)); }
+        uniform float uTime, uFogNear, uFogFar, uDetail; uniform vec3 uSun, uSunCol, uSkyTop, uSkyMid, uSkyHor, uDeep, uShallow, uFog; uniform vec2 uPiles[${PILES.length}]; varying vec3 vW;
+        ${NOISE}
+        float H;
+        vec2 wv(vec2 p, vec2 d, float f, float sp, float a){ float ph = dot(p, d) * f + uTime * sp; H += a * sin(ph); return d * (a * f * cos(ph)); }
         void main(){
           vec2 p = vW.xz;
           float dist = length(cameraPosition.xz - p);
+          H = 0.0;
           vec2 g = wv(p, normalize(vec2(0.25, 1.0)), 0.31, 0.9, 0.16);
           g += wv(p, normalize(vec2(-0.7, 0.6)), 0.57, 1.3, 0.07);
           g += wv(p, normalize(vec2(0.9, 0.25)), 1.21, 1.9, 0.03);
-          float near = smoothstep(220.0, 30.0, dist) * uDetail;   // fine ripples fade before they alias
+          float near = smoothstep(220.0, 30.0, dist) * uDetail;
           g += wv(p, normalize(vec2(-0.2, -1.0)), 2.63, 2.8, 0.013) * near;
           g += wv(p, normalize(vec2(0.62, -0.78)), 4.9, 3.9, 0.007) * near;
           g += wv(p, normalize(vec2(-0.93, -0.35)), 9.7, 5.3, 0.0035) * near * smoothstep(60.0, 10.0, dist);
@@ -137,47 +168,104 @@
           vec3 skyc = mix(uSkyHor, uSkyMid, smoothstep(0.0, 0.14, ry));
           skyc = mix(skyc, uSkyTop, smoothstep(0.1, 0.6, ry));
           float s = max(dot(R, uSun), 0.0);
-          // the glitter path: tight sparkles plus a broad golden sheen toward the low sun
-          float az = max(dot(normalize(vec3(-V.x, 0.0, -V.z)), normalize(vec3(uSun.x, 0.0, uSun.z))), 0.0);
-          vec3 spec = uSunCol * (pow(s, 700.0) * 60.0 + pow(s, 90.0) * 3.0 + pow(s, 12.0) * 0.3) + uSunCol * pow(az, 60.0) * 0.18;
+          vec3 flatV = normalize(vec3(-V.x, 0.0, -V.z));
+          float az = max(dot(flatV, normalize(vec3(uSun.x, 0.0, uSun.z))), 0.0);
+          // the glitter path: a hot core, twinkles scattered on the facets, a broad golden sheen
+          float tw = noise(p * 7.0 + vec2(uTime * 0.9, -uTime * 0.7)) * noise(p * 11.0 - vec2(uTime * 1.3, uTime * 0.4));
+          vec3 spec = uSunCol * (pow(s, 700.0) * 60.0 + pow(s, 90.0) * 3.0 + pow(s, 12.0) * 0.3)
+            + uSunCol * pow(az, 60.0) * 0.18 + uSunCol * smoothstep(0.42, 0.62, tw) * pow(az, 70.0) * pow(s, 6.0) * 4.0 * near;
+          // body colour: clear teal shallows, deep blue out to sea; backlit wave crests glow
           vec3 base = mix(uShallow, uDeep, smoothstep(4.0, 70.0, dist));
-          base += uSunCol * 0.05 * pow(max(dot(normalize(vec3(-V.x, 0.0, -V.z)), uSun), 0.0), 3.0);
+          base += uSunCol * (0.05 + max(H, 0.0) * 1.2) * pow(az, 3.0) * 0.6;
           vec3 c = mix(base, skyc, fres) + spec;
-          c = mix(c, uFog, smoothstep(uFogNear, uFogFar, dist));
-          gl_FragColor = vec4(c, 1.0);
+          // foam around the pilings, breathing with the swell
+          float foam = 0.0;
+          if (abs(p.x) < 7.0 && p.y > -2.5 && p.y < 8.0)   // only by the dock: the loop is not free
+          for (int i = 0; i < ${PILES.length}; i++) {
+            float d = length(p - uPiles[i]);
+            foam += smoothstep(0.9, 0.2, d + (noise(p * 6.0 + uTime) - 0.5) * 0.5) * (0.55 + 0.45 * sin(uTime * 1.7 + d * 7.0));
+          }
+          foam = clamp(foam, 0.0, 1.0) * smoothstep(0.35, 0.6, noise(p * 9.0 - uTime * 0.6) + foam * 0.3);
+          c = mix(c, vec3(1.0, 0.96, 0.88) * (0.75 + uSunCol * 0.25), foam * 0.8);
+          float alpha = clamp(max(max(fres * 1.7, smoothstep(9.0, 42.0, dist)), foam) + 0.5, 0.0, 1.0);
+          float fog = smoothstep(uFogNear, uFogFar, dist);
+          c = mix(c, uFog, fog);
+          gl_FragColor = vec4(c, max(alpha, fog));
           #include <tonemapping_fragment>
           #include <encodings_fragment>
         }`,
     }));
     water.rotation.x = -Math.PI / 2;
-    water.renderOrder = -5;
+    water.renderOrder = -1;
     scene.add(water);
     /** The swell under a floating thing at (x, z), metres (matches the shader's big waves). */
     function bob(x, z, t) {
       return 0.03 * Math.sin((0.25 * x + 1.0 * z) / 1.03 * 0.31 + t * 0.9) + 0.014 * Math.sin((-0.7 * x + 0.6 * z) / 0.92 * 0.57 + t * 1.3);
     }
 
-    // ---------------------------------------------------------------- far shores
-    const farMat = new T.MeshLambertMaterial({ color: 0x4a3d5c });
-    const domeGeo = new T.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2);
-    function hills(x, z, n, spread, hMax, seed) {
-      const g = new T.Group();
-      let s = seed;
-      const r = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
-      for (let i = 0; i < n; i++) {
-        const h = hMax * (0.35 + r() * 0.65), w = h * (2.6 + r() * 3);
-        const m = new T.Mesh(domeGeo, farMat);
-        m.position.set(x + (r() - 0.5) * spread, -1.5, z + (r() - 0.5) * spread * 0.25);
-        m.scale.set(w, h, w * 0.35);
-        g.add(m);
+    // ---------------------------------------------------------------- shores: real terrain, wooded, fading into the haze
+    const shoreMats = [];
+    function terrain(o) {
+      const geo = new T.PlaneGeometry(o.w, o.d, o.sx || 80, o.sz || 20); geo.rotateX(-Math.PI / 2);
+      const pos = geo.attributes.position, cols = [];
+      const off = [((o.seed * 7919) % 97) * 1.3, ((o.seed * 104729) % 89) * 0.7];
+      const n2 = (x, z) => Math.sin(x * 1.7 + off[0]) * Math.cos(z * 1.3 + off[1]) + Math.sin(x * 3.9 + z * 2.1 + off[1]) * 0.5 + Math.sin(x * 9.1 - z * 5.3 + off[0]) * 0.18;
+      const u0 = o.u0 || 0, u1 = o.u1 || 1;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i), z = pos.getZ(i);
+        const u = x / o.w + 0.5, v = z / o.d + 0.5;           // v: 0 the back, 1 the seaward edge
+        const env = Math.pow(Math.sin(Math.PI * Math.min(1, Math.max(0, (u - u0) / (u1 - u0)))), o.sharp || 0.8);
+        const ridge = 1 - Math.abs(n2(x / o.w * 4, z / o.d * 2)) * 0.45;
+        let y = o.h * env * ridge * Math.pow(1 - v, 0.6) * (0.75 + 0.25 * Math.sin(u * 23 + o.seed));
+        y = Math.max(-3, y - v * 6);
+        pos.setY(i, y);
       }
-      scene.add(g);
-      return g;
+      geo.computeVertexNormals();
+      const nrm = geo.attributes.normal, low = col(o.low), high = col(o.high), rock = col('#6a5a50'), sandC = col('#b89a70');
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i), up = nrm.getY(i);
+        const c = low.clone().lerp(high, Math.min(1, Math.max(0, y / o.h))).lerp(rock, Math.min(1, Math.max(0, 0.75 - up) * 1.6));
+        if (y < 1.2) c.lerp(sandC, 0.7);
+        cols.push(c.r, c.g, c.b);
+      }
+      geo.setAttribute('color', new T.Float32BufferAttribute(cols, 3));
+      const m = new T.Mesh(geo, new T.MeshLambertMaterial({ vertexColors: true }));
+      m.position.set(o.x, 0, o.z);
+      scene.add(m); shoreMats.push(m.material);
+      return m;
     }
-    hills(-430, -560, 12, 520, 62, 11);
-    hills(420, -700, 8, 360, 40, 29);
-    // the point with the lighthouse, right
-    const point = hills(176, -330, 5, 80, 18, 5);
+    function heightAt(m, wx, wz) {
+      const pos = m.geometry.attributes.position; let best = -9, bd = 1e9;
+      const lx = wx - m.position.x, lz = wz - m.position.z;
+      for (let i = 0; i < pos.count; i++) { const d = Math.hypot(pos.getX(i) - lx, pos.getZ(i) - lz); if (d < bd) { bd = d; best = pos.getY(i); } }
+      return best;
+    }
+    terrain({ x: -560, z: -900, w: 900, d: 260, h: 120, seed: 3, low: '#3c3a52', high: '#5a4e6a' });
+    terrain({ x: 600, z: -980, w: 760, d: 240, h: 85, seed: 9, low: '#3c3a52', high: '#5c5068' });
+    const headL = terrain({ x: -300, z: -430, w: 420, d: 170, h: 62, seed: 5, u1: 0.95, low: '#2e3a2c', high: '#4a5236', sx: 96, sz: 26 });
+    const pointR = terrain({ x: 205, z: -335, w: 200, d: 110, h: 24, seed: 11, u0: 0.05, low: '#3a3a30', high: '#55503c', sx: 60, sz: 24, sharp: 0.55 });
+    {
+      const tree = new T.ConeGeometry(1, 1, 6); tree.translate(0, 0.5, 0);
+      const inst = new T.InstancedMesh(tree, new T.MeshLambertMaterial({ color: 0x223024 }), 260);
+      const mtx = new T.Matrix4(), q = new T.Quaternion(), sc = new T.Vector3(), p = new T.Vector3();
+      const pos = headL.geometry.attributes.position; let n = 0;
+      for (let tries = 0; tries < 4000 && n < 260; tries++) {
+        const i = (Math.random() * pos.count) | 0, y = pos.getY(i);
+        if (y < 8) continue;
+        const hgt = 7 + Math.random() * 9;
+        p.set(pos.getX(i) + headL.position.x, y - 0.5, pos.getZ(i) + headL.position.z);
+        sc.set(hgt * 0.32, hgt, hgt * 0.32);
+        inst.setMatrixAt(n++, mtx.compose(p, q, sc));
+      }
+      inst.count = n; scene.add(inst); shoreMats.push(inst.material);
+    }
+    const rockMatFar = new T.MeshLambertMaterial({ color: 0x4a4038, flatShading: true });
+    for (let i = 0; i < 14; i++) {
+      const r = 2 + Math.random() * 5, m = new T.Mesh(new T.DodecahedronGeometry(r, 0), rockMatFar);
+      m.position.set(150 + Math.random() * 110, -r * 0.3, -290 + Math.random() * 20); m.rotation.set(Math.random() * 3, Math.random() * 3, 0); m.scale.y = 0.6;
+      scene.add(m);
+    }
+    const lhX = 236, lhZ = -335, lhY = Math.max(4, heightAt(pointR, lhX, lhZ) - 1);
     const lh = new T.Group();
     const white = new T.MeshLambertMaterial({ color: 0xf2ede4 }), red = new T.MeshLambertMaterial({ color: 0xb8432e });
     for (let i = 0; i < 4; i++) {
@@ -187,7 +275,9 @@
     const lampMat = new T.MeshBasicMaterial({ color: 0xfff1c0 });
     const lamp = new T.Mesh(new T.CylinderGeometry(1.3, 1.3, 2, 10), lampMat); lamp.position.y = 19; lh.add(lamp);
     const cap = new T.Mesh(new T.ConeGeometry(1.9, 1.8, 10), red); cap.position.y = 20.9; lh.add(cap);
-    lh.position.set(186, 12, -318);
+    const keeper = new T.Mesh(new T.BoxGeometry(6, 3.5, 4), white); keeper.position.set(5, 1.75, 2); lh.add(keeper);
+    const roof = new T.Mesh(new T.ConeGeometry(4.6, 2.2, 4), red); roof.position.set(5, 4.6, 2); roof.rotation.y = Math.PI / 4; lh.add(roof);
+    lh.position.set(lhX, lhY, lhZ);
     scene.add(lh);
     const glowTex = canvasTex(128, 128, (g, w) => {
       const gr = g.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2);
@@ -195,9 +285,23 @@
       g.fillStyle = gr; g.fillRect(0, 0, w, w);
     });
     const lhGlow = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: 0xffe6b0, transparent: true, depthWrite: false, blending: T.AdditiveBlending, fog: false }));
-    lhGlow.position.set(186, 31, -318); lhGlow.scale.setScalar(18); scene.add(lhGlow);
+    lhGlow.position.set(lhX, lhY + 19, lhZ); lhGlow.scale.setScalar(18); scene.add(lhGlow);
+    // the beam: a long soft cone sweeping round at dusk
+    const beamGeo = new T.CylinderGeometry(0.6, 16, 220, 16, 1, true); beamGeo.translate(0, -110, 0); beamGeo.rotateZ(Math.PI / 2);
+    {
+      const pos = beamGeo.attributes.position, a = [];
+      for (let i = 0; i < pos.count; i++) a.push(1 - Math.min(1, Math.abs(pos.getX(i)) / 220));
+      beamGeo.setAttribute('fade', new T.Float32BufferAttribute(a, 1));
+    }
+    const beamMat = new T.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide, uniforms: { uO: { value: 0 }, uC: { value: col('#ffe6b0') } },
+      vertexShader: 'attribute float fade; varying float vF; void main(){ vF = fade; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+      fragmentShader: 'uniform float uO; uniform vec3 uC; varying float vF; void main(){ gl_FragColor = vec4(uC * uO * vF * vF, 1.0); }',
+    });
+    const beam = new T.Mesh(beamGeo, beamMat); beam.position.set(lhX, lhY + 19, lhZ); scene.add(beam);
     const sunGlow = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: 0xffd9a0, transparent: true, depthWrite: false, blending: T.AdditiveBlending, fog: false, opacity: 0.55 }));
     sunGlow.scale.setScalar(150); sunGlow.renderOrder = -9; scene.add(sunGlow);
+
 
     // a sailboat drifting across the glare
     const boat = new T.Group();
@@ -321,26 +425,35 @@
       const g = new T.Group();
       g.position.set(x, DECK_Y, 0.55);
       const shadow = m => { m.castShadow = true; return m; };
+      // waders and boots
       [-0.1, 0.1].forEach(lx => {
-        const leg = shadow(new T.Mesh(new T.CylinderGeometry(0.075, 0.065, 0.62, 10), pants)); leg.position.set(lx, 0.39, 0); g.add(leg);
-        const boot = shadow(new T.Mesh(new T.BoxGeometry(0.14, 0.13, 0.28), bootMat)); boot.position.set(lx, 0.065, -0.04); g.add(boot);
+        const leg = shadow(new T.Mesh(new T.CylinderGeometry(0.08, 0.07, 0.62, 12), pants)); leg.position.set(lx, 0.39, 0); g.add(leg);
+        const boot = shadow(new T.Mesh(new T.CylinderGeometry(0.075, 0.08, 0.16, 12), bootMat)); boot.position.set(lx, 0.08, 0); g.add(boot);
+        const toe = shadow(new T.Mesh(new T.SphereGeometry(0.075, 10, 8), bootMat)); toe.position.set(lx, 0.04, -0.07); toe.scale.set(1, 0.6, 1.4); g.add(toe);
       });
-      // a fisherman's oilskin: a coat that flares to the knee, a vest panel, rounded shoulders
-      const coat = shadow(new T.Mesh(new T.CylinderGeometry(0.2, 0.25, 0.78, 16), jacket)); coat.position.y = 1.0; coat.scale.z = 0.78; g.add(coat);
-      const chest = shadow(new T.Mesh(new T.SphereGeometry(0.205, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), jacket)); chest.position.y = 1.38; chest.scale.set(1, 0.55, 0.78); g.add(chest);
-      const vest = new T.Mesh(new T.CylinderGeometry(0.206, 0.226, 0.4, 16, 1, true, Math.PI * 0.62, Math.PI * 0.76), new T.MeshStandardMaterial({ color: 0x2e3a2a, roughness: 0.9, side: T.DoubleSide }));
-      vest.position.y = 1.16; vest.scale.z = 0.8; g.add(vest);
-      const neck = new T.Mesh(new T.CylinderGeometry(0.055, 0.06, 0.08, 10), skin); neck.position.y = 1.5; g.add(neck);
-      const head = shadow(new T.Mesh(new T.SphereGeometry(0.115, 16, 12), skin)); head.position.y = 1.62; head.scale.set(0.95, 1.05, 1); g.add(head);
-      const hatMat = new T.MeshStandardMaterial({ color: c, roughness: 0.65 });
-      const brim = shadow(new T.Mesh(new T.CylinderGeometry(0.21, 0.25, 0.05, 24), hatMat)); brim.position.y = 1.69; g.add(brim);
-      const crown = shadow(new T.Mesh(new T.SphereGeometry(0.135, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), hatMat)); crown.position.y = 1.7; crown.scale.y = 0.85; g.add(crown);
-      const band = new T.Mesh(new T.CylinderGeometry(0.137, 0.14, 0.03, 16), new T.MeshStandardMaterial({ color: 0x241c16 })); band.position.y = 1.72; g.add(band);
+      // an oilskin coat turned on a lathe: hem flared at the knee, waist, chest, sloping shoulders
+      const prof = [[0.25, 0.62], [0.255, 0.66], [0.22, 0.9], [0.205, 1.08], [0.215, 1.3], [0.2, 1.42], [0.15, 1.48], [0.07, 1.52], [0.0, 1.53]].map(p => new T.Vector2(p[0], p[1]));
+      const coat = shadow(new T.Mesh(new T.LatheGeometry(prof, 20), jacket)); coat.scale.z = 0.8; g.add(coat);
+      [-1, 1].forEach(sx => { const sh = shadow(new T.Mesh(new T.SphereGeometry(0.075, 12, 8), jacket)); sh.position.set(sx * 0.18, 1.42, 0); g.add(sh); });
+      const pocket = new T.MeshStandardMaterial({ color: c.clone().multiplyScalar(0.55), roughness: 0.85 });
+      [-1, 1].forEach(sx => { const pk = new T.Mesh(new T.BoxGeometry(0.1, 0.09, 0.03), pocket); pk.position.set(sx * 0.11, 1.2, -0.17); g.add(pk); });
+      const belt = new T.Mesh(new T.TorusGeometry(0.205, 0.018, 6, 20), new T.MeshStandardMaterial({ color: 0x3a2a1c })); belt.rotation.x = Math.PI / 2; belt.position.y = 1.07; belt.scale.y = 0.8; g.add(belt);
+      const scarf = new T.Mesh(new T.TorusGeometry(0.085, 0.035, 8, 16), new T.MeshStandardMaterial({ color: c, roughness: 0.8 })); scarf.rotation.x = Math.PI / 2; scarf.position.y = 1.5; g.add(scarf);
+      const tail = new T.Mesh(new T.BoxGeometry(0.06, 0.18, 0.02), scarf.material); tail.position.set(0.06, 1.4, 0.1); tail.rotation.z = 0.3; g.add(tail);
+      const head = shadow(new T.Mesh(new T.SphereGeometry(0.11, 18, 14), skin)); head.position.y = 1.63; head.scale.set(0.95, 1.08, 1); g.add(head);
+      const hair = new T.Mesh(new T.SphereGeometry(0.113, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.62), new T.MeshStandardMaterial({ color: 0x3a2a20, roughness: 0.9 }));
+      hair.position.y = 1.64; hair.rotation.x = 0.5; g.add(hair);
+      [-1, 1].forEach(sx => { const ear = new T.Mesh(new T.SphereGeometry(0.025, 8, 6), skin); ear.position.set(sx * 0.105, 1.62, 0.01); ear.scale.z = 0.6; g.add(ear); });
+      // a bucket hat: soft crown and a brim that droops at the edge
+      const hatMat = new T.MeshStandardMaterial({ color: c, roughness: 0.7, side: T.DoubleSide });
+      const hatProf = [[0.0, 0.17], [0.09, 0.165], [0.125, 0.12], [0.135, 0.06], [0.14, 0.04], [0.2, 0.02], [0.24, -0.01], [0.25, -0.025]].map(p => new T.Vector2(p[0], p[1]));
+      const hat = shadow(new T.Mesh(new T.LatheGeometry(hatProf, 24), hatMat)); hat.position.y = 1.68; g.add(hat);
+      const band = new T.Mesh(new T.CylinderGeometry(0.137, 0.14, 0.025, 20, 1, true), new T.MeshStandardMaterial({ color: 0x241c16, side: T.DoubleSide })); band.position.y = 1.74; g.add(band);
       scene.add(g);
       const armMat = jacket;
       const parts = {
-        upper: shadow(new T.Mesh(cyl, armMat)), fore: shadow(new T.Mesh(cyl, armMat)), hand: shadow(new T.Mesh(new T.SphereGeometry(0.055, 8, 6), skin)),
-        upper2: shadow(new T.Mesh(cyl, armMat)), fore2: shadow(new T.Mesh(cyl, armMat)), hand2: shadow(new T.Mesh(new T.SphereGeometry(0.055, 8, 6), skin)),
+        upper: shadow(new T.Mesh(cyl, armMat)), fore: shadow(new T.Mesh(cyl, armMat)), hand: shadow(new T.Mesh(new T.SphereGeometry(0.05, 10, 8), skin)), elbow: shadow(new T.Mesh(new T.SphereGeometry(0.06, 10, 8), armMat)),
+        upper2: shadow(new T.Mesh(cyl, armMat)), fore2: shadow(new T.Mesh(cyl, armMat)), hand2: shadow(new T.Mesh(new T.SphereGeometry(0.05, 10, 8), skin)), elbow2: shadow(new T.Mesh(new T.SphereGeometry(0.06, 10, 8), armMat)),
       };
       Object.values(parts).forEach(m => scene.add(m));
       // rod: cork grip, reel, then a tapering blank in segments that bend toward the line
@@ -361,24 +474,41 @@
       lineGeo.setAttribute('position', new T.BufferAttribute(new Float32Array(N * 3), 3));
       const lineMat = lineMatBase.clone();
       const line = new T.Line(lineGeo, lineMat); line.frustumCulled = false; scene.add(line);
+      const lineGlow = new T.Line(lineGeo, new T.LineBasicMaterial({ color: 0xffb347, transparent: true, opacity: 0, blending: T.AdditiveBlending, depthWrite: false }));
+      lineGlow.frustumCulled = false; lineGlow.renderOrder = 3; scene.add(lineGlow);
+      const aimM = new T.Mesh(aimGeo, new T.MeshBasicMaterial({ map: aimTex('#' + c.getHexString(T.SRGBColorSpace)), transparent: true, depthWrite: false, opacity: 0.6, fog: false, toneMapped: false }));
+      aimM.renderOrder = 2; aimM.visible = false; scene.add(aimM);
       // the float: white below, the player's colour on top, a little antenna
       const bob = new T.Group();
       const lower = new T.Mesh(new T.SphereGeometry(0.07, 14, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), new T.MeshStandardMaterial({ color: 0xf6f1e6, roughness: 0.4 }));
       const upper = new T.Mesh(new T.SphereGeometry(0.07, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), new T.MeshStandardMaterial({ color: c, roughness: 0.4, emissive: c, emissiveIntensity: 0.25 }));
       const stick = new T.Mesh(new T.CylinderGeometry(0.008, 0.008, 0.12, 5), new T.MeshStandardMaterial({ color: 0x222222 })); stick.position.y = 0.1;
       const knob = new T.Mesh(new T.SphereGeometry(0.018, 8, 6), new T.MeshBasicMaterial({ color: c })); knob.position.y = 0.16;
-      bob.add(lower, upper, stick, knob);
+      const halo = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: c, transparent: true, depthWrite: false, blending: T.AdditiveBlending, opacity: 0.5, fog: false }));
+      halo.scale.setScalar(0.5); halo.position.y = 0.05;
+      bob.add(lower, upper, stick, knob, halo);
       scene.add(bob);
       const marker = new T.Sprite(new T.SpriteMaterial({ map: markerTex, color: c, transparent: true, depthWrite: false, depthTest: false, fog: false }));
       marker.renderOrder = 5; scene.add(marker);
-      return { g, parts, grip, reel, segs, tipBead, line, lineGeo, lineMat, bob, marker, N, color: c, x, tip: new T.Vector3(), hand: new T.Vector3(), headPos: new T.Vector3(x, DECK_Y + 1.62, 0.55), visible: true };
+      return { g, parts, grip, reel, segs, tipBead, line, lineGlow, lineGeo, lineMat, bob, halo, marker, aim: aimM, N, color: c, x, tip: new T.Vector3(), hand: new T.Vector3(), headPos: new T.Vector3(x, DECK_Y + 1.62, 0.55), visible: true };
     }
+    const aimGeo = new T.PlaneGeometry(4, 9);
+    /** Chevrons with a dark rim, so they read on the glare as well as the shadowed water. */
+    const aimTex = color => canvasTex(96, 216, (g, w, h) => {
+      g.lineCap = 'round'; g.lineJoin = 'round';
+      for (let k = 0; k < 3; k++) {
+        const y = h * (0.2 + k * 0.27), a = 1 - k * 0.22;
+        const path = () => { g.beginPath(); g.moveTo(w * 0.14, y + 26); g.lineTo(w * 0.5, y); g.lineTo(w * 0.86, y + 26); };
+        g.globalAlpha = 0.7 * a; g.strokeStyle = '#1a1226'; g.lineWidth = 16; path(); g.stroke();
+        g.globalAlpha = a; g.strokeStyle = color; g.lineWidth = 8; path(); g.stroke();
+      }
+    });
     const markerTex = canvasTex(64, 64, (g, w) => {
       g.fillStyle = '#fff'; g.beginPath(); g.moveTo(w * 0.5, w * 0.92); g.lineTo(w * 0.18, w * 0.45); g.lineTo(w * 0.82, w * 0.45); g.closePath(); g.fill();
       g.beginPath(); g.arc(w * 0.5, w * 0.34, w * 0.2, 0, Math.PI * 2); g.fill();
     });
     function removeAngler(a) {
-      [a.g, a.grip, a.reel, a.tipBead, a.line, a.bob, a.marker, ...a.segs, ...Object.values(a.parts)].forEach(o => scene.remove(o));
+      [a.g, a.grip, a.reel, a.tipBead, a.line, a.lineGlow, a.bob, a.marker, a.aim, ...a.segs, ...Object.values(a.parts)].forEach(o => scene.remove(o));
     }
 
     const _a = new T.Vector3(), _b = new T.Vector3(), _c = new T.Vector3(), _d = new T.Vector3(), _q = new T.Quaternion(), _p = [];
@@ -392,7 +522,7 @@
       const S = _a.set(arm.shoulder.x, arm.shoulder.y, arm.shoulder.z).add(H);
       const E = _b.set(arm.elbow.x, arm.elbow.y, arm.elbow.z).add(H);
       const W = _c.set(arm.hand.x, arm.hand.y, arm.hand.z).add(H);
-      place(a.parts.upper, S, E, 0.062); place(a.parts.fore, E, W, 0.052); a.parts.hand.position.copy(W);
+      place(a.parts.upper, S, E, 0.066); place(a.parts.fore, E, W, 0.054); a.parts.hand.position.copy(W); a.parts.elbow.position.copy(E);
       a.hand.copy(W);
       // the grip runs back past the hand, the reel sits under it, the blank goes forward
       const dir = _d.copy(rodDir).normalize();
@@ -407,32 +537,52 @@
       const S2 = new T.Vector3(-arm.shoulder.x, arm.shoulder.y, arm.shoulder.z).add(H);
       const reelHand = a.reel.position.clone().add(new T.Vector3(left ? -0.06 : 0.06, -0.02, 0));
       const E2 = S2.clone().lerp(reelHand, 0.5).add(new T.Vector3(left ? 0.06 : -0.06, -0.12, 0.05));
-      place(a.parts.upper2, S2, E2, 0.062); place(a.parts.fore2, E2, reelHand, 0.052); a.parts.hand2.position.copy(reelHand);
+      place(a.parts.upper2, S2, E2, 0.066); place(a.parts.fore2, E2, reelHand, 0.054); a.parts.hand2.position.copy(reelHand); a.parts.elbow2.position.copy(E2);
       // blank: a quadratic curve whose far half leans toward the line
-      const L = 2.2 - 0.12;
-      const bendDir = new T.Vector3().copy(dir).lerp(bendTo || dir, Math.min(0.9, bend)).normalize();
-      const P0 = gripEnd, P1 = new T.Vector3().copy(P0).addScaledVector(dir, L * 0.55);
-      const P2 = new T.Vector3().copy(P1).addScaledVector(bendDir, L * 0.45 * (1 - 0.15 * bend));
+      // blank: a loaded cantilever, stiff at the butt, the tip pulled round toward the line
+      const L = 2.2 - 0.12, P0 = gripEnd;
+      const perp = new T.Vector3();
+      if (bendTo) { perp.copy(bendTo).addScaledVector(dir, -bendTo.dot(dir)); if (perp.lengthSq() > 1e-6) perp.normalize(); else perp.set(0, 0, 0); }
+      const bd = Math.min(1.1, bend) * 0.42 * (bendTo ? Math.min(1, 1 - bendTo.dot(dir) + 0.3) : 0);
       for (let i = 0; i <= ROD_SEG; i++) {
-        const t = i / ROD_SEG, u = 1 - t;
-        _p[i].set(0, 0, 0).addScaledVector(P0, u * u).addScaledVector(P1, 2 * u * t).addScaledVector(P2, t * t);
+        const t = i / ROD_SEG, defl = bd * t * t * (3 - t) / 2;
+        _p[i].copy(P0).addScaledVector(dir, L * t * (1 - 0.5 * defl * defl)).addScaledVector(perp, L * defl);
       }
       for (let i = 0; i < ROD_SEG; i++) place(a.segs[i], _p[i], _p[i + 1], 0.011 - i * 0.00075);
       a.tip.copy(_p[ROD_SEG]);
       a.tipBead.position.copy(a.tip);
     }
     /** Draw the line from the rod tip to `to`, sagging by `sag` metres in the middle. */
-    function drawLine(a, to, sag, visible) {
-      a.line.visible = visible !== false;
+    const lineCalm = col('#fff6e0'), lineHot = col('#ffb347'), lineRed = col('#ff4a2e');
+    /**
+     * Draw the line from the rod tip to `to`, sagging by `sag` metres in the middle. tension 0..1+
+     * colours it (cream, amber, red) and lights a glow along it; above 0.85 it thrums.
+     */
+    function drawLine(a, to, sag, visible, tension) {
+      a.line.visible = a.lineGlow.visible = visible !== false;
       if (!a.line.visible) return;
+      const T0 = tension || 0, thrum = T0 > 0.85 ? (T0 - 0.85) * 0.12 : 0;
       const pos = a.lineGeo.attributes.position.array, N = a.N;
       for (let i = 0; i < N; i++) {
-        const s = i / (N - 1);
-        pos[i * 3] = a.tip.x + (to.x - a.tip.x) * s;
-        pos[i * 3 + 1] = a.tip.y + (to.y - a.tip.y) * s - sag * 4 * s * (1 - s);
+        const s = i / (N - 1), w = Math.sin(Math.PI * s) * thrum * Math.sin(time * 90 + i * 1.3);
+        pos[i * 3] = a.tip.x + (to.x - a.tip.x) * s + w;
+        pos[i * 3 + 1] = a.tip.y + (to.y - a.tip.y) * s - sag * 4 * s * (1 - s) + w;
         pos[i * 3 + 2] = a.tip.z + (to.z - a.tip.z) * s;
       }
       a.lineGeo.attributes.position.needsUpdate = true;
+      const k = Math.min(1, T0);
+      a.lineMat.color.copy(lineCalm).lerp(k < 0.6 ? lineCalm : lineHot, k < 0.6 ? 0 : Math.min(1, (k - 0.6) / 0.25)).lerp(lineRed, Math.max(0, (k - 0.85) / 0.15));
+      a.lineGlow.material.color.copy(a.lineMat.color);
+      a.lineGlow.material.opacity = Math.max(0, (T0 - 0.35) * 0.9);
+    }
+    /** The aim arrow on the water: where the rod points (not where it will land). */
+    function aim(a, heading, show, pulse) {
+      a.aim.visible = !!show;
+      if (!show) return;
+      const r = 13;
+      a.aim.position.set(a.x + Math.sin(heading) * r, 0.04, 0.1 - Math.cos(heading) * r);
+      a.aim.rotation.set(-Math.PI / 2, 0, -heading);
+      a.aim.material.opacity = 0.55 + 0.45 * (pulse || 0);
     }
 
     // ---------------------------------------------------------------- fish
@@ -486,7 +636,7 @@
       geo.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
       geo.setIndex(idx); geo.computeVertexNormals();
       const mat = new T.MeshStandardMaterial({ map: fishTexture(look), roughness: 0.32, metalness: 0.28 });
-      const finMat = new T.MeshStandardMaterial({ color: col(look.fin), roughness: 0.5, transparent: true, opacity: 0.88, side: T.DoubleSide });
+      const finMat = new T.MeshStandardMaterial({ color: col(look.fin), roughness: 0.5, side: T.DoubleSide });
       const shape = pts => { const s = new T.Shape(); s.moveTo(pts[0][0], pts[0][1]); pts.slice(1).forEach(p => s.lineTo(p[0], p[1])); return new T.ShapeGeometry(s); };
       const H = look.h;
       const tail = sp.flat ? null : shape([[0, 0.04 * H / 0.3], [0.2, 0.55 * H], [0.13, 0], [0.2, -0.55 * H], [0, -0.04 * H / 0.3]]);
@@ -498,12 +648,13 @@
     const eyeMat = new T.MeshStandardMaterial({ color: 0x0c0c0c, roughness: 0.1, metalness: 0.4 });
     const eyeRingMat = new T.MeshStandardMaterial({ color: 0xf2d27a, roughness: 0.3, metalness: 0.5 });
     /** A fish model, 1 m long along -Z (nose at -0.5); scale it by the fish's length. */
-    function makeFish(sp) {
+    function makeFish(sp, simple) {
       const P = fishParts(sp), g = new T.Group();
       const body = new T.Mesh(P.geo, P.mat); body.castShadow = true; g.add(body);
       const tailG = new T.Group(); tailG.position.z = 0.44; g.add(tailG);
       if (P.tail) { const tl = new T.Mesh(P.tail, P.finMat); tl.rotation.y = -Math.PI / 2; tailG.add(tl); }
       else { const whip = new T.Mesh(cyl, P.finMat); whip.scale.set(0.012, 0.9, 0.012); whip.rotation.x = Math.PI / 2; whip.position.z = 0.4; tailG.add(whip); }
+      if (simple) { g.userData.tail = tailG; return g; }   // seen through the water: body and tail are enough
       if (P.dorsal) { const d = new T.Mesh(P.dorsal, P.finMat); d.rotation.y = -Math.PI / 2; d.position.set(0, sp.look.h * 0.42, -0.18); g.add(d); }
       [-1, 1].forEach(s => {
         const p = new T.Mesh(P.pect, P.finMat); p.position.set(s * sp.look.w * 0.45, -sp.look.h * 0.12, -0.28); p.rotation.set(0, s > 0 ? -2.4 : -0.7, s * 0.4); g.add(p);
@@ -616,11 +767,11 @@
       scene.fog.color.copy(P.fog);
       sun.color.copy(P.sun); sun.intensity = P.sunI;
       hemi.color.copy(P.hemi); hemi.groundColor.copy(P.ground); hemi.intensity = P.amb;
-      clouds.forEach(c => c.material.color.copy(P.mid).lerp(col('#fff2e0'), 0.45 - t * 0.3));
-      farMat.color.copy(P.top).lerp(P.fog, 0.42).multiplyScalar(0.62);
+      skyU.cLit.value.copy(P.cLit); skyU.cDark.value.copy(P.cDark);
       const dusk = Math.max(0, (t - 0.45) / 0.55);
       lanterns.forEach(l => { l.bulbMat.emissiveIntensity = 0.6 + dusk * 2.4; l.glow.material.opacity = 0.25 + dusk * 0.7; l.light.intensity = dusk * 1.6; });
       lhGlow.material.opacity = 0.35 + dusk * 0.65;
+      beamMat.uniforms.uO.value = 0.03 + dusk * 0.32;
       sunGlow.position.copy(sunDir).multiplyScalar(850); sunGlow.material.color.copy(P.sun); sunGlow.material.opacity = 0.55 - t * 0.2;
     }
     setDay(0);
@@ -634,24 +785,26 @@
       else if (n === 2) { view.pos.set(0, 4.9, 7.6); view.look.set(0, 0.2, -24); }
       else { view.pos.set(0, 5.6, 9.2); view.look.set(0, 0.2, -24); }
     }
-    let shake = 0;
-    function updateCamera(dt, focus, focusAmt) {
-      const k = 1 - Math.exp(-dt * 2.5);
-      const targetPos = view.pos.clone(), targetLook = view.look.clone();
-      if (focus && focusAmt > 0) {
-        // ease toward a landed fish held up at the dock: from the side, back far enough to frame it
-        const d = 0.8 + (focus.size || 0.4) * 1.5;
-        targetPos.lerp(new T.Vector3(focus.x - d * 0.55, focus.y + d * 0.12, focus.z + d * 0.85), focusAmt);
-        targetLook.lerp(focus, focusAmt);
-        key.position.set(focus.x - d * 0.4, focus.y + 0.3, focus.z + d * 0.6);
-      }
-      key.intensity += ((focus ? 2.2 * focusAmt : 0) - key.intensity) * k;
-      camCur.pos.lerp(targetPos, k); camCur.look.lerp(targetLook, k);
+    let shake = 0, baseFov = 50, fovCur = 50;
+    const _tp = new T.Vector3(), _tl = new T.Vector3();
+    /**
+     * shot (optional): { pos, look, fov, speed, key } overrides the base framing (the game's camera
+     * director: follow the cast, push in on the float, frame the fight, the catch close-up).
+     */
+    function updateCamera(dt, shot) {
+      const k = 1 - Math.exp(-dt * ((shot && shot.speed) || 2.2));
+      _tp.copy(shot && shot.pos ? shot.pos : view.pos); _tl.copy(shot && shot.look ? shot.look : view.look);
+      camCur.pos.lerp(_tp, k); camCur.look.lerp(_tl, k);
+      const fov = (shot && shot.fov) || baseFov;
+      fovCur += (fov - fovCur) * k;
+      if (Math.abs(camera.fov - fovCur) > 0.01) { camera.fov = fovCur; camera.updateProjectionMatrix(); }
+      if (shot && shot.key) key.position.copy(shot.key);
+      key.intensity += ((shot && shot.key ? 2.2 : 0) - key.intensity) * k;
       camera.position.copy(camCur.pos);
       if (shake > 0) { shake = Math.max(0, shake - dt * 0.6); camera.position.x += (Math.random() - 0.5) * shake * 0.1; camera.position.y += (Math.random() - 0.5) * shake * 0.1; }
       camera.lookAt(camCur.look);
     }
-    function snapCamera() { camCur.pos.copy(view.pos); camCur.look.copy(view.look); }
+    function snapCamera() { camCur.pos.copy(view.pos); camCur.look.copy(view.look); fovCur = baseFov; }
 
     // ---------------------------------------------------------------- per frame
     let time = 0;
@@ -660,7 +813,9 @@
       waterU.uTime.value = time;
       sun.position.copy(sunDir).multiplyScalar(40).add(new T.Vector3(0, 0, 2));
       sun.target.position.set(0, DECK_Y, 2);
-      clouds.forEach(c => { c.position.x += c.userData.drift * dt; if (c.position.x > 900) c.position.x = -900; });
+      skyU.uTime.value = time;
+      kelps.forEach(k => { k.rotation.z = Math.sin(time * 0.8 + k.userData.ph) * 0.18; k.rotation.x = Math.sin(time * 0.6 + k.userData.ph * 1.3) * 0.12; });
+      beam.rotation.y = time * 0.45;
       boat.position.x += dt * 0.9; if (boat.position.x > 220) boat.position.x = -220;
       boat.position.y = Math.sin(time * 0.6) * 0.15; boat.rotation.z = Math.sin(time * 0.5) * 0.03;
       gulls.forEach(g => {
@@ -678,7 +833,8 @@
       const w = innerWidth, h = innerHeight;
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
-      camera.fov = w / h < 1.5 ? 58 : 50;
+      baseFov = w / h < 1.5 ? 58 : 50;
+      camera.fov = fovCur = baseFov;
       camera.updateProjectionMatrix();
     }
     function setQuality(q) {   // 2 high, 1 medium, 0 low
@@ -686,7 +842,6 @@
       sun.castShadow = q >= 1;
       sun.shadow.mapSize.set(q >= 2 ? 1536 : 1024, q >= 2 ? 1536 : 1024);
       if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
-      waterU.uDetail.value = q >= 1 ? 1 : 0;
       scene.traverse(o => { if (o.material) o.material.needsUpdate = true; });
     }
     const _v = new T.Vector3();
@@ -697,7 +852,7 @@
     resize();
     return {
       renderer, scene, camera, DECK_Y, bob, update, render, resize, setQuality, setDay, frameFor, updateCamera, snapCamera, toScreen,
-      createAngler, removeAngler, poseAngler, drawLine, makeFish, makeShadow, ripple, splash, sparkle,
+      view, get baseFov() { return baseFov; }, createAngler, removeAngler, poseAngler, drawLine, aim, makeFish, makeShadow, ripple, splash, sparkle,
       shake: v => { shake = Math.max(shake, v); }, get time() { return time; }, sunDir,
     };
   }

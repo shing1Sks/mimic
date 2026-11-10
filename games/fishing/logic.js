@@ -23,36 +23,119 @@
   }
 
   // ------------------------------------------------------------------ casting
+  /*
+   * Casting reads the whole forward stroke, not the instant of release. A real overhead flick
+   * (recorded on a phone, 2026-11-10) comes over the top in 80-120 ms at 15-30 rad/s, and players
+   * let go of A at the END of it (40-120 ms after the peak) or during the backswing: judging the
+   * cast by the tip velocity at the release sample threw almost every cast into the water at
+   * their feet. Now: distance = how hard the stroke was (its peak turn rate), direction = where
+   * the rod points at the follow-through (where you stop it), and release timing only nudges
+   * the arc inside a wide window. All of it is still the phone's raw motion, 1:1.
+   */
   const ROD_LEN = 2.2;           // m, butt (the phone) to tip
   const CAST = {
-    WHIP: 1.32,                  // a loaded rod flings the rig faster than the rigid tip moves
-    LAG: 38 * Math.PI / 180,     // the bent rod and trailing rig leave higher than the tip's path
-    MIN_TIP: 3.2,                // m/s tip speed below which a release just drops the rig
-    MAX_SPEED: 46,               // m/s, the line and rig cannot go faster
+    W_MIN: 4,                    // rad/s: a stroke slower than this is not a cast
+    W_FULL: 27,                  // rad/s: a full-power flick (recorded flicks: 16-29)
+    V_MIN: 8, V_MAX: 31,         // m/s launch speed from the weakest to a full flick
+    WIN_BEFORE: 0.45, WIN_AFTER: 0.35,   // s around the release in which the stroke may lie
     DRAG: 0.0105,                // 1/m, air + line drag (quadratic)
     LINE: 0.18,                  // m/s^2 per m/s, line peeling off the spool (linear)
   };
+  const ang = (a, b) => Math.acos(clamp(a.x * b.x + a.y * b.y + a.z * b.z, -1, 1));
+
+  /** Turn rate of the rod (rad/s) at each sample, measured over at least 50 ms (robust to repeats). */
+  function strokeSpeeds(samples) {
+    const out = new Array(samples.length).fill(0);
+    for (let i = 1; i < samples.length; i++) {
+      let j = i - 1;
+      while (j > 0 && samples[i].t - samples[j].t < 0.05) j--;
+      const dt = samples[i].t - samples[j].t;
+      if (dt > 1e-3) out[i] = ang(samples[j].f, samples[i].f) / dt;
+    }
+    return out;
+  }
 
   /**
-   * Launch from the rod's motion at the moment of release, 1:1: the tip of a rod pointing along
-   * rodDir (unit, world) turning at angVel (rad/s, world) moves at v = w x r. The rig leaves along
-   * that velocity, lifted by the rod's lag. heading: 0 = straight out to sea, + = right (rad).
+   * The strongest stroke whose peak lies in [t0, t1]. samples: [{t, f}] (rod direction, newest
+   * last). Returns { peakT, w, follow (rod direction at the follow-through), heading, forward,
+   * done (the stroke has finished) } or null.
    */
-  function castLaunch(rodDir, angVel) {
-    const vt = cross(angVel, { x: rodDir.x * ROD_LEN, y: rodDir.y * ROD_LEN, z: rodDir.z * ROD_LEN });
-    const tip = len(vt);
-    const horiz = Math.hypot(vt.x, vt.z);
-    const heading = horiz > 1e-6 ? Math.atan2(vt.x, -vt.z) : 0;
-    const elev0 = Math.atan2(vt.y, horiz);
-    const elev = clamp(elev0 + CAST.LAG, -0.7, 1.48);
-    const speed = tip < CAST.MIN_TIP ? 0 : Math.min(CAST.MAX_SPEED, tip * CAST.WHIP);
-    const backward = speed > 0 && Math.abs(heading) > 100 * Math.PI / 180;
-    const v = {
-      x: speed * Math.cos(elev) * Math.sin(heading),
-      y: speed * Math.sin(elev),
-      z: -speed * Math.cos(elev) * Math.cos(heading),
-    };
-    return { speed, tip, heading, elev, elev0, backward, v };
+  function findStroke(samples, t0, t1) {
+    const w = strokeSpeeds(samples);
+    let best = null;
+    for (let i = 1; i < samples.length; i++) {
+      const s = samples[i];
+      if (s.t < t0 || s.t > t1 || w[i] < CAST.W_MIN) continue;
+      if (w[i] >= (w[i - 1] || 0) && w[i] >= (w[i + 1] || 0)) {
+        // follow-through: where the rod is once the stroke has died down (or 0.15 s on)
+        let k = i, done = false;
+        while (k + 1 < samples.length && samples[k + 1].t - s.t <= 0.15) { k++; if (w[k] < w[i] * 0.35) { done = true; break; } }
+        if (!done && samples[samples.length - 1].t - s.t >= 0.15) done = true;
+        const f = samples[k].f;
+        const heading = Math.atan2(f.x, -f.z);
+        const cand = { peakT: s.t, w: w[i], follow: f, heading, forward: Math.abs(heading) < 100 * Math.PI / 180 && f.y < 0.85, done };
+        // prefer forward strokes: a fast backswing must not beat the cast that follows it
+        if (!best || (cand.forward && !best.forward) || (cand.forward === best.forward && cand.w > best.w)) best = cand;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Launch from a stroke. releaseT: when A came up (null = released at the peak, Snap mode).
+   * Release timing is a refinement: early (before the peak) lobs it high and short, around the
+   * peak to well into the follow-through is clean, very late flattens it.
+   */
+  function castFromStroke(st, releaseT) {
+    const s = clamp((st.w - CAST.W_MIN) / (CAST.W_FULL - CAST.W_MIN), 0, 1.12);
+    let speed = lerp(CAST.V_MIN, CAST.V_MAX, Math.min(1, s)) + Math.max(0, s - 1) * 18;
+    const dt = releaseT === null || releaseT === undefined ? 0.03 : releaseT - st.peakT;
+    let elevDeg, timing;
+    if (dt < -0.18) { elevDeg = 60; speed *= 0.8; timing = 'early'; }
+    else if (dt < -0.08) { elevDeg = 47; timing = 'a touch early'; }
+    else if (dt <= 0.22) { elevDeg = 37 - Math.max(0, dt) * 22; timing = 'clean'; }
+    else if (dt <= 0.32) { elevDeg = 25; speed *= 0.92; timing = 'a touch late'; }
+    else { elevDeg = 15; speed *= 0.8; timing = 'late'; }
+    const elev = elevDeg * Math.PI / 180, heading = st.heading;
+    const v = { x: speed * Math.cos(elev) * Math.sin(heading), y: speed * Math.sin(elev), z: -speed * Math.cos(elev) * Math.cos(heading) };
+    return { speed, heading, elev, v, power: Math.min(1, s), timing, backward: !st.forward, dt };
+  }
+
+  /**
+   * The live cast detector, one rod sample at a time ({t, f, a}). mode 'thumb': letting go of A
+   * casts with the stroke around that moment (waiting up to WIN_AFTER for a stroke still to
+   * come); 'snap': the line flies when a forward flick finishes, no button. Returns null, a
+   * launch (castFromStroke), or { fail: 'weak' | 'backward' }.
+   */
+  function createCaster() { return { hist: [], held: false, pending: null, last: -9 }; }
+  function stepCaster(c, smp, mode) {
+    c.hist.push({ t: smp.t, f: smp.f });
+    while (c.hist.length > 2 && smp.t - c.hist[0].t > 1.3) c.hist.shift();
+    if (mode === 'snap') {
+      if (smp.t - c.last < 1) return null;
+      const st = findStroke(c.hist, smp.t - 0.4, smp.t);
+      if (st && st.done && st.forward && st.w >= CAST.W_MIN + 4) { c.last = smp.t; c.hist.length = 0; return castFromStroke(st, null); }
+      return null;
+    }
+    if (smp.a) { c.held = true; c.pending = null; return null; }
+    if (c.held) { c.held = false; c.pending = smp.t; }
+    if (c.pending === null) return null;
+    const rel = c.pending, st = findStroke(c.hist, rel - CAST.WIN_BEFORE, rel + CAST.WIN_AFTER);
+    const late = smp.t > rel + CAST.WIN_AFTER + 0.15;
+    if (!(st && st.done) && !late) return null;
+    c.pending = null; c.last = smp.t;
+    if (!st) return { fail: 'weak' };
+    if (!st.forward) return { fail: 'backward' };
+    return castFromStroke(st, rel);
+  }
+
+  /** Why a cast went where it did, for the words over the float. */
+  function castWord(l) {
+    if (l.timing === 'early') return 'let go too early: lobbed';
+    if (l.timing === 'late') return 'let go late: flat';
+    if (l.power < 0.3) return 'gentle flick: snap it harder for distance';
+    if (l.timing !== 'clean') return l.timing;
+    return l.power > 0.85 ? 'full power, clean release' : 'clean release';
   }
 
   /** One integration step of the rig in the air (semi-implicit Euler). s = {x,y,z,vx,vy,vz}. */
@@ -75,20 +158,10 @@
     return { x: s.x, z: s.z, dist: Math.hypot(s.x - from.x, s.z - from.z), t };
   }
 
-  /** A word for the cast, from the launch elevation: the release timing made visible. */
-  function castWord(elev) {
-    const d = elev * 180 / Math.PI;
-    if (d > 68) return 'sky-high';
-    if (d > 55) return 'a touch early';
-    if (d >= 25) return 'clean release';
-    if (d >= 10) return 'a touch late';
-    return 'slapped down';
-  }
-
   // ------------------------------------------------------------------ reel crank
   const LINE_PER_TURN = 1.0;    // m of line per crank turn (a fast spinning reel)
-  const A_REEL = 1.8;          // m/s when the reel button is held instead
-  const CRANK = { TAU_MEAN: 0.3, MIN_R: 0.035, TAU_RATE: 0.12, MAX_TPS: 4 };
+  const A_REEL = 2.4;          // m/s when the reel button is held instead
+  const CRANK = { TAU_MEAN: 0.3, MIN_R: 0.035, MAX_R: 0.4, MAX_STEP: 1.4, TAU_RATE: 0.12, MAX_TPS: 4 };
 
   /**
    * Turning the reel = circling the rod tip. The rod's slow-moving mean direction is the axle;
@@ -109,12 +182,15 @@
     const e = { x: f.x - m.x, y: f.y - m.y, z: f.z - m.z };
     const eu = dot(e, u), ew = dot(e, w), r = Math.hypot(eu, ew);
     const kr = 1 - Math.exp(-dt / CRANK.TAU_RATE);
-    if (r < CRANK.MIN_R) { cr.a = null; cr.rate += (0 - cr.rate) * kr; }
+    // a circle has a small, steady radius; a big haul of the rod (pumping a fish) is not a crank,
+    // and neither is a swing that crosses the axle (the angle jumps by half a turn)
+    if (r < CRANK.MIN_R || r > CRANK.MAX_R) { cr.a = null; cr.rate += (0 - cr.rate) * kr; }
     else {
       const a = Math.atan2(ew, eu);
       if (cr.a !== null) {
         const da = wrap(a - cr.a);
-        cr.rate += (clamp(da / Math.max(dt, 1e-3), -CRANK.MAX_TPS * TAU, CRANK.MAX_TPS * TAU) - cr.rate) * kr;
+        if (Math.abs(da) > CRANK.MAX_STEP) cr.rate += (0 - cr.rate) * kr;
+        else cr.rate += (clamp(da / Math.max(dt, 1e-3), -CRANK.MAX_TPS * TAU, CRANK.MAX_TPS * TAU) - cr.rate) * kr;
       }
       cr.a = a;
     }
@@ -159,32 +235,32 @@
    */
   const SPECIES = [
     { id: 'perch', name: 'Copper Perch', blurb: 'Nosy, nibbly, never far from the dock.', kg: [0.2, 0.9], len: [18, 32], spawn: 30,
-      power: 0.32, speed: 2.2, stamina: 0.55, jumpy: 0, thrash: 0.15, charge: 0.1, runLen: [0.8, 1.8], restLen: [1.2, 2.4],
-      nibbles: [2, 4], window: 0.95, curiosity: 1.0, wary: 0.15, likesMotion: 0.2, senseR: 9, depth: 0.5, slackTol: 1.9,
+      power: 0.34, speed: 2.4, stamina: 0.42, jumpy: 0.12, thrash: 0.45, charge: 0.1, runLen: [0.8, 1.8], restLen: [1.2, 2.4],
+      nibbles: [1, 3], window: 1.4, curiosity: 1.0, wary: 0.15, likesMotion: 0.2, senseR: 9, depth: 0.5, slackTol: 1.9,
       look: { back: '#5a3d1c', side: '#d9893a', belly: '#f7dfb4', fin: '#e8763a', mark: 'bars', h: 0.42, w: 0.2 } },
     { id: 'mackerel', name: 'Glass Mackerel', blurb: 'Hits anything that moves. Reel it past them.', kg: [0.4, 1.4], len: [28, 44], spawn: 20,
-      power: 0.42, speed: 5.0, stamina: 0.5, jumpy: 0.06, thrash: 0.1, charge: 0.35, runLen: [0.5, 1.1], restLen: [0.5, 1.0],
-      nibbles: [0, 1], window: 0.5, curiosity: 0.75, wary: 0.3, likesMotion: 1, senseR: 13, depth: 0.35, slackTol: 2.0,
+      power: 0.44, speed: 5.0, stamina: 0.5, jumpy: 0.15, thrash: 0.3, charge: 0.35, runLen: [0.5, 1.1], restLen: [0.5, 1.0],
+      nibbles: [0, 1], window: 1.05, curiosity: 0.75, wary: 0.3, likesMotion: 1, senseR: 13, depth: 0.35, slackTol: 2.0,
       look: { back: '#1f5a6e', side: '#9fd6dc', belly: '#eef6f2', fin: '#4d8a96', mark: 'waves', h: 0.24, w: 0.16 } },
     { id: 'bass', name: 'Tidebass', blurb: 'Steady, stubborn runner. Keep the rod up.', kg: [1, 4.5], len: [35, 66], spawn: 22,
-      power: 0.58, speed: 3.2, stamina: 1.0, jumpy: 0.12, thrash: 0.25, charge: 0.25, runLen: [1.4, 3.0], restLen: [1.0, 2.2],
-      nibbles: [1, 2], window: 0.75, curiosity: 0.6, wary: 0.45, likesMotion: 0.4, senseR: 11, depth: 1.0, slackTol: 1.8,
+      power: 0.58, speed: 3.2, stamina: 0.85, jumpy: 0.12, thrash: 0.25, charge: 0.25, runLen: [1.4, 3.0], restLen: [1.0, 2.2],
+      nibbles: [0, 2], window: 1.25, curiosity: 0.6, wary: 0.45, likesMotion: 0.4, senseR: 11, depth: 1.0, slackTol: 1.8,
       look: { back: '#2c3b2a', side: '#8d9c6a', belly: '#e6e2c4', fin: '#56603e', mark: 'stripes', h: 0.32, w: 0.19 } },
     { id: 'snapper', name: 'Ember Snapper', blurb: 'Shakes its head like it means it.', kg: [1.5, 6], len: [38, 70], spawn: 14,
       power: 0.68, speed: 3.0, stamina: 1.15, jumpy: 0.05, thrash: 0.7, charge: 0.1, runLen: [1.0, 2.2], restLen: [0.9, 1.8],
-      nibbles: [1, 3], window: 0.7, curiosity: 0.55, wary: 0.4, likesMotion: 0.3, senseR: 10, depth: 1.2, slackTol: 1.6,
+      nibbles: [1, 2], window: 1.2, curiosity: 0.55, wary: 0.4, likesMotion: 0.3, senseR: 10, depth: 1.2, slackTol: 1.6,
       look: { back: '#8a1f22', side: '#ef5b3f', belly: '#ffd0b0', fin: '#d8452e', mark: 'spots', h: 0.38, w: 0.18 } },
     { id: 'ray', name: 'Dusk Ray', blurb: 'Glides off the bottom and just keeps going.', kg: [4, 14], len: [60, 120], spawn: 7,
-      power: 0.82, speed: 2.4, stamina: 1.8, jumpy: 0, thrash: 0.05, charge: 0, runLen: [2.5, 4.5], restLen: [1.5, 2.5],
-      nibbles: [2, 3], window: 0.9, curiosity: 0.45, wary: 0.6, likesMotion: 0.1, senseR: 9, depth: 1.8, slackTol: 2.0, flat: true,
+      power: 0.82, speed: 2.4, stamina: 1.3, jumpy: 0, thrash: 0.05, charge: 0, runLen: [2.5, 4.5], restLen: [1.5, 2.5],
+      nibbles: [1, 2], window: 1.4, curiosity: 0.45, wary: 0.6, likesMotion: 0.1, senseR: 9, depth: 1.8, slackTol: 2.0, flat: true,
       look: { back: '#3d3550', side: '#6e5f86', belly: '#f2eaf2', fin: '#4a3f60', mark: 'speckle', h: 0.12, w: 0.9 } },
     { id: 'tarpon', name: 'Silver Tarpon', blurb: 'Leaps clean out. Bow the rod when it jumps.', kg: [6, 22], len: [80, 150], spawn: 5,
-      power: 0.9, speed: 4.4, stamina: 1.55, jumpy: 0.65, thrash: 0.3, charge: 0.2, runLen: [1.4, 3.0], restLen: [1.0, 2.0],
-      nibbles: [0, 2], window: 0.6, curiosity: 0.5, wary: 0.5, likesMotion: 0.6, senseR: 12, depth: 0.8, slackTol: 1.5,
+      power: 0.9, speed: 4.4, stamina: 1.3, jumpy: 0.65, thrash: 0.3, charge: 0.2, runLen: [1.4, 3.0], restLen: [1.0, 2.0],
+      nibbles: [0, 1], window: 1.05, curiosity: 0.5, wary: 0.5, likesMotion: 0.6, senseR: 12, depth: 0.8, slackTol: 1.5,
       look: { back: '#4b5f6e', side: '#d6e2ea', belly: '#ffffff', fin: '#8aa1b0', mark: 'scales', h: 0.27, w: 0.15 } },
     { id: 'grouper', name: 'Gilded Grouper', blurb: 'Rises at sundown. Nobody has landed it twice.', kg: [25, 60], len: [120, 190], spawn: 0, legendary: true,
-      power: 1.0, speed: 2.8, stamina: 2.2, jumpy: 0, thrash: 0.5, charge: 0.15, runLen: [1.8, 3.6], restLen: [1.0, 2.0],
-      nibbles: [1, 2], window: 0.85, curiosity: 0.9, wary: 0.1, likesMotion: 0.3, senseR: 16, depth: 1.6, slackTol: 1.8,
+      power: 1.0, speed: 2.8, stamina: 1.8, jumpy: 0, thrash: 0.5, charge: 0.15, runLen: [1.8, 3.6], restLen: [1.0, 2.0],
+      nibbles: [1, 2], window: 1.3, curiosity: 0.9, wary: 0.1, likesMotion: 0.3, senseR: 16, depth: 1.6, slackTol: 1.8,
       look: { back: '#5a3b10', side: '#e2a640', belly: '#fff0c2', fin: '#c07a1c', mark: 'spots', h: 0.4, w: 0.26 } },
   ];
   const byId = id => SPECIES.find(s => s.id === id);
@@ -196,7 +272,7 @@
     for (const s of pool) { r -= s.spawn; if (r < 0) return s; }
     return pool[0];
   }
-  const BOUNDS = { x0: -30, x1: 30, z0: -8, z1: -56 };
+  const BOUNDS = { x0: -28, x1: 28, z0: -5, z1: -50 };
 
   /** A new fish: size skews small (most catches are ordinary, trophies are rare). */
   function spawnFish(rng, opts) {
@@ -268,10 +344,10 @@
     } else if (f.state === 'approach' && L) {
       const d = Math.hypot(L.x - f.x, L.z - f.z);
       const shy = L.moving > 0.7 && sp.likesMotion < 0.5;   // a fast lure makes the cautious ones hang back
-      steer(L.x, L.z, shy ? 0.5 : 1.1 + sp.likesMotion * 0.8, 2.2);
+      steer(L.x, L.z, shy ? 0.5 : (d > 3 ? 1.6 : 1.0) + sp.likesMotion * 0.8, 2.4);
       if (d < 0.75) {
         if (L.moving > 0.25 && rng() < sp.likesMotion) { f.state = 'strike'; f.t = sp.window; ev.push({ type: 'strike', fish: f, lure: L }); }
-        else { f.state = 'nibble'; f.nibLeft = sp.nibbles[0] + Math.floor(rng() * (sp.nibbles[1] - sp.nibbles[0] + 1)); f.nibT = 0.35 + rng() * 0.8; }
+        else { f.state = 'nibble'; f.nibLeft = sp.nibbles[0] + Math.floor(rng() * (sp.nibbles[1] - sp.nibbles[0] + 1)); f.nibT = 0.3 + rng() * 0.5; }
       }
     } else if (f.state === 'nibble' && L) {
       steer(L.x + Math.sin(f.phase * 0.3) * 0.5, L.z + Math.cos(f.phase * 0.3) * 0.5, 0.25, 1.5);
@@ -282,7 +358,7 @@
       }
       f.nibT -= dt;
       if (f.nibT <= 0) {
-        if (f.nibLeft > 0) { f.nibLeft--; f.nibT = 0.45 + rng() * 1.0; ev.push({ type: 'nibble', fish: f, lure: L }); }
+        if (f.nibLeft > 0) { f.nibLeft--; f.nibT = 0.4 + rng() * 0.6; ev.push({ type: 'nibble', fish: f, lure: L }); }
         else { f.state = 'strike'; f.t = sp.window; ev.push({ type: 'strike', fish: f, lure: L }); }
       }
     } else if (f.state === 'strike' && L) {
@@ -304,12 +380,33 @@
     return ev;
   }
 
+  /**
+   * Nobody biting? Send someone. The nearest free fish within reach is called to the float
+   * (far enough off that its shadow is seen closing in); if the water nearby is empty, a fish
+   * comes in from beyond the float. Returns { fish } (already sent) or { spawn: {x, z} }.
+   */
+  function directBite(fishes, lure, rng) {
+    let best = null, bd = 1e9;
+    for (const f of fishes) {
+      if (f.state !== 'wander' || f.cool > 0 || f.lure >= 0 || f.sp.legendary) continue;
+      const d = Math.hypot(f.x - lure.x, f.z - lure.z);
+      if (d < 3 || d > 24) continue;
+      if (d < bd) { bd = d; best = f; }
+    }
+    if (best) { sendToLure(best, lure); return { fish: best }; }
+    const a = (rng() - 0.5) * 2.4, r = 7 + rng() * 3;
+    return { spawn: { x: lure.x + Math.sin(a) * r, z: Math.min(-3, lure.z - Math.cos(a) * r) } };
+  }
+  function sendToLure(f, lure) { f.state = 'approach'; f.lure = lure.id; lure.claimed = f.id; f.cool = 0; }
+
   // ------------------------------------------------------------------ the fight
   const FIGHT = {
     LAND_D: 2.4,        // m: close enough to lift out
     LAND_S: 0.3,        // stamina below which it can be landed
     DRAG_T: 0.8,        // fish pull above this slips the drag
     SNAP_T: 0.95,       // tension above this strains the line
+    WARN_T: 0.86,       // tension above this is the danger zone (sound, rumble, HUD)
+    DRAG_LIMIT: 0.86,   // the reel's drag setting: load above it slips line off the spool
     SLACK_T: 0.08,
     MIN_LINE: 1.2,
   };
@@ -321,7 +418,7 @@
   function cushion(delta) {
     const d = clamp(delta, 0, Math.PI);
     if (d >= 1.2) return 0.75;
-    return lerp(1.45, 0.75, Math.pow(d / 1.2, 0.8));
+    return lerp(1.7, 0.75, Math.pow(d / 1.2, 0.8));
   }
 
   /** fish: {sp, kg, size}; d, phi: distance (m) and bearing (rad, + right) from the angler. */
@@ -408,30 +505,45 @@
     fs.phi = clamp(fs.phi + w * dt / Math.max(3, fs.d), -1.15, 1.15);
     const P = fishPull(fs);
     const running = fs.phase === 'run' || fs.phase === 'burst';
-    let Tt;
+    // pumping: swinging the rod away from the fish drags it toward you by the tip's travel;
+    // swinging back toward it gives that line back as slack (pump, then reel down)
+    const de = clamp(fs.delta, 0, 1.9), ddel = fs.prevDelta === undefined ? 0 : clamp(de - fs.prevDelta, -0.25, 0.25);
+    fs.prevDelta = de;
+    const lift = clamp(ddel / Math.max(dt, 1e-3), -4, 4) * 0.1;
+    let Tt, slipping = false, reelIn = reel;
     if (want >= fs.line - 0.02) {
-      // taut: a running fish peels line off (less when the reel is fighting it), otherwise it is held
-      if (running || fs.phase === 'jump') fs.line = Math.max(fs.line, want - reel * 0.35 * dt);
+      if (running || fs.phase === 'jump') fs.line = Math.max(fs.line, want);
       fs.d = fs.line;
       const pulled = P < FIGHT.DRAG_T ? P : FIGHT.DRAG_T + (P - FIGHT.DRAG_T) * 0.3;
       // cranking against a running fish is what breaks lines
       const reelLoad = reel * (0.1 + 0.36 * P + (running ? 0.18 : 0));
-      const lift = clamp(inp.pitchRate || 0, -4, 4) * 0.1;
       // in the air the rod's bend no longer matters: a high rod yanks the leaping fish, a bowed one gives it line
       if (fs.air) Tt = 0.75 * (pulled + reelLoad) + Math.max(0, (inp.pitch || 0) - 0.15) * 0.55 + lift;
       else Tt = cushion(fs.delta) * (pulled + reelLoad) + lift;
+      // the reel's drag: above its setting the spool slips and sings instead of the line parting;
+      // only a lot more load than that pushes the line itself toward breaking
+      if (Tt > FIGHT.DRAG_LIMIT) {
+        slipping = true;
+        fs.line += (Tt - FIGHT.DRAG_LIMIT) * 5 * dt;
+        reelIn = 0;
+        Tt = FIGHT.DRAG_LIMIT + (Tt - FIGHT.DRAG_LIMIT) * 0.5;
+      }
+      if (ddel > 0 && !running) fs.line -= ROD_LEN * 0.65 * ddel;
     } else {
       fs.d = want;                        // the fish swims toward you faster than you reel: slack
       Tt = Math.max(0, 0.06 - (fs.line - fs.d) * 0.2);
     }
-    fs.line = Math.max(FIGHT.MIN_LINE, fs.line - reel * dt);
+    if (ddel < 0) fs.line += ROD_LEN * 0.65 * -ddel;
+    fs.slipping = slipping;
+    fs.line = Math.max(FIGHT.MIN_LINE, fs.line - reelIn * dt);
     if (fs.d > fs.line) fs.d = fs.line;   // reeling drags a held fish in
     fs.T += (Math.max(0, Tt) - fs.T) * Math.min(1, dt / 0.07);
     fs.maxT = Math.max(fs.maxT, fs.T);
 
-    // the line: strain builds above SNAP_T, slack runs out the hook
-    if (fs.T > FIGHT.SNAP_T) fs.strain += ((fs.T - FIGHT.SNAP_T) * 12 + 0.8) * dt;
-    else fs.strain = Math.max(0, fs.strain - 0.8 * dt);
+    // the line: strain builds above SNAP_T (a second or two of warning), slack runs out the hook
+    if (fs.T > FIGHT.SNAP_T) fs.strain += ((fs.T - FIGHT.SNAP_T) * 3 + 0.36) * dt;
+    else fs.strain = Math.max(0, fs.strain - 0.5 * dt);
+    fs.danger = fs.T > FIGHT.WARN_T || fs.strain > 0;
     // a little sag holds the hook for a while; a loose loop of line loses it fast
     if (fs.T < FIGHT.SLACK_T) fs.slackT += dt * clamp((fs.line - fs.d) / 1.5, 0.4, 1.5);
     else fs.slackT = Math.max(0, fs.slackT - 2 * dt);
@@ -441,8 +553,8 @@
     if (fs.risk >= 1) { fs.over = 'thrown'; ev.push('thrown'); return ev; }
 
     // stamina: pressure tires it, more so from the side and with the rod up; slack lets it recover
-    const lift = (inp.pitch || 0) > 0.35 ? 1.2 : 1;
-    fs.S = Math.max(0, fs.S - dt * fs.T * 0.085 * (1 + 1.5 * sideOn) * lift / sp.stamina);
+    const up = (inp.pitch || 0) > 0.35 ? 1.2 : 1;
+    fs.S = Math.max(0, fs.S - dt * fs.T * 0.12 * (1 + 1.5 * sideOn) * up / sp.stamina);
     if (fs.T < 0.2) fs.S = Math.min(1, fs.S + dt * 0.035);
 
     if (fs.d <= FIGHT.LAND_D) {
@@ -466,10 +578,10 @@
   const api = {
     G, ROD_LEN, CAST, LINE_PER_TURN, A_REEL, CRANK, JERK, FIGHT, SPECIES, BOUNDS,
     rng32, clamp, lerp, wrap, cross, dot, norm,
-    castLaunch, stepFlight, landing, castWord,
+    strokeSpeeds, findStroke, castFromStroke, createCaster, stepCaster, stepFlight, landing, castWord,
     createCrank, stepCrank, reelSpeed,
     pitchUpRate, detectJerk,
-    byId, pickSpecies, spawnFish, splashNear, flee, stepFish,
+    byId, pickSpecies, spawnFish, splashNear, flee, stepFish, directBite, sendToLure,
     cushion, createFight, stepFight, fishPull, beginPhase,
     rank, stars,
   };

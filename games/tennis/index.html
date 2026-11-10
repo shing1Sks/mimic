@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sunvolley</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="stage"></div>
+
+<!-- ============ HUD ============ -->
+<div id="hud" class="hidden">
+  <div id="split-line"></div>
+  <div id="scoreboard">
+    <div class="sb-head"><span class="sb-title">SUNVOLLEY</span><span id="sb-mode">FIRST TO 3</span></div>
+    <div class="sb-row" id="sb-p0"><span class="sb-serve"></span><span class="sb-name">YOU</span><span class="sb-games">0</span><span class="sb-pts">0</span></div>
+    <div class="sb-row" id="sb-p1"><span class="sb-serve"></span><span class="sb-name">RIO</span><span class="sb-games">0</span><span class="sb-pts">0</span></div>
+    <div id="sb-tag"></div>
+  </div>
+  <div id="practice-board" class="hidden">
+    <div class="sb-head"><span class="sb-title">PRACTICE</span><span>BALL MACHINE</span></div>
+    <div class="pb-grid">
+      <div><b id="pb-streak">0</b><span>streak</span></div>
+      <div><b id="pb-best">0</b><span>best</span></div>
+      <div><b id="pb-in">0%</b><span>in</span></div>
+      <div><b id="pb-targets">0</b><span>targets</span></div>
+    </div>
+  </div>
+  <div id="ctrl-pill"><i></i><span>Using mouse</span><small>Esc pause</small></div>
+  <div class="ptag" id="ptag0"><b>P1</b><span>WAND</span></div>
+  <div class="ptag" id="ptag1"><b>P2</b><span>WAND</span></div>
+  <div id="rally-chip" class="hidden">RALLY <b>0</b></div>
+  <div id="banner"><div class="b-main"></div><div class="b-sub"></div></div>
+  <div class="speed" id="speed"><div class="sp-court"><i class="sp-dot"></i></div><div class="sp-info"><div class="sp-val"><b>0</b> km/h</div><div class="sp-tags"></div></div></div>
+  <div class="speed" id="speed-1"><div class="sp-court"><i class="sp-dot"></i></div><div class="sp-info"><div class="sp-val"><b>0</b> km/h</div><div class="sp-tags"></div></div></div>
+  <div class="prompt" id="prompt"></div>
+  <div class="prompt" id="prompt-1"></div>
+  <div class="toast" id="toast"></div>
+  <div class="toast" id="toast-1"></div>
+  <div id="meter"><div class="m-label">SWING</div><div class="m-track"><div class="m-fill"></div><div class="m-tick"></div></div></div>
+</div>
+
+<!-- ============ TITLE ============ -->
+<div id="title" class="screen">
+  <div class="t-left">
+    <header>
+      <div class="t-kicker">A MIMIC MOTION GAME</div>
+      <h1>SUN<span>VOLLEY</span></h1>
+      <p class="t-sub">Grab your phone. It's your racket now.</p>
+    </header>
+    <div class="menu" id="title-menu">
+      <button class="mi primary" data-act="circuit">CIRCUIT <small id="circ-sub">round one vs PIP</small></button>
+      <button class="mi" data-act="match">QUICK MATCH <small id="quick-sub">vs RIO</small></button>
+      <button class="mi" data-act="versus">2 PLAYERS <small>two phones, one screen</small></button>
+      <button class="mi" data-act="practice">PRACTICE <small>ball machine</small></button>
+      <button class="mi" data-act="options">OPTIONS <small>hand, swing, sound, graphics</small></button>
+    </div>
+    <div class="menu hidden" id="opts-menu">
+      <div class="mi opt" data-opt="opp"><span>QUICK MATCH OPPONENT</span><span class="ov"><i class="arr">&#9664;</i><b>RIO</b><i class="arr">&#9654;</i></span></div>
+      <div class="mi opt" data-opt="games"><span>MATCH LENGTH</span><span class="ov"><i class="arr">&#9664;</i><b>FIRST TO 3</b><i class="arr">&#9654;</i></span></div>
+      <div class="mi opt" data-opt="sens"><span>SWING SENSITIVITY</span><span class="ov"><i class="arr">&#9664;</i><b>NORMAL</b><i class="arr">&#9654;</i></span></div>
+      <div class="mi opt" data-opt="zone"><span>HIT ZONE</span><span class="ov"><i class="arr">&#9664;</i><b>NORMAL</b><i class="arr">&#9654;</i></span></div>
+      <div class="mi opt" data-opt="power"><span>SWING POWER</span><span class="ov"><i class="arr">&#9664;</i><b>NORMAL</b><i class="arr">&#9654;</i></span></div>
+      <div class="mi opt" data-opt="hand"><span>PLAYING HAND</span><span class="ov"><i class="arr">&#9664;</i><b>RIGHT</b><i class="arr">&#9654;</i></span></div>
+      <div class="mi opt" data-opt="sound"><span>SOUND</span><span class="ov"><i class="arr">&#9664;</i><b>ON + UMPIRE</b><i class="arr">&#9654;</i></span></div>
+      <div class="mi opt" data-opt="vol"><span>VOLUME</span><span class="ov"><i class="arr">&#9664;</i><b>100%</b><i class="arr">&#9654;</i></span></div>
+      <div class="mi opt" data-opt="gfx"><span>GRAPHICS</span><span class="ov"><i class="arr">&#9664;</i><b>AUTO</b><i class="arr">&#9654;</i></span></div>
+      <button class="mi back" data-act="back">&#9664; BACK</button>
+    </div>
+    <div class="t-connect">
+      <div id="title-ctrl" class="ctrl-status"><i></i><span>Using mouse</span><small>Open Mimic on your phone, pick Wand or Grip.</small></div>
+      <div class="t-connect-row"><div class="mimic-scan" data-mimic-join="grip" data-compact></div><div id="rumble-status" class="rumble-status">Vibration: click to set up</div></div>
+    </div>
+  </div>
+  <div class="t-right">
+    <h3>HOW TO PLAY</h3>
+    <ul class="howto">
+      <li><svg viewBox="0 0 24 24"><ellipse cx="12" cy="7" rx="5" ry="5.5"/><path d="M12 12.5V22"/></svg><b>Hold it like a racket</b><span>Top end is the head</span></li>
+      <li><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg><b>Point and align</b><span>Whenever it drifts</span></li>
+      <li><svg viewBox="0 0 24 24"><path d="M4 18c3-9 10-13 16-12"/><path d="M16 3l4 3-3 4"/></svg><b>Swing as it arrives</b><span>You run on your own</span></li>
+      <li><svg viewBox="0 0 24 24"><path d="M12 21V5M5 11l7-7 7 7"/><path d="M3 21h18"/></svg><b>Your hand aims</b><span>Harder goes deeper</span></li>
+      <li><svg viewBox="0 0 24 24"><path d="M4 19c4 0 6-14 16-14"/><circle cx="20" cy="5" r="1.6"/><path d="M4 5c4 0 6 9 16 9" opacity=".5"/></svg><b>Spin</b><span>Up: topspin. Down: slice</span></li>
+      <li><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.6"/><path d="M12 10v11M8 14l4-4 4 4"/></svg><b>Serve</b><span>Toss, swing at the top</span></li>
+    </ul>
+    <div class="t-keys">
+      <span></span><b>WAND</b><b>GRIP</b>
+      <span>Toss / pick</span><span><kbd>A</kbd></span><span><kbd>Vol Down</kbd></span>
+      <span>Pause / back</span><span><kbd>B</kbd></span><span>tap <kbd>Vol Up</kbd></span>
+      <span>Align</span><span><kbd>Center</kbd></span><span>hold <kbd>Vol Up</kbd></span>
+    </div>
+    <details class="t-more"><summary>Mouse (testing)</summary><p>Sweep side to side to swing, up to down to serve, click to toss. <kbd>Esc</kbd> pause, <kbd>M</kbd> mute.</p></details>
+  </div>
+</div>
+
+<!-- ============ CIRCUIT INTRO ============ -->
+<div id="intro" class="screen modal hidden">
+  <div class="card wide intro" id="intro-card">
+    <div class="ladder" id="intro-ladder"></div>
+    <div class="e-kicker" id="intro-kicker">CIRCUIT</div>
+    <h2 id="intro-name">PIP</h2>
+    <div class="i-title" id="intro-title">THE LOBBER</div>
+    <p class="i-blurb" id="intro-blurb"></p>
+    <p class="i-tip" id="intro-tip"></p>
+    <div class="menu row" id="intro-menu">
+      <button class="mi primary" data-act="play">PLAY</button>
+      <button class="mi" data-act="back">BACK</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TWO-PLAYER LOBBY ============ -->
+<div id="lobby" class="screen modal hidden">
+  <div class="card wide lobby">
+    <div class="e-kicker">TWO PLAYERS · ONE SCREEN</div>
+    <h2>JOIN IN</h2>
+    <div class="slots">
+      <div class="slot" id="slot0"><b class="s-tag">P1</b><div class="s-state">PRESS A TO JOIN</div><div class="s-bar"><i></i></div><div class="s-help"></div><div class="s-join" data-mimic-join="grip" data-size="92"></div></div>
+      <div class="slot" id="slot1"><b class="s-tag">P2</b><div class="s-state">PRESS A TO JOIN</div><div class="s-bar"><i></i></div><div class="s-help"></div><div class="s-join" data-mimic-join="grip" data-size="92"></div></div>
+    </div>
+    <p class="lobby-status" id="lobby-status"></p>
+    <div class="menu row">
+      <button class="mi primary hidden" id="lobby-start">START</button>
+      <button class="mi" id="lobby-back">BACK</button>
+    </div>
+    <p class="hint">Split screen: P1 left, P2 right.</p>
+  </div>
+</div>
+
+<!-- ============ PAUSE ============ -->
+<div id="pause" class="screen modal hidden">
+  <div class="card">
+    <h2>PAUSED</h2>
+    <div class="menu" id="pause-menu">
+      <button class="mi primary" data-act="resume">RESUME</button>
+      <button class="mi" data-act="restart">RESTART</button>
+      <button class="mi" data-act="quit">MAIN MENU</button>
+    </div>
+    <p class="hint" id="pause-hint">Phone drifted? Point at the screen and tap <b>Center</b>.</p>
+  </div>
+</div>
+
+<!-- ============ MATCH END ============ -->
+<div id="end" class="screen modal hidden">
+  <div class="card wide">
+    <div class="ladder hidden" id="end-ladder"></div>
+    <div class="e-kicker" id="end-kicker">MATCH POINT CONVERTED</div>
+    <h2 id="end-title">CHAMPION</h2>
+    <div class="e-score" id="end-score">3 - 1</div>
+    <div class="e-stats" id="end-stats"></div>
+    <div class="menu row" id="end-menu"></div>
+  </div>
+</div>
+
+<div id="flash"></div>
+
+<script src="../lib/three.min.js"></script>
+<script type="module" src="../lib/vendor/loaders.js"></script>
+<script src="../lib/mimic.js"></script>
+<script src="../lib/mimic-link.js"></script>
+<script src="../lib/recorder.js"></script>
+<script src="../lib/wandcursor.js"></script>
+<script src="physics.js"></script>
+<script src="contact.js"></script>
+<script src="frame.js"></script>
+<script src="lobby.js"></script>
+<script src="audio.js"></script>
+<script src="world.js"></script>
+<script src="actors.js"></script>
+<script src="athletes.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

@@ -28,6 +28,73 @@
   }
   const V = p => new THREE.Vector3(p.x, p.y, p.z);
 
+  /** Light quality: every static world material except the ground goes Lambert (no GGX, no
+   * environment lookups): on an Iris Xe the jungle's plants cost about a third less to shade. The
+   * missing image-based ambient comes back as an ambient cube (envAmbient) so they keep their light. */
+  const liteCache = new WeakMap();
+  /** Ambient cube of an HDRI: the irradiance a matte surface facing +X, -X, +Y, -Y, +Z, -Z gets,
+   * scaled by level. It is what the standard material's image-based light adds, so Lambert can add
+   * the same, including the sunny side of a dusk sky. Directions follow envMap (the HDRI drawn on a
+   * SphereGeometry). */
+  const ambCache = {};
+  function envAmbient(key, level) {
+    const ck = key + level;
+    if (ambCache[ck]) return ambCache[ck];
+    const tex = DH.Assets.get(key), img = tex && tex.image;
+    if (!img || !img.data) return null;
+    const W = img.width, H = img.height, d = img.data, f = d instanceof Uint16Array ? THREE.DataUtils.fromHalfFloat : (x => x);
+    const E = [0, 1, 2, 3, 4, 5].map(() => [0, 0, 0]), st = 4;
+    for (let y = 0; y < H; y += st) {
+      const th = (y + 0.5) / H * Math.PI, sy = Math.cos(th), r = Math.sin(th), dw = r * (Math.PI / H * st) * (2 * Math.PI / W * st);
+      for (let x = 0; x < W; x += st) {
+        const ph = (x + 0.5) / W * 2 * Math.PI, dx = -Math.cos(ph) * r, dz = Math.sin(ph) * r;
+        const i = (y * W + x) * 4, R = f(d[i]) * dw, G = f(d[i + 1]) * dw, B = f(d[i + 2]) * dw;
+        const add = (k, c) => { if (c > 0) { E[k][0] += R * c; E[k][1] += G * c; E[k][2] += B * c; } };
+        add(0, dx); add(1, -dx); add(2, sy); add(3, -sy); add(4, dz); add(5, -dz);
+      }
+    }
+    return (ambCache[ck] = E.map(e => new THREE.Color(e[0] * level, e[1] * level, e[2] * level)));
+  }
+  // ambient cube for the diffuse light, plus a Schlick sheen of the sky at grazing angles (walls and
+  // wet ground seen edge-on lit up in the standard shading; plain Lambert left them dark)
+  const AMB_GLSL = `
+    { vec3 wn = inverseTransformDirection(normal, viewMatrix), q = wn * wn;
+      irradiance += q.x * (wn.x > 0.0 ? uAmb[0] : uAmb[1]) + q.y * (wn.y > 0.0 ? uAmb[2] : uAmb[3]) + q.z * (wn.z > 0.0 ? uAmb[4] : uAmb[5]);
+      vec3 rv = inverseTransformDirection(reflect(-geometry.viewDir, normal), viewMatrix), rq = rv * rv;
+      vec3 rad = (rq.x * (rv.x > 0.0 ? uAmb[0] : uAmb[1]) + rq.y * (rv.y > 0.0 ? uAmb[2] : uAmb[3]) + rq.z * (rv.z > 0.0 ? uAmb[4] : uAmb[5])) * RECIPROCAL_PI;
+      float fr = 0.04 + 0.96 * pow(1.0 - saturate(dot(normal, geometry.viewDir)), 5.0);
+      totalEmissiveRadiance += rad * fr * uSheen; }`;
+  function liteMaterials(root, amb) {
+    const U = { uAmb: { value: amb } };
+    const lite = m => {
+      if (liteCache.has(m)) return liteCache.get(m);
+      const l = new THREE.MeshLambertMaterial({ map: m.map, color: m.color, alphaTest: m.alphaTest, side: m.side, transparent: m.transparent,
+        opacity: m.opacity, depthWrite: m.depthWrite, normalMap: m.normalMap, emissive: m.emissive, emissiveMap: m.emissiveMap, emissiveIntensity: m.emissiveIntensity, vertexColors: m.vertexColors });
+      if (m.normalMap) l.normalScale.copy(m.normalScale);
+      const prev = m.onBeforeCompile, pk = m.customProgramCacheKey ? m.customProgramCacheKey() : '';
+      l.onBeforeCompile = (sh, r) => {
+        if (prev && prev !== THREE.Material.prototype.onBeforeCompile) prev.call(m, sh, r);
+        Object.assign(sh.uniforms, U);
+        sh.uniforms.uSheen = { value: m.alphaTest > 0 ? 0 : Math.max(0, 1 - m.roughness) * 1.6 + 0.15 };   // cut-out leaves would glow edge-on
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 uAmb[6]; uniform float uSheen;')
+          .replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>' + AMB_GLSL);
+      };
+      l.customProgramCacheKey = () => 'lite|' + pk;
+      l.userData.src = m;
+      liteCache.set(m, l);
+      return l;
+    };
+    // metals and the moving props (the ride's jeep, right under your gun) keep standard shading:
+    // without reflections they went nearly black, and they are only a few draws
+    const ok = m => m && m.isMeshStandardMaterial && m.metalness < 0.3;
+    const dyn = o => { for (let q = o; q && q !== root; q = q.parent) if (q.userData.noMerge) return true; return false; };
+    root.traverse(o => {
+      if (!o.isMesh || o.name === 'terrain' || o.isSkinnedMesh || dyn(o)) return;
+      if (Array.isArray(o.material)) o.material = o.material.map(m => (ok(m) ? lite(m) : m));
+      else if (ok(o.material)) o.material = lite(o.material);
+    });
+  }
+
   // ------------------------------------------------------------------ vegetation
   function vegetate(B, set) {
     const W = DH.WorldLib, d = B.d, q = B.q, R = B.R;
@@ -210,6 +277,12 @@
     vegetate(B, set);
     B.flushFences();
     B.mergeStatic();
+    if (B.q < 1) {
+      const lv = env.envLevel || (dusk ? 0.45 : overcast ? 0.55 : 0.4);
+      const g = new T.Color(0.8, 0.85, 0.85).multiplyScalar(lv / 0.4);
+      const amb = envAmbient(dusk ? 'world_hdr_dusk' : 'sky_hdr', lv) || [g, g, g.clone().multiplyScalar(1.4), g.clone().multiplyScalar(0.4), g, g];
+      liteMaterials(B.root, amb);
+    }
     if (env.rain) rain(B);
     scene.add(B.root);
 

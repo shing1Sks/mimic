@@ -548,7 +548,10 @@
     geo.setIndex(new T.BufferAttribute(idx, 1));
     geo.computeVertexNormals(); geo.computeBoundingSphere(); geo.computeBoundingBox();
 
-    const mat = B.own(new T.MeshStandardMaterial({ map: tex('forest_leaves_02'), normalMap: tex('forest_leaves_02', 'nor'), roughness: 1, metalness: 0 }));
+    // Light quality: no normal maps on the ground (five fewer lookups on the costliest shader on
+    // screen); the albedo blend and the wet road's roughness carry it
+    const lite = B.q < 1;
+    const mat = B.own(new T.MeshStandardMaterial({ map: tex('forest_leaves_02'), normalMap: lite ? null : tex('forest_leaves_02', 'nor'), roughness: 1, metalness: 0 }));
     mat.normalScale.set(1.2, 1.2);
     const U = {
       tG: { value: tex('leafy_grass') }, tM: { value: tex('mud_forest') }, tR: { value: tex('muddy_tracks') }, tK: { value: tex('mossy_rock') },
@@ -571,8 +574,10 @@
           vec2 uvR = vec2(vExtra.x + 0.5, vExtra.y * 0.5);
           vec3 cL = texture2D(map, uvL).rgb * tintL, cG = texture2D(tG, uvG).rgb * tintG, cM = texture2D(tM, uvM).rgb, cR = texture2D(tR, uvR).rgb * tintR, cK = texture2D(tK, uvK).rgb;
           // break up tiling with a second, rotated lookup of the forest floor
+          #ifndef TERRAIN_LITE
           cL = mix(cL, texture2D(map, vec2(uvL.y, -uvL.x) * 0.37).rgb * tintL, 0.35);
           cG = mix(cG, texture2D(tG, vec2(-uvG.y, uvG.x) * 0.41).rgb * tintG, 0.3);
+          #endif
           vec4 sp = vSplat; float sL = max(0.0, 1.0 - sp.x - sp.y - sp.z - sp.w);
           // height-aware blend: brighter (higher) texels win at the borders
           vec4 hw = sp * (vec4(tLum(cG), tLum(cM), tLum(cR) + 0.25, tLum(cK) + 0.1) + 0.35);
@@ -589,16 +594,22 @@
           float wetK = clamp(wet + rut * 0.45 + hw.y * wet, 0.0, 1.0);
           col *= 1.0 - wetK * 0.25;
           diffuseColor.rgb *= col;
+          #ifndef TERRAIN_LITE
           vec3 tn = (texture2D(normalMap, uvL).xyz * 2.0 - 1.0) * hl + (texture2D(nG, uvG).xyz * 2.0 - 1.0) * hw.x + (texture2D(nM, uvM).xyz * 2.0 - 1.0) * hw.y
                   + (texture2D(nR, uvR).xyz * 2.0 - 1.0) * hw.z + (texture2D(nK, uvK).xyz * 2.0 - 1.0) * hw.w;
           tn.xy *= 1.0 - rut * 0.6;
+          #endif
           float wsRough = clamp(0.95 * hl + 0.9 * hw.x + 0.8 * hw.y + 0.85 * hw.z + 0.75 * hw.w - wetK * 0.35, 0.4, 1.0);`)
         .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = wsRough;')
         .replace('vec3 mapN = texture2D( normalMap, vUv ).xyz * 2.0 - 1.0;', 'vec3 mapN = normalize(tn + vec3(0.0, 0.0, 0.35));');
     };
-    mat.customProgramCacheKey = () => 'ironfern-terrain';
+    if (lite) mat.defines = Object.assign({}, mat.defines, { TERRAIN_LITE: '' });
+    mat.customProgramCacheKey = () => 'ironfern-terrain' + (lite ? '-lite' : '');
     const mesh = new T.Mesh(geo, mat);
     mesh.receiveShadow = true; mesh.castShadow = false; mesh.name = 'terrain';
+    // drawn after the other opaque things: early depth rejects the ground hidden behind plants and props
+    // (it is the most expensive shader on screen)
+    mesh.renderOrder = 5;
     B.add(mesh);
     return { mesh, grid, splat: sp };
   }
@@ -611,14 +622,14 @@
       cloud: { value: o.cloud == null ? 0.6 : o.cloud }, cloudC: { value: new T.Color(o.cloudColor || 0xd8dcd8) }, uTime: shared.time, glow: { value: o.glow || 1 },
     };
     const mat = B.own(new T.ShaderMaterial({
-      uniforms: U, side: T.BackSide, depthWrite: false, fog: false,
+      uniforms: U, side: T.BackSide, depthWrite: false, fog: false, defines: { SKY_OCT: B.q < 1 ? 3 : 5 },
       vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); vec4 p = modelViewMatrix * vec4(position,1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w; }',
       fragmentShader: `
         uniform vec3 zen, hor, sunC, sunDir, cloudC; uniform float cloud, uTime, glow; varying vec3 vD;
         float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float n2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
           return mix(mix(h21(i), h21(i+vec2(1,0)), f.x), mix(h21(i+vec2(0,1)), h21(i+vec2(1,1)), f.x), f.y); }
-        float fbm(vec2 p){ float s = 0.0, a = 0.5; for (int i = 0; i < 5; i++){ s += a * n2(p); p *= 2.07; a *= 0.5; } return s; }
+        float fbm(vec2 p){ float s = 0.0, a = 0.5; for (int i = 0; i < SKY_OCT; i++){ s += a * n2(p); p *= 2.07; a *= 0.5; } return s; }
         void main(){
           vec3 d = normalize(vD); float y = max(d.y, 0.0);
           vec3 c = mix(hor, zen, pow(y, 0.55));
@@ -637,7 +648,8 @@
         }`,
     }));
     const m = new T.Mesh(B.own(new T.SphereGeometry(850, 48, 24)), mat);
-    m.renderOrder = -10; m.frustumCulled = false; m.name = 'sky';
+    // last of the opaque things (it sits at the far plane): only the sky actually visible is shaded
+    m.renderOrder = 10; m.frustumCulled = false; m.name = 'sky';
     B.add(m);
     B.anim.push(() => { m.position.copy(B.ctx.camera.position); });
     return m;

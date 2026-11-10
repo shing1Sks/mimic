@@ -202,7 +202,7 @@
     vmFlash.scale.setScalar(vmFlashSize * (0.75 + 0.5 * Math.random()) * (0.6 + 0.4 * k));
     vmFlash.material.opacity = k;
     vmLight.position.copy(_v);
-    vmLight.intensity = 1.2 * k;
+    vmLight.intensity = 9 * k;   // the flash lights the hands and the gun
   }
 
   const _a = new T.Vector3(), _b = new T.Vector3();
@@ -244,7 +244,7 @@
     vmFlash = new T.Sprite(new T.SpriteMaterial({ map: TEX.flash, transparent: true, depthWrite: false, blending: T.AdditiveBlending, color: 0xfff0d8 }));
     vmFlash.visible = false; vmFlash.renderOrder = 10;
     sc.add(vmFlash);
-    vmLight = new T.PointLight(0xffb066, 0, 2.5, 2);
+    vmLight = new T.PointLight(0xffb066, 0, 3, 2);
     sc.add(vmLight);
     const geo = new T.CylinderGeometry(0.0045, 0.0045, 0.028, 10);
     const mat = new T.MeshStandardMaterial({ color: 0xc9a14e, metalness: 1, roughness: 0.28 });

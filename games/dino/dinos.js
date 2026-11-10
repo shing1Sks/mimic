@@ -587,7 +587,7 @@
         }
         break;
       }
-      case 'roar': voice(d, 'roar'); oneShot(d, 'Attack', { rate: 0.45, weight: 0.5 }); if (ctx.addShake && hdist(d.pos, playerPos()) < 50) ctx.addShake(0.35); break;
+      case 'roar': voice(d, 'roar'); oneShot(d, 'Attack', { rate: 0.45, weight: 0.5 }); if (ctx.addShake && hdist(d.pos, playerPos()) < 50) ctx.addShake(0.35); if (DH.bus) DH.bus.emit('dino:roar', { dino: d, dist: hdist(d.pos, playerPos()) }); break;
       case 'reached': if (DH.bus) DH.bus.emit('dino:reached', { dino: d, point: d.target.clone() }); voice(d, 'idle'); break;
       case 'alarm': voice(d, 'alarm'); break;
       case 'state':
@@ -619,6 +619,9 @@
       const dp = hdist(d.pos, playerPos());
       sfx(Math.random() < 0.5 ? 'stomp1' : 'stomp2', d.pos, (d.species === 'rex' ? 0.9 : 0.55) * (run ? 1.2 : 0.8), d.species === 'rex' ? 0.6 : 0.8, d.species === 'rex' ? 16 : 10);
       if (d.species === 'rex' && dp < 45 && ctx.addShake) ctx.addShake(0.12 * (1 - dp / 45) * (run ? 2 : 1));
+      // the phone feels the big ones walking (feel.js)
+      const feelR = d.species === 'rex' ? 60 : 30;
+      if (dp < feelR && DH.bus) DH.bus.emit('dino:step', { dino: d, near: (1 - dp / feelR) * (run ? 1 : 0.6) });
     }
     d.stepPhase = ph;
   }

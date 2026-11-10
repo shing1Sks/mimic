@@ -188,6 +188,8 @@
   let slot = 0, pending = -1, switchPhase = 0; // 0 idle, 1 lowering, 2 raising
   let switchT = 0, adsT = 0, lowerAmt = 0, scopeOverlay = null;
   let kickZ = 0, kickR = 0, swayX = 0, swayY = 0, shootAnimT = 0, reloadSoundT = -1;
+  // recoil springs (slightly under-damped: the gun snaps back, overshoots a hair and settles)
+  let kickZv = 0, kickRv = 0, kickRoll = 0, kickRollV = 0;
   const SWITCH_DOWN = 0.2, SWITCH_UP = 0.28;
 
   const W = DH.Weapons = {
@@ -203,9 +205,11 @@
     vmScene = new T.Scene();
     vmCamera = new T.PerspectiveCamera(50, innerWidth / innerHeight, 0.01, 20);
     vmScene.add(vmCamera);
-    const key = new T.DirectionalLight(0xfff0dc, 3.2); key.position.set(-1, 2, 1.2); vmScene.add(key);
-    const rim = new T.DirectionalLight(0xbcd2ff, 0.9); rim.position.set(1.5, 0.6, -1); vmScene.add(rim);
-    vmScene.add(new T.HemisphereLight(0xc8d8f0, 0x2a2618, 0.5));
+    // key from above-left like the jungle sun through the canopy, a cool rim to draw the gun's
+    // silhouette against the foliage, and a dim bounce from the ground
+    const key = new T.DirectionalLight(0xfff0dc, 2.4); key.position.set(-1, 2, 1.2); vmScene.add(key);
+    const rim = new T.DirectionalLight(0xbcd2ff, 1.5); rim.position.set(1.5, 0.8, -1.2); vmScene.add(rim);
+    vmScene.add(new T.HemisphereLight(0xb8c8d8, 0x3a3020, 0.42));
     W.vm = { scene: vmScene, camera: vmCamera };
     scopeOverlay = document.getElementById('scope');
     if (scopeOverlay) buildScope(scopeOverlay);
@@ -226,15 +230,120 @@
   }
 
   let glassMat = null;
-  function tuneMaterial(m, rigged) {
-    if (!m || !m.isMeshStandardMaterial) return;
-    const n = m.name || '';
-    if (/skin/i.test(n)) { m.metalness = 0; m.roughness = 0.55; }
-    else if (/shirt|glove/i.test(n)) { m.metalness = 0; m.roughness = 0.85; }
-    else if (/wood|bakelite|plastic|frame|mag/i.test(n)) { m.metalness = 0.05; m.roughness = 0.55; }
-    else if (rigged) { m.metalness = 0.75; m.roughness = Math.max(0.32, m.roughness); }
-    else { m.metalness = 0.35; m.roughness = 0.45; }
-    m.envMapIntensity = 1.2;
+  // The rigs ship flat colours on low-poly arms; under the old bright rig they read as mint sleeves
+  // and pink wood. Each material gets a real colour and a surface: a procedural detail texture
+  // (fabric weave, glove grain, wood grain, mottling) mapped in the mesh's own space (the UVs are
+  // unusable), bumped through screen-space derivatives so it works on the skinned meshes too.
+  const LOOKS = [
+    // [name, colour, metalness, roughness, env, detail: freq (repeats per mesh length), mix (weave, grain, wood, mottle), dark, bump, rough, tint]
+    [/shirt/i, 0x2c3322, 0, 0.92, 0.45, { freq: 9, mix: [1, 0, 0, 0.25], dark: 0.45, bump: 0.9, rough: 0.12, tint: 0.16 }],
+    [/glove/i, 0x121314, 0, 0.84, 0.28, { freq: 2.5, mix: [0, 1, 0, 0.3], dark: 0.35, bump: 0.7, rough: 0.25, tint: 0.1 }],
+    [/skin/i, 0xa9785a, 0, 0.58, 0.5, { freq: 2, mix: [0, 0.4, 0, 0.6], dark: 0.12, bump: 0.25, rough: 0.12, tint: 0.12 }],
+    [/wood/i, 0x4a2412, 0, 0.5, 0.7, { freq: 1.6, mix: [0, 0, 1, 0.2], dark: 0.55, bump: 0.35, rough: 0.2, tint: 0.22 }],
+    [/bakelite/i, 0x4a1c10, 0.05, 0.4, 0.8, { freq: 1.5, mix: [0, 0.2, 0, 0.8], dark: 0.18, bump: 0.15, rough: 0.2, tint: 0.14 }],
+    [/plastic|frame|grayshade|^black/i, 0x1f2022, 0, 0.6, 0.7, { freq: 2.5, mix: [0, 0.8, 0, 0.4], dark: 0.2, bump: 0.35, rough: 0.2, tint: 0.06 }],
+    [/magazine/i, 0x1c1d1f, 0.1, 0.55, 0.7, { freq: 2.5, mix: [0, 0.8, 0, 0.4], dark: 0.2, bump: 0.3, rough: 0.2, tint: 0.06 }],
+    [/bullet|casing|tip/i, null, 0.9, 0.3, 1.0, null],
+    [/metal|slide/i, 0x2a2c2f, 0.85, 0.4, 0.9, { freq: 1.5, mix: [0, 0.3, 0, 1], dark: 0.1, bump: 0.1, rough: 0.3, tint: 0.12 }],
+  ];
+  let detailTex = null;
+  function makeDetailTex() {
+    // a DataTexture, not a canvas: a 2D canvas premultiplies alpha and would wreck the other channels
+    const S = 256, d = new Uint8Array(S * S * 4);
+    const h = (x, y) => { const v = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return v - Math.floor(v); };
+    const vn = (x, y, p) => { // tileable value noise, period p
+      const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+      const w = (a, b) => h(((a % p) + p) % p, ((b % p) + p) % p);
+      return (w(xi, yi) * (1 - u) + w(xi + 1, yi) * u) * (1 - v) + (w(xi, yi + 1) * (1 - u) + w(xi + 1, yi + 1) * u) * v;
+    };
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const i = (y * S + x) * 4, u = x / S, v = y / S;
+      // R: plain weave (over-under threads), 16 threads a tile
+      const tx = u * 16, ty = v * 16, cx = Math.floor(tx), cy = Math.floor(ty);
+      const fx = tx - cx, fy = ty - cy;
+      const weave = (cx + cy) % 2 === 0 ? Math.sin(Math.PI * fy) * (0.75 + 0.25 * Math.sin(Math.PI * fx)) : Math.sin(Math.PI * fx) * (0.75 + 0.25 * Math.sin(Math.PI * fy));
+      // G: pebbled grain
+      const grain = 0.55 * vn(u * 48, v * 48, 48) + 0.3 * vn(u * 96, v * 96, 96) + 0.15 * vn(u * 12, v * 12, 12);
+      // B: wood grain, rings across v warped by noise
+      const warp = vn(u * 4, v * 24, 4) * 2.2 + vn(u * 8, v * 64, 8) * 0.5;
+      const ring = 0.5 + 0.5 * Math.sin((v * 22 + warp) * Math.PI * 2);
+      const wood = Math.pow(ring, 3) * 0.7 + vn(u * 64, v * 256, 64) * 0.3;
+      // A: soft mottling
+      const mot = 0.6 * vn(u * 6, v * 6, 6) + 0.4 * vn(u * 20, v * 20, 20);
+      d[i] = weave * 255; d[i + 1] = grain * 255; d[i + 2] = wood * 255; d[i + 3] = mot * 255;
+    }
+    const t = new T.DataTexture(d, S, S, T.RGBAFormat);
+    t.needsUpdate = true;
+    t.magFilter = T.LinearFilter;
+    t.wrapS = t.wrapT = T.RepeatWrapping; t.generateMipmaps = true; t.minFilter = T.LinearMipmapLinearFilter; t.anisotropy = 4;
+    return t;
+  }
+  function addDetail(m, det, len) {
+    detailTex = detailTex || makeDetailTex();
+    const u = { dTex: { value: detailTex }, dFreq: { value: det.freq / Math.max(1e-4, len) }, dMix: { value: new T.Vector4(det.mix[0], det.mix[1], det.mix[2], det.mix[3]) },
+      dDark: { value: det.dark }, dBump: { value: det.bump }, dRough: { value: det.rough }, dTint: { value: det.tint } };
+    m.onBeforeCompile = sh => {
+      Object.assign(sh.uniforms, u);
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vDetP; varying vec3 vDetN; uniform float dFreq;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvDetP = position * dFreq; vDetN = normal;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+          varying vec3 vDetP; varying vec3 vDetN; uniform sampler2D dTex; uniform vec4 dMix; uniform float dDark, dBump, dRough, dTint;
+          float detH; float detM;`)
+        .replace('#include <map_fragment>', `#include <map_fragment>
+          {
+            vec3 bw = pow(abs(normalize(vDetN)), vec3(4.0)); bw /= (bw.x + bw.y + bw.z);
+            vec4 s = texture2D(dTex, vDetP.yz) * bw.x + texture2D(dTex, vDetP.xz) * bw.y + texture2D(dTex, vDetP.xy) * bw.z;
+            detH = dot(s.rgb, dMix.rgb) / max(1e-3, dMix.r + dMix.g + dMix.b);
+            detM = s.a;
+            diffuseColor.rgb *= (1.0 - dDark * (1.0 - detH)) * (1.0 + dTint * (detM - 0.5) * 2.0 * dMix.a);
+          }`)
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = clamp(roughnessFactor + dRough * (detM - 0.5) - dRough * 0.5 * (detH - 0.5), 0.05, 1.0);')
+        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+          {
+            // bump from the detail height through screen derivatives (as three's perturbNormalArb)
+            vec3 vSigmaX = dFdx(-vViewPosition), vSigmaY = dFdy(-vViewPosition);
+            vec3 R1 = cross(vSigmaY, normal), R2 = cross(normal, vSigmaX);
+            float fDet = dot(vSigmaX, R1) * faceDirection;
+            vec2 dH = vec2(dFdx(detH), dFdy(detH)) * dBump * 0.0004; // height in metres: ~0.4 mm of relief
+            vec3 vGrad = sign(fDet) * (dH.x * R1 + dH.y * R2);
+            normal = normalize(abs(fDet) * normal - vGrad);
+          }`);
+    };
+    m.customProgramCacheKey = () => 'vm-detail';
+    m.needsUpdate = true;
+  }
+  function tuneMaterial(m, rigged, len) {
+    if (!m || !m.isMeshStandardMaterial || m.userData.tuned) return;
+    m.userData.tuned = true;
+    if (!rigged) { m.metalness = Math.max(0.3, m.metalness); m.roughness = 0.45; m.envMapIntensity = 0.8; return; } // the textured M21
+    const look = LOOKS.find(l => l[0].test(m.name || ''));
+    if (!look) { m.metalness = 0.75; m.roughness = Math.max(0.32, m.roughness); m.envMapIntensity = 0.9; return; }
+    if (look[1] != null) m.color.setHex(look[1]);
+    m.metalness = look[2]; m.roughness = look[3]; m.envMapIntensity = look[4];
+    if (look[5]) addDetail(m, look[5], len);
+  }
+  /** Low-poly arms read as boxes: average the normals of coincident vertices whose faces are
+   * within `deg` of each other (hard edges stay hard). */
+  function smoothNormals(geo, deg) {
+    const pos = geo.attributes.position, nor = geo.attributes.normal;
+    if (!pos || !nor) return;
+    const cos = Math.cos(deg * Math.PI / 180), map = new Map(), n = pos.count;
+    const keyOf = i => Math.round(pos.getX(i) * 1e4) + ',' + Math.round(pos.getY(i) * 1e4) + ',' + Math.round(pos.getZ(i) * 1e4);
+    for (let i = 0; i < n; i++) { const k = keyOf(i); let l = map.get(k); if (!l) map.set(k, l = []); l.push(i); }
+    const out = new Float32Array(n * 3);
+    map.forEach(list => {
+      for (const i of list) {
+        let x = 0, y = 0, z = 0;
+        const ax = nor.getX(i), ay = nor.getY(i), az = nor.getZ(i);
+        for (const j of list) {
+          const bx = nor.getX(j), by = nor.getY(j), bz = nor.getZ(j);
+          if (ax * bx + ay * by + az * bz >= cos) { x += bx; y += by; z += bz; }
+        }
+        const l = Math.hypot(x, y, z) || 1;
+        out[i * 3] = x / l; out[i * 3 + 1] = y / l; out[i * 3 + 2] = z / l;
+      }
+    });
+    geo.setAttribute('normal', new T.BufferAttribute(out, 3));
   }
 
   const _v = new T.Vector3();
@@ -263,8 +372,13 @@
       if (o.isMesh) {
         o.frustumCulled = false; o.castShadow = false; o.receiveShadow = false;
         if (o.name === 'Glass') { // scope lens: dark coated glass, not a white disc
-          o.material = glassMat = glassMat || new T.MeshStandardMaterial({ color: 0x07131a, metalness: 0.6, roughness: 0.04, envMapIntensity: 1.6 });
-        } else (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => tuneMaterial(m, !!cfg.anims));
+          o.material = glassMat = glassMat || new T.MeshStandardMaterial({ color: 0x050a0c, metalness: 0.5, roughness: 0.12, envMapIntensity: 0.55 });
+        } else {
+          if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+          const sz = o.geometry.boundingBox.getSize(new T.Vector3()), len = Math.max(sz.x, sz.y, sz.z);
+          if (/^ArmModel/.test(o.name) && !o.geometry.userData.smoothed) { smoothNormals(o.geometry, 55); o.geometry.userData.smoothed = true; }
+          (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => tuneMaterial(m, !!cfg.anims, len));
+        }
       }
     });
     // measure the gun (skinned vertices in the current pose) in wrapper-parent space
@@ -339,7 +453,7 @@
     states = {};
     ORDER.forEach(id => { states[id] = createState(SPECS[id]); });
     slot = 0; pending = -1; switchPhase = 2; switchT = 0;
-    adsT = 0; W.ads = 0; kickZ = kickR = 0; reloadSoundT = -1;
+    adsT = 0; W.ads = 0; kickZ = kickR = kickZv = kickRv = kickRoll = kickRollV = 0; reloadSoundT = -1;
     W.current = states[ORDER[slot]];
     setScoped(false);
     if (ctx) ctx.fovZoom = 1;
@@ -438,7 +552,7 @@
     const k = recoil(spec, st.shotIndex - 1, Math.random(), { ads: W.scoped || adsT > 0.6 });
     ctx.addKick(k.pitch, k.yaw);
     ctx.addShake(spec.shake);
-    kickZ += cfg.kickBack; kickR += cfg.kickRot;
+    kickZv += cfg.kickBack * 30; kickRv += cfg.kickRot * 30; kickRollV += (Math.random() - 0.5) * cfg.kickRot * 22;
     if (g && g.actions.shoot) { const a = g.actions.shoot; a.reset(); a.play(); shootAnimT = a.getClip().duration; }
     if (W.scoped && scopeOverlay) scopeOverlay.style.setProperty('--kick', '1');
   }
@@ -551,8 +665,12 @@
       g.mixer.update(dt);
     }
     // springs
-    const kd = Math.exp(-dt * 13);
-    kickZ *= kd; kickR *= Math.exp(-dt * 10);
+    const spring = (x, v, k, z, h) => { v += (-k * x - 2 * Math.sqrt(k) * z * v) * h; return [x + v * h, v]; };
+    for (let i = 0, n = Math.max(1, Math.ceil(dt / 0.008)), h = dt / n; i < n; i++) {
+      [kickZ, kickZv] = spring(kickZ, kickZv, 520, 0.8, h);
+      [kickR, kickRv] = spring(kickR, kickRv, 300, 0.6, h);
+      [kickRoll, kickRollV] = spring(kickRoll, kickRollV, 260, 0.55, h);
+    }
     swayX += (Math.max(-0.03, Math.min(0.03, -f.dx * 0.00022)) - swayX) * Math.min(1, dt * 8);
     swayY += (Math.max(-0.03, Math.min(0.03, f.dy * 0.00022)) - swayY) * Math.min(1, dt * 8);
     const lowerTarget = ducking ? 1 : 0;
@@ -584,7 +702,7 @@
     const dx = tx - pv.position.x, dy = ty - pv.position.y, dz = tz - pv.position.z;
     const yaw = Math.atan2(-dx, -dz), pitch = Math.atan2(dy, Math.hypot(dx, dz));
     const dk = p.dodgeT > 0 && DH.Player ? Math.sin(Math.PI * (1 - p.dodgeT / DH.Player.DODGE_WINDOW)) * (p.dodgeDir || 1) : 0;
-    let rx = pitch + kickR - low * 0.9, rz = -dk * 0.35 + swayX * 2, ry = yaw;
+    let rx = pitch + kickR - low * 0.9, rz = -dk * 0.35 + swayX * 2 + kickRoll, ry = yaw;
     if (cfg.procedural) {
       // bolt cycle after a shot, and a tilt-and-swap reload with the mag dropping out
       const since = st.sinceShot;

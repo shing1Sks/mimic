@@ -607,6 +607,8 @@
       if (waveSt) waveSt.kills++;
       if (pts < 0) feed((NAMES[sp] || 'Animal') + ' killed', pts, 'penalty');
       else feed(weak ? WEAK_LABEL[d.zone] : (NAMES[sp] || 'Target') + ' down', pts, weak ? 'weak' : 'kill');
+      // a kill inside ADRENALINE (feel.js) pays half again
+      if (pts > 0 && DH.Feel && DH.Feel.adrenaline()) { const b = Math.round(pts / 2); S.stats.killPoints += b; feed('Clutch', b, 'weak'); }
     });
     on('player:hurt', d => { S.stats.damageTaken += d.damage || 0; });
     on('player:dead', () => { if (playing()) fail('You were taken down'); });

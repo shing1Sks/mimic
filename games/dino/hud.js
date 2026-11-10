@@ -10,30 +10,44 @@
 
   // Mimic Grip mode: the phone in your fist sends its motion (aim) and the volume keys; CENTRE is the
   // one on-screen button. Mouse + keyboard shown small.
+  // A browser phone (games/phone) has on-screen Grip buttons instead: `web` is its wording.
   const CONTROLS = {
-    fire: { phone: 'VOL DOWN', verb: 'fire', key: 'click' },
-    reload: { phone: 'TAP VOL UP', verb: 'reload', key: 'R' },
+    fire: { phone: 'VOL DOWN', web: 'HOLD', verb: 'fire', key: 'click' },
+    reload: { phone: 'TAP VOL UP', web: 'TAP B', verb: 'reload', key: 'R' },
     align: { phone: 'CENTRE', verb: 'align', key: 'V' },
-    switch: { phone: 'DOUBLE VOL UP', verb: 'switch', key: 'Q' },
+    switch: { phone: 'DOUBLE VOL UP', web: 'SWITCH', verb: 'switch', key: 'Q' },
     dodge: { phone: 'FLICK', verb: 'dodge', key: 'Space' },
     scope: { phone: 'HOLD STEADY', verb: 'scope', key: 'right click' },
-    pause: { phone: 'HOLD VOL UP 2 S', verb: 'pause', key: 'Esc' },
+    pause: { phone: 'HOLD VOL UP 2 S', web: 'HOLD CENTRE 1 S', verb: 'pause', key: 'Esc' },
   };
+  /** True while the phone driving the game is a browser phone in Grip (HOLD / B / CENTRE / SWITCH). */
+  function webGrip() {
+    const ph = DH.Input && DH.Input.phone, mc = ph && ph.mc;
+    return !!(ph && ph.connected && mc && mc.mode === 'grip' && mc.via === 'browser');
+  }
+  const pk = c => (webGrip() && c.web) || c.phone;
+  /** Text that differs for a browser phone; applyWeb() swaps every one in place (no re-render). */
+  const sw = (app, web) => `<span data-app="${esc(app)}" data-web="${esc(web)}">${esc(app)}</span>`;
+  function applyWeb() {
+    H.web = webGrip();
+    document.querySelectorAll('[data-web]').forEach(n => { const t = H.web ? n.dataset.web : n.dataset.app; if (n.textContent !== t) n.textContent = t; });
+  }
   // seconds before impact when the prompt switches from GET READY to DODGE (a dodge lasts ~0.55 s)
   const DODGE_CALL = Math.min(0.5, ((DH.Player && DH.Player.DODGE_WINDOW) || 0.55) - 0.05);
   const ORDER_KEYS = ['fire', 'reload', 'align', 'switch', 'dodge', 'pause'];
-  const chip = (id, cls) => { const c = CONTROLS[id]; return `<span class="kc ${cls || ''}"><b>${c.phone}</b><em>${c.verb}</em><small>${c.key}</small></span>`; };
-  const ALIGN_TIP = 'Hold the phone the way you like, point it at the centre of the screen, then press CENTRE on the phone (or hold VOL UP). Do it again any time the crosshair feels off.';
+  const chip = (id, cls) => { const c = CONTROLS[id]; return `<span class="kc ${cls || ''}"><b>${c.web ? sw(c.phone, c.web) : c.phone}</b><em>${c.verb}</em><small>${c.key}</small></span>`; };
+  const ALIGN_TIP = `${esc('Hold the phone the way you like, point it at the centre of the screen, then press CENTRE on the phone')}${sw(' (or hold VOL UP)', '')}. Do it again any time the crosshair feels off.`;
   const PAIR_TIP = 'On your phone: open Mimic, choose <b>Grip</b>, and pair over Bluetooth. The phone is read as a motion controller: just point it.';
   /** Mimic family hint bar: what the Grip (and the mouse) does on each screen. */
   const kb = (k, t) => `<span><kbd>${k}</kbd>${t}</span>`;
+  const VD = sw('Vol Down', 'HOLD'), VU = sw('Vol Up', 'B');
   const HINTS = {
-    title: kb('Vol Down / click', 'start'),
-    select: kb('Point phone / mouse', 'choose') + kb('Vol Down / click', 'play mission') + kb('Vol Up / R', 'back'),
-    briefing: kb('Vol Down / click', 'begin') + kb('Vol Up / R', 'missions'),
-    pause: kb('Vol Down / click', 'choose') + kb('Vol Up / R', 'resume'),
-    results: kb('Vol Down / click', 'choose') + kb('Vol Up / R', 'missions'),
-    settings: kb('Point + Vol Down / click', 'change') + kb('Vol Up / R', 'done'),
+    title: kb(VD + ' / click', 'start'),
+    select: kb('Point phone / mouse', 'choose') + kb(VD + ' / click', 'play mission') + kb(VU + ' / R', 'back'),
+    briefing: kb(VD + ' / click', 'begin') + kb(VU + ' / R', 'missions'),
+    pause: kb(VD + ' / click', 'choose') + kb(VU + ' / R', 'resume'),
+    results: kb(VD + ' / click', 'choose') + kb(VU + ' / R', 'missions'),
+    settings: kb('Point + ' + VD + ' / click', 'change') + kb(VU + ' / R', 'done'),
   };
   function family(state) {
     let b = $('mbadge'), h = $('mhint');
@@ -199,6 +213,7 @@
   // ---------------------------------------------------------------- per-frame HUD
   function update(dt, c) {
     ctx = c || ctx;
+    if (H.web !== webGrip()) applyWeb();   // controller changed: swap Vol keys <-> browser buttons
     if (ctx && ctx.state !== 'play') badge();
     if (!ctx || ctx.state !== 'play') return;
     const W = DH.Weapons || {}, w = W.current, p = ctx.player || {}, M = DH.Missions && DH.Missions.state;
@@ -248,7 +263,7 @@
       } else el.amReload.classList.remove('on');
       needReload = w.mag === 0 && !w.reloading && w.reserve > 0;
       empty = w.mag === 0 && !w.reloading && !(w.reserve > 0);
-      el.amHint.textContent = empty ? 'DOUBLE VOL UP: switch' : '';
+      el.amHint.textContent = empty ? pk(CONTROLS.switch) + ': switch' : '';
     } else { el.amName.textContent = 'Carbine'; el.amMag.textContent = '–'; el.amRes.textContent = ''; }
 
     // prompt: attack telegraph > result flash > reload > mission hint
@@ -276,8 +291,8 @@
       el.prWord.textContent = pr.word;
       const c = pr.ctl && CONTROLS[pr.ctl];
       const hint = pr.cls.indexOf('hint') >= 0;
-      el.prPhone.textContent = c ? c.phone : '';
-      el.prKey.innerHTML = !c ? '' : hint ? `<b>${c.phone}</b>${esc(c.key)}` : esc(c.key);
+      el.prPhone.textContent = c ? pk(c) : '';
+      el.prKey.innerHTML = !c ? '' : hint ? `<b>${pk(c)}</b>${esc(c.key)}` : esc(c.key);
       el.ring.style.strokeDashoffset = (238.76 * (1 - (pr.frac == null ? 1 : pr.frac))).toFixed(1);
     } else el.prompt.className = '';
 
@@ -314,7 +329,7 @@
           <div class="brand"><div class="logo">IRONFERN</div><div class="tag">Halcyon Biotech containment failure &middot; day 41</div></div>
           <p class="premise">The park fell six weeks ago. Hold your ground, reach the survivors, put down what owns the island.</p>
           <div class="ti-go">
-            <button class="cta" id="ti-start">Vol Down / click to start</button>
+            <button class="cta" id="ti-start">${VD} / click to start</button>
             <div class="mimic-scan" data-mimic-join="grip" data-compact data-label="No app? Scan to play"></div>
           </div>
         </div>
@@ -323,12 +338,12 @@
           <ul class="ti-how">
             <li><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg><span><b>Point to aim</b> 1:1, no aim assist</span></li>
             <li><svg viewBox="0 0 24 24"><path d="M3 17h18M6 17V9h8l3 4v4"/><circle cx="8" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg><span><b>You never walk</b> hold positions, the jeep moves you</span></li>
-            <li><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 3-6.2"/><path d="M4 3v4h4"/></svg><span><b>Drifting?</b> point at the centre, CENTRE or hold VOL UP</span></li>
+            <li><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 3-6.2"/><path d="M4 3v4h4"/></svg><span><b>Drifting?</b> point at the centre, ${sw('CENTRE or hold VOL UP', 'press CENTRE')}</span></li>
           </ul>
           <div class="ctl-grid">${ORDER_KEYS.map(k => chip(k, 'lg')).join('')}</div>
           <details class="more"><summary>More</summary>
             <div class="pair">${PAIR_TIP}</div>
-            <div class="small">${esc(ALIGN_TIP)} Mouse and keyboard work too (keys shown small). To pause, keep holding VOL UP for about 2 seconds, or press Esc.</div>
+            <div class="small">${ALIGN_TIP} Mouse and keyboard work too (keys shown small). To pause, keep holding ${sw('VOL UP for about 2 seconds', 'CENTRE for about a second')}, or press Esc.</div>
           </details>
         </div>
       </div>`;
@@ -363,11 +378,11 @@
         <div class="pn-head"><span class="pn-kicker">Mission ${String(ord.indexOf(id) + 1).padStart(2, '0')} &middot; briefing</span><span class="pn-title big">${esc(m.title)}</span></div>
         <p class="br-text">${esc(m.brief)}</p>
         <div class="br-obj"><span>Objective</span><b>${esc(m.objective)}</b></div>
-        <div class="br-align"><b>First, align:</b> point at the centre of the screen, press CENTRE (or hold VOL UP).</div>
+        <div class="br-align"><b>First, align:</b> point at the centre of the screen, press CENTRE${sw(' (or hold VOL UP)', '')}.</div>
         <div class="br-ctl-lbl">What you will need</div>
         <div class="ctl-row">${(m.controls || []).slice(0, 3).map(k => chip(k, 'xl')).join('')}</div>
         ${m.best ? `<div class="br-best">${stars(m.best.stars)} Best ${num(m.best.score)}</div>` : ''}
-        <button class="cta" id="br-go">Vol Down / click to begin</button>
+        <button class="cta" id="br-go">${VD} / click to begin</button>
       </div>`;
     $('briefing').onclick = () => go('play');
   }
@@ -499,6 +514,7 @@
       if (prev === 'briefing') { H.qAtLoad = ctx && ctx.settings ? ctx.settings.quality : 1; H.keysT = 0; H.hurtA = 0; H.prompt = null; H.flash = null; el.feed.innerHTML = ''; H.needAlign = true; H.playT = now(); H.hurtDirs = []; }
     }
     family(state);
+    applyWeb();
     H.lastScreen = state;
   }
 

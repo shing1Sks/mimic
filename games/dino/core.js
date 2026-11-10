@@ -24,6 +24,8 @@
   // let the governor (signs.js) trade resolution for frame rate on a weak GPU.
   const BASE_PR = Math.min(1, devicePixelRatio || 1);
   let gov = DH.Signs.governor({ min: 0.6, max: 1 });
+  // Light quality may drop further (FXAA on the copy keeps 0.5 tidy); set per mission in startMission
+  const govFor = q => DH.Signs.governor({ min: q < 1 ? 0.5 : 0.6, max: 1 });
   renderer.setPixelRatio(BASE_PR);
   renderer.outputEncoding = T.sRGBEncoding;
   renderer.toneMapping = T.ACESFilmicToneMapping;
@@ -198,6 +200,7 @@
       call('Missions', 'start', id, ctx);
       ctx.aim = DH.Aim.create(ctx.view.stand);
       prewarm(id);
+      gov = govFor(settings.quality || 1);
       ctx.shadowDirty = true;
       Core.go('briefing', { id });
     },
@@ -259,11 +262,12 @@
   const _sz = new T.Vector2();
   let worldRT = null;
   const blit = new T.Mesh(new T.PlaneGeometry(2, 2), new T.ShaderMaterial({
-    uniforms: { tMap: { value: null }, uScale: { value: new T.Vector2(1, 1) }, uMax: { value: new T.Vector2(1, 1) }, uTexel: { value: new T.Vector2(1, 1) }, uFxaa: { value: 0 } },
+    uniforms: { tMap: { value: null }, uScale: { value: new T.Vector2(1, 1) }, uMax: { value: new T.Vector2(1, 1) }, uTexel: { value: new T.Vector2(1, 1) }, uFxaa: { value: 0 },
+      uSat: { value: 1 }, uVig: { value: 0 } },
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
     // FXAA (3.11 "lite") on the copy when the target is not multisampled: MSAA costs ~10 ms a frame
     // on an Iris Xe with this much alpha-tested foliage, FXAA well under 1 ms
-    fragmentShader: `uniform sampler2D tMap; uniform vec2 uScale, uMax, uTexel; uniform float uFxaa; varying vec2 vUv;
+    fragmentShader: `uniform sampler2D tMap; uniform vec2 uScale, uMax, uTexel; uniform float uFxaa, uSat, uVig; varying vec2 vUv;
       vec3 tap(vec2 uv) { return texture2D(tMap, min(uv, uMax)).rgb; }
       float lum(vec3 c) { c = c / (1.0 + c); return dot(c, vec3(0.299, 0.587, 0.114)); }
       void main() {
@@ -283,6 +287,11 @@
           float lB = lum(bb);
           col = (lB < lMin || lB > lMax) ? a : bb;
         }
+        // slow motion grade (feel.js): drain the colour, close in the edges
+        float gl = dot(col, vec3(0.299, 0.587, 0.114));
+        col = mix(vec3(gl), col, uSat);
+        vec2 vq = vUv - 0.5;
+        col *= 1.0 - uVig * smoothstep(0.18, 0.75, dot(vq, vq) * 2.2) * 0.85;
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
         #include <encodings_fragment>
@@ -305,6 +314,8 @@
     const u = blit.material.uniforms;
     u.tMap.value = worldRT.texture; u.uScale.value.set(w / _sz.x, h / _sz.y); u.uMax.value.set((w - 0.5) / _sz.x, (h - 0.5) / _sz.y);
     u.uTexel.value.set(1 / _sz.x, 1 / _sz.y); u.uFxaa.value = worldRT.samples ? 0 : 1;
+    const gr = ctx.state === 'play' || ctx.state === 'pause' ? ctx.grade : null;
+    u.uSat.value = gr ? gr.sat : 1; u.uVig.value = gr ? gr.vig : 0;
     renderer.clear(); renderer.render(blitScene, blitCam);
   }
 
@@ -340,11 +351,15 @@
   let last = performance.now();
   function frame(now) {
     requestAnimationFrame(frame);
-    const dt = Math.min(0.05, (now - last) / 1000); last = now;
-    ctx.dt = dt; ctx.time += dt;
+    // rdt: real seconds (aim, camera, the gun, HUD); dt: world seconds, slowed by hit-stops and
+    // ADRENALINE (feel.js): animals, missions, effects, the player's dodge
+    const rdt = Math.min(0.05, (now - last) / 1000); last = now;
+    const k = DH.Feel ? DH.Feel.step(rdt, ctx) : 1;
+    const dt = rdt * k;
+    ctx.dt = dt; ctx.rdt = rdt; ctx.time += dt;
     const f = Input.frame();
     if (ctx.state === 'play') {
-      hold.t = f.centerHeld ? hold.t + dt : 0;
+      hold.t = f.centerHeld ? hold.t + rdt : 0;
       if (!f.centerHeld) hold.latch = false;
       if (f.pressed.pause) { Core.go('pause'); }
       else if (hold.t >= PAUSE_HOLD && !hold.latch) {
@@ -356,10 +371,10 @@
         ctx.player.ducking = f.held.duck;
         if (f.pressed.dodge && DH.Player.dodge(ctx.player, ctx.time)) { dodgeAway(); DH.bus.emit('player:dodge', {}); }
         DH.Player.tick(ctx.player, dt);
-        updateCamera(dt, f);
+        updateCamera(rdt, f);
         call('Missions', 'update', dt, ctx, f);
         call('Dinos', 'update', dt, ctx);
-        call('Weapons', 'update', dt, ctx, f);
+        call('Weapons', 'update', rdt, ctx, f);
       }
     } else if (MENUS[ctx.state]) {
       // menus with the phone: point and press Vol Down (a) on a button (wandcursor.js); Vol Down
@@ -376,19 +391,19 @@
       }
     }
     if (cursor && !MENUS[ctx.state]) cursor.update();   // hides it
-    call('Hud', 'update', dt, ctx, f);
+    call('Hud', 'update', rdt, ctx, f);
     if (ctx.world && ctx.world.update) ctx.world.update(dt, ctx);
     call('Fx', 'update', dt, ctx);
     call('Audio', 'update', dt, ctx);
     if (ctx.shadowDirty) { renderer.shadowMap.needsUpdate = true; ctx.shadowDirty = false; }
-    if (ctx.state === 'play') { gov = DH.Signs.govern(gov, dt, now / 1000); ctx.renderScale = gov.scale; autoLight(dt); }
+    if (ctx.state === 'play') { gov = DH.Signs.govern(gov, rdt, now / 1000); ctx.renderScale = gov.scale; autoLight(rdt); }
     drawWorld(ctx.state === 'play' ? gov.scale : 1);
     if (ctx.state === 'play' || ctx.state === 'pause') call('Weapons', 'render', renderer, ctx);
   }
 
   // ------------------------------------------------------------------ boot
   async function boot() {
-    ['Audio', 'Fx', 'Dinos', 'Weapons', 'Missions', 'Hud'].forEach(m => call(m, 'init', ctx));
+    ['Audio', 'Fx', 'Dinos', 'Weapons', 'Missions', 'Hud', 'Feel'].forEach(m => call(m, 'init', ctx));
     await DH.Assets.load((done, total) => {
       $('loadbar').style.width = Math.round(100 * done / Math.max(1, total)) + '%';
       $('loadtext').textContent = `Loading ${done} / ${total}`;

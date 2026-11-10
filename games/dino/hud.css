@@ -395,3 +395,18 @@ div.set { grid-template-columns: auto 1fr; }
 .panel.pause .ctl-grid { grid-template-columns: repeat(3, 1fr); }
 .sel-foot { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 18px; justify-content: center; }
 .sel-foot .link { font-size: 14px; padding: 8px 14px; }
+
+/* ADRENALINE (feel.js): meter above the health panel, a word across the screen when it fires */
+#adrenal { position: absolute; left: 22px; bottom: 74px; display: flex; align-items: center; gap: 10px; padding: 5px 14px; background: var(--panel); border-left: 3px solid rgba(226, 70, 52, 0.55); }
+#adrenal .ad-lbl { font-size: 9.5px; letter-spacing: 0.26em; color: var(--dim); min-width: 92px; }
+#adrenal .ad-bar { width: 205px; height: 5px; background: rgba(255, 255, 255, 0.1); }
+#adrenal .ad-bar i { display: block; height: 100%; width: 50%; background: #c8503c; transition: width 0.25s; }
+#adrenal.full { border-left-color: var(--red); }
+#adrenal.full .ad-lbl { color: var(--red); }
+#adrenal.full .ad-bar i { background: var(--red); animation: adready 0.9s ease-in-out infinite alternate; }
+#adrenal.on .ad-lbl { color: var(--fg); }
+#adrenal.on .ad-bar i { background: var(--fg); transition: none; }
+@keyframes adready { from { filter: brightness(0.85); } to { filter: brightness(1.6); } }
+#adflash { position: absolute; left: 0; right: 0; top: 30%; text-align: center; font-size: clamp(28px, 5vh, 46px); font-weight: 800; letter-spacing: 0.5em; color: var(--red); opacity: 0; pointer-events: none; }
+#adflash.show { animation: adflash 1.1s ease-out forwards; }
+@keyframes adflash { 0% { opacity: 0; transform: scale(1.25); letter-spacing: 0.9em; } 12% { opacity: 1; transform: scale(1); letter-spacing: 0.5em; } 70% { opacity: 0.9; } 100% { opacity: 0; letter-spacing: 0.6em; } }

@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tidecast</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="vignette"></div>
+<div id="flash"></div>
+
+<!-- ============ HUD ============ -->
+<div id="hud" class="hidden">
+  <div class="hud-top">
+    <div id="clock"><svg viewBox="0 0 24 24"><circle cx="12" cy="14" r="5"/><path d="M2 19h20M12 4v3M4.5 7.5l2 2M19.5 7.5l-2 2"/></svg><b id="clockText">3:00</b><span id="clockSub">until sunset</span></div>
+    <div id="rule"></div>
+  </div>
+  <div id="board"></div>
+  <div id="cards"></div>
+  <div id="floats"></div>
+  <div id="banner"><div class="b-main"></div><div class="b-sub"></div></div>
+  <div id="catch" class="hidden">
+    <div class="c-kicker" id="catchKicker">LANDED</div>
+    <div class="c-name" id="catchName"></div>
+    <div class="c-stars" id="catchStars"></div>
+    <div class="c-weight"><b id="catchKg"></b><span>kg</span><em id="catchCm"></em></div>
+    <div class="c-blurb" id="catchBlurb"></div>
+    <div class="c-record" id="catchRecord"></div>
+    <div class="c-next" id="catchNext"></div>
+  </div>
+</div>
+
+<div id="chip" class="mimic-badge"><b>Mimic</b><i></i><span>No phone: mouse</span></div>
+<div id="mhint" class="mimic-hint hidden"></div>
+
+<!-- ============ TITLE ============ -->
+<section id="title" class="screen">
+  <div class="t-left">
+    <div class="kicker">A Mimic motion game</div>
+    <h1 class="logo">Tide<span>cast</span></h1>
+    <p class="tagline">Your phone is the rod. Cast it, feel the bite, fight the fish.</p>
+    <div class="menu" id="titleMenu">
+      <button class="mi primary" data-act="calm"><b>Golden Hour</b><small>calm solo fishing, no clock</small></button>
+      <button class="mi" data-act="derby"><b>Sunset Derby</b><small>solo: your heaviest fish before the sun sets</small></button>
+      <button class="mi" data-act="party"><b>Dock Party</b><small>2 to 4 phones side by side on one dock</small></button>
+      <div class="mi-row">
+        <button class="mi" data-act="journal"><b>Fish Journal</b><small id="journalSub">0 of 7 species</small></button>
+        <button class="mi" data-act="settings"><b>Settings</b><small>sound, graphics, hand</small></button>
+      </div>
+    </div>
+    <div class="t-connect">
+      <div class="ctrl" id="titleCtrl"><i></i><span>No phone yet</span><small>Open Mimic, pick Wand (or Grip), pair over Bluetooth.</small></div>
+      <div class="t-connect-row">
+        <div class="mimic-scan" data-mimic-join="wand" data-compact data-players="4" data-label="No app? Scan to play"></div>
+        <button class="rumble" id="rumbleBtn" data-act="rumble">Vibration off: click to set up</button>
+      </div>
+    </div>
+  </div>
+  <div class="t-right panel">
+    <h3>How to fish</h3>
+    <ol class="howto">
+      <li><svg viewBox="0 0 24 24"><path d="M5 20L17 4"/><path d="M17 4c3 4 4 9 2 14"/><circle cx="19" cy="19" r="1.6"/></svg><div><b>Cast</b><span id="howCast">Hold A, flick the rod over your shoulder, let go of A as it comes forward.</span></div></li>
+      <li><svg viewBox="0 0 24 24"><path d="M3 12h3l2-5 3 10 2-6 2 3h6"/></svg><div><b>Feel</b><span>Light ticks are nibbles. Wait. A heavy thump is the strike.</span></div></li>
+      <li><svg viewBox="0 0 24 24"><path d="M12 21V5M6 11l6-6 6 6"/></svg><div><b>Strike</b><span>Jerk the rod up, hard, right on the thump.</span></div></li>
+      <li><svg viewBox="0 0 24 24"><path d="M4 18c5 0 7-12 16-12"/><path d="M14 6h6v6"/></svg><div><b>Fight</b><span>Rod up and leaned against the run. Never reel while it runs.</span></div></li>
+      <li><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 5a7 7 0 0 1 7 7"/><path d="M17 10l2 2 2-2"/></svg><div><b>Reel</b><span id="howReel">Circle the rod tip like a crank, or hold A.</span></div></li>
+    </ol>
+    <div class="keys" id="keys"></div>
+  </div>
+</section>
+
+<!-- ============ PARTY LOBBY ============ -->
+<section id="lobby" class="screen hidden">
+  <div class="panel lobby-panel">
+    <div class="kicker">Dock Party · one screen</div>
+    <h2>Grab a spot on the dock</h2>
+    <div class="slots" id="slots"></div>
+    <div class="lobby-opts">
+      <div class="opt-group"><span>Win by</span><div class="seg" id="optRule"><button class="nav" data-act="rule:big">Heaviest fish</button><button class="nav" data-act="rule:total">Total catch</button></div></div>
+      <div class="opt-group"><span>Round</span><div class="seg" id="optTime"><button class="nav" data-act="time:120">2 min</button><button class="nav" data-act="time:180">3 min</button><button class="nav" data-act="time:300">5 min</button></div></div>
+    </div>
+    <p class="lobby-status" id="lobbyStatus"></p>
+    <div class="row-btns">
+      <button class="nav primary" id="lobbyStart" data-act="lobbyStart">Start</button>
+      <button class="nav" data-act="title">Back</button>
+    </div>
+  </div>
+  <div class="lobby-join panel"><div data-mimic-join="wand" data-size="112" data-players="4" data-label="Scan to join"></div><p>No app? Any phone browser works. Pick <b>Wand</b>.</p></div>
+</section>
+
+<!-- ============ ALIGN (solo) ============ -->
+<section id="align" class="screen hidden">
+  <div class="panel align-panel">
+    <div class="kicker" id="alignMode">Golden Hour</div>
+    <div class="rod-art"><div class="phone"><i></i></div><div class="blank"></div></div>
+    <h2>Point the rod out to sea</h2>
+    <p id="alignText"></p>
+    <div class="row-btns"><button class="nav primary" data-act="alignGo">Lines in</button><button class="nav" data-act="title">Back</button></div>
+  </div>
+</section>
+
+<!-- ============ JOURNAL ============ -->
+<section id="journal" class="screen hidden">
+  <div class="panel journal-panel">
+    <div class="j-head"><h2>Fish Journal</h2><span id="journalCount"></span></div>
+    <div class="species" id="species"></div>
+    <div class="row-btns single"><button class="nav" data-act="title">Back</button></div>
+  </div>
+</section>
+
+<!-- ============ SETTINGS ============ -->
+<section id="settings" class="screen hidden">
+  <div class="panel settings-panel">
+    <h2>Settings</h2>
+    <div class="set-list" id="setList"></div>
+    <p class="set-note" id="setNote"></p>
+    <div class="row-btns"><button class="nav" data-act="rumbleAsk" id="setRumble">Vibration</button><button class="nav" data-act="setBack">Back</button></div>
+  </div>
+</section>
+
+<!-- ============ PAUSE ============ -->
+<section id="pause" class="screen hidden">
+  <div class="panel list-panel">
+    <h2>Paused</h2>
+    <button class="nav primary" data-act="resume">Resume</button>
+    <button class="nav" data-act="restart">Restart</button>
+    <button class="nav" data-act="settings">Settings</button>
+    <button class="nav" data-act="end" id="pauseEnd">End round</button>
+    <p class="small" id="pauseTip"></p>
+  </div>
+</section>
+
+<!-- ============ RESULTS ============ -->
+<section id="results" class="screen hidden">
+  <div class="panel results-panel">
+    <div class="kicker" id="resKicker">The sun is down</div>
+    <h2 id="resTitle"></h2>
+    <div class="podium" id="podium"></div>
+    <div class="row-btns">
+      <button class="nav primary" data-act="again">Fish again</button>
+      <button class="nav" data-act="title">Title</button>
+    </div>
+  </div>
+</section>
+
+<script src="../lib/three.min.js"></script>
+<script src="../lib/mimic.js"></script>
+<script src="../lib/mimic-link.js"></script>
+<script src="../lib/recorder.js"></script>
+<script src="../lib/wandcursor.js"></script>
+<script src="logic.js"></script>
+<script src="lobby.js"></script>
+<script src="audio.js"></script>
+<script src="scene.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

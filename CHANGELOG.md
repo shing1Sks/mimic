@@ -19,6 +19,12 @@ Updated just before each approved release, not on every change.
   without a signaling relay show no QR that could not connect.
 - **Every local play is recorded:** on this machine's server each play saves the game video and every
   input (no prompt), so feedback can point at a real session; `?rec=0` turns it off.
+- **Tidecast (new):** motion fishing on a golden-hour dock. Cast with a real flick (hold A as a thumb
+  on the spool, let go as the rod comes forward: timing and wrist speed set the arc), feel nibbles and
+  the strike through the phone, set the hook with an upward jerk, then fight: rod angle against the
+  fish's runs, reel by circling the rod tip (or hold A), keep the line between snapping and slack, bow
+  when it jumps. Seven fish with their own habits, one legendary at sunset. Golden Hour (calm solo),
+  Sunset Derby, and Dock Party for 2-4 phones where the round clock is the sun going down.
 - **Duskwater: The Gulls.** Fall in the fight, rise as a gull: a dead player flies over the depot for
   the rest of the round, marks every enemy it sees for its team (through walls, on the radar, to bot
   teammates) and dives (R2 / click) to blind an enemy for 1.7 s; a kill within 5 s pays a gull assist

@@ -85,28 +85,41 @@
       for (let i = 0; i < 256; i += 6) { x.beginPath(); x.moveTo(i, 57); x.lineTo(i + 3, 61); x.stroke(); x.beginPath(); x.moveTo(i, 71); x.lineTo(i + 3, 67); x.stroke(); }
       const t = new T.CanvasTexture(c); t.encoding = T.sRGBEncoding; return t;
     })();
-    const m = new T.Mesh(new T.SphereGeometry(0.036 * 1.3, 20, 14), std({ map: tex, roughness: 0.35, emissive: 0x2a2620 }));
+    // drawn 1.6x real size (a broadcast's long lens and motion blur make a real one read bigger)
+    const m = new T.Mesh(new T.SphereGeometry(0.036 * 1.6, 24, 16), std({ map: tex, roughness: 0.3, emissive: 0x4a443a }));
     m.castShadow = true;
     return m;
   }
-  /** A fading streak behind the ball so a 140 km/h delivery can be followed. */
+  /**
+   * A tapering ribbon behind the ball (a 1-pixel line read as a scratch): camera-facing, wide at
+   * the ball and fading out behind, only while the ball is quick, so its path reads at a glance.
+   */
   function makeTrail(n) {
-    const pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
+    const pos = new Float32Array(n * 2 * 3), col = new Float32Array(n * 2 * 3), idx = [];
+    for (let i = 0; i < n - 1; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
     const geo = new T.BufferGeometry();
     geo.setAttribute('position', new T.BufferAttribute(pos, 3));
     geo.setAttribute('color', new T.BufferAttribute(col, 3));
-    const line = new T.Line(geo, new T.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.85, blending: T.AdditiveBlending, depthWrite: false, toneMapped: false }));
+    geo.setIndex(idx);
+    const line = new T.Mesh(geo, new T.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide, toneMapped: false }));
     line.frustumCulled = false;
-    const pts = [];
+    const pts = [], W = 0.05;
+    const t = new T.Vector3(), c = new T.Vector3(), sd = new T.Vector3();
     return {
       line,
-      push(p, on) {
+      /** p: the ball now; on: draw it; cam: the camera position (the ribbon faces it). */
+      push(p, on, cam) {
         pts.unshift([p.x, p.y, p.z]); if (pts.length > n) pts.pop();
         for (let i = 0; i < n; i++) {
-          const q = pts[Math.min(i, pts.length - 1)] || [p.x, p.y, p.z];
-          pos[i * 3] = q[0]; pos[i * 3 + 1] = q[1]; pos[i * 3 + 2] = q[2];
-          const k = on ? Math.pow(1 - i / n, 1.6) * 0.75 : 0;
-          col[i * 3] = k; col[i * 3 + 1] = k * 0.92; col[i * 3 + 2] = k * 0.75;
+          const q = pts[Math.min(i, pts.length - 1)] || [p.x, p.y, p.z], q2 = pts[Math.min(i + 1, pts.length - 1)] || q;
+          t.set(q[0] - q2[0], q[1] - q2[1], q[2] - q2[2]);
+          if (t.lengthSq() < 1e-8) t.set(0, 0, 1);
+          c.set(cam ? cam.x - q[0] : 0, cam ? cam.y - q[1] : 1, cam ? cam.z - q[2] : 0);
+          // seen end-on the ribbon thins out instead of twisting (|t x c| = sin of the angle)
+          sd.crossVectors(t.normalize(), c.normalize()).multiplyScalar(W * (1 - i / n));
+          pos.set([q[0] + sd.x, q[1] + sd.y, q[2] + sd.z, q[0] - sd.x, q[1] - sd.y, q[2] - sd.z], i * 6);
+          const k = on ? Math.pow(1 - i / n, 1.4) * 0.55 : 0;
+          col.set([k, k * 0.95, k * 0.82, k, k * 0.95, k * 0.82], i * 6);
         }
         geo.attributes.position.needsUpdate = true; geo.attributes.color.needsUpdate = true;
       },
@@ -310,15 +323,18 @@
     geo.setAttribute('aCell', new T.InstancedBufferAttribute(cell, 1));
     geo.setAttribute('aRy', new T.InstancedBufferAttribute(ry, 1));
     geo.setAttribute('aPh', new T.InstancedBufferAttribute(ph, 1));
-    const uni = { uTime: { value: 0 }, uExcite: { value: 0 } };
+    const uni = { uTime: { value: 0 }, uExcite: { value: 0 }, uWaveA: { value: 0 }, uWaveOn: { value: 0 } };
     const mat = new T.MeshBasicMaterial({ map: atlas.texture, alphaTest: 0.5, side: T.DoubleSide });
     mat.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, uni);
       sh.vertexShader = sh.vertexShader
         .replace('#include <common>', `#include <common>
-          attribute float aCell; attribute float aRy; attribute float aPh; uniform float uTime; uniform float uExcite;`)
+          attribute float aCell; attribute float aRy; attribute float aPh; uniform float uTime; uniform float uExcite; uniform float uWaveA; uniform float uWaveOn;`)
         .replace('#include <uv_vertex>', `#include <uv_vertex>
           float up = (uExcite > 0.3 && sin(aPh * 13.7) > 1.1 - min(1.0, uExcite) * 1.3) ? 1.0 : 0.0;
+          { vec3 cw = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+            float d = atan(cw.x, cw.z + 10.06) - uWaveA; d = atan(sin(d), cos(d));
+            if (uWaveOn > 0.5 && abs(d) < 0.22) up = 1.0; }
           { float col = mod(aCell, ${atlas.cols}.0); float row = floor(aCell / ${atlas.cols}.0) + up * ${atlas.rows / 2}.0;
             vUv = (uv + vec2(col, row)) / vec2(${atlas.cols}.0, ${atlas.rows}.0); }`)
         .replace('#include <begin_vertex>', `#include <begin_vertex>
@@ -343,7 +359,7 @@
     scene.add(mesh);
     crowd.bodies.visible = false; crowd.heads.visible = false;
     crowd.impostors = mesh;
-    crowd.impUpdate = () => { uni.uTime.value = crowd.t; uni.uExcite.value = crowd.excite; };
+    crowd.impUpdate = () => { uni.uTime.value = crowd.t; uni.uExcite.value = crowd.excite; uni.uWaveA.value = crowd.wave ? crowd.wave.a : 0; uni.uWaveOn.value = crowd.wave && crowd.wave.t > 0 ? 1 : 0; };
   }
 
   Object.assign(CK, { makeBat, makeBall, makeTrail, makeAthlete, poseAthlete: pose, boneWorld, aimBone, bakeCrowdAtlas, crowdImpostors });

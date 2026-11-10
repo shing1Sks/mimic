@@ -44,12 +44,45 @@ function real(i) {
   check('...all head within 8 deg of straight (key-up reading gave 40-57 deg on two)', rs.every(r => Math.abs(deg(r.az)) < 8), rs.map(r => deg(r.az).toFixed(1)));
   check('...pace 100-150 km/h from 15-22 m/s whips', rs.every(r => r.pace * 3.6 > 100 && r.pace * 3.6 < 150), rs.map(r => (r.pace * 3.6).toFixed(0)));
   const dts = rs.map(r => r.dt).sort((a, b) => a - b);
-  check('...the key came up -92..+25 ms from the whip; DT_IDEAL sits at their median', Math.abs((dts[1] + dts[2]) / 2 - B.BOWL.DT_IDEAL) < 10, dts.map(Math.round));
+  check('...the key came up -92..+25 ms from the whip (a habit of letting go just before)', dts[0] > -100 && dts[3] < 30, dts.map(Math.round));
   check('...none twisted hard enough for spin (natural twist under MIN_TWIST)', rs.every(r => r.spin === 0), rs.map(r => r.twist.toFixed(1)));
   const lens = rs.map(r => bowlRel(r, { x: 0, len: 6 }).pitch);
   check('...NORMAL: every real ball pitches within 2 m of the aimed 6 m, within 0.6 m of the line', lens.every(p => p && Math.abs(-p.z - 6) < 2 && Math.abs(p.x) < 0.6), lens.map(p => p && [p.x.toFixed(2), (-p.z).toFixed(2)]));
   const neutral = B.seamNeutral(rs.map(r => r.alpha));
   check('the real screen sits ~100 deg off the palm line: measured from the natural grip, no swing', Math.abs(deg(neutral)) > 80 && rs.every(r => Math.abs(B.readRelease(real(rs.indexOf(r)).samples, 0, { seamRef: neutral }).swing) < 1), deg(neutral));
+}
+
+// --- session 2 (26 real throws): the forward whip and the player's own line-up
+{
+  const R2 = require(path.join(__dirname, 'fixtures', 'real-bowls-2.json'));
+  const dts = [], azs = [], res = [];
+  for (const f of R2) {
+    const s = f.s.map(([t, ax, a]) => ({ t, q: B.decodePad(ax), a: !!a }));
+    const r = B.readRelease(s, 0, { tPress: f.tPress - f.tUp, dtRef: dts.length >= 2 ? B.median(dts.slice(-5)) : null, azRef: azs.length >= 2 ? B.median(azs.slice(-5)) : null });
+    if (!r.ok) { res.push(null); continue; }
+    dts.push(r.dt); azs.push(r.azRaw);
+    const d = B.toDelivery(r, { x: 0, len: 5 }, { arm: 1, rng: seeded(), view: 'bowler' }); d.seamKick = 0;
+    res.push(P.run(B.launch(d), { until: x => x.p.z >= 0, samples: false }).pitch);
+  }
+  const ok = res.filter(Boolean);
+  check('25 of the 26 real throws are deliveries (the game called 11 of them backward / underarm)', ok.length >= 25, res.filter(x => !x).length);
+  check("...the arm came across the body: raw line ~17 deg left of the phone's zero", Math.abs(B.median(azs) * 180 / Math.PI + 17) < 6, B.median(azs) * 180 / Math.PI);
+  const later = ok.slice(2);
+  const inX = later.filter(p => Math.abs(p.x) < 1).length, inL = later.filter(p => Math.abs(-p.z - 5) < 1.5).length;
+  check('...with LINE-UP: 85% pitch within 1 m of the aimed line (it was 1.3-4.2 m left)', inX / later.length >= 0.85, [inX, later.length]);
+  check('...and 75% within 1.5 m of the aimed length', inL / later.length >= 0.75, [inL, later.length]);
+}
+
+// --- the bowler's own view: the room turned half round (screen right = world -x)
+{
+  const aim = { x: 0, len: 4.5 };
+  const mk = (o, view) => { const r = rel(o); const d = B.toDelivery(r, aim, { arm: 1, rng: seeded(), view }); d.seamKick = 0; return { d, end: P.run(B.launch(d), { until: x => x.p.z >= 0, samples: false }).end }; };
+  const cw = mk({ peakW: 13, twist: 25 }, 'bowler'), plain = mk({ peakW: 13 }, 'bowler');
+  check("bowler view: a clockwise wrist turns the ball to the bowler's right (world -x)", cw.end.p.x - plain.end.p.x < -0.1, cw.end.p.x - plain.end.p.x);
+  check("...a right-armer's clockwise wrist to a right-handed batter is a real off-break", B.describe({ pitch: { x: 0, z: -4.5 }, heightAtBat: 0.5 }, cw.d, 1).includes('OFF-BREAK'));
+  const right = mk({ peakW: 20, yaw: rad(10) }, 'bowler'), str = mk({ peakW: 20 }, 'bowler');
+  check("...the arm swung right goes right on the bowler's screen (world -x)", right.end.p.x < str.end.p.x - 0.3, [right.end.p.x, str.end.p.x]);
+  check('...and a right-armer releases from his right side (world -x)', str.d.from.x < 0);
 }
 
 // --- stray taps and lazy arms
@@ -78,14 +111,14 @@ function real(i) {
   check('early / late key-ups still find the same whip', early.ok && late.ok && Math.abs(early.t - late.t) < 10, [early.t, late.t]);
   const bo = bowl({ peakW: 20 }), be = bowl({ peakW: 20, upOffset: -60 }), bl = bowl({ peakW: 20, upOffset: 60 });
   check('on time it pitches on the aimed spot (within 15 cm)', Math.abs(-bo.pitch.z - AIM.len) < 0.15, bo.pitch);
-  check('60 ms early pitches ~0.9 m fuller, 60 ms late ~0.9 m shorter (NORMAL)', Math.abs(-be.pitch.z - (AIM.len - 0.9)) < 0.2 && Math.abs(-bl.pitch.z - (AIM.len + 0.9)) < 0.2, [be.pitch.z, bl.pitch.z]);
+  check('60 ms early pitches ~0.6 m fuller, 60 ms late ~0.6 m shorter (NORMAL)', Math.abs(-be.pitch.z - (AIM.len - 0.6)) < 0.2 && Math.abs(-bl.pitch.z - (AIM.len + 0.6)) < 0.2, [be.pitch.z, bl.pitch.z]);
   const pe = bowl({ peakW: 20, upOffset: -60 }, AIM, B.BOWL.GAIN.PRO);
-  check('PRO doubles it (1.8 m fuller)', Math.abs(-pe.pitch.z - (AIM.len - 1.8)) < 0.25, pe.pitch);
+  check('PRO 2.5x it (1.5 m fuller)', Math.abs(-pe.pitch.z - (AIM.len - 1.5)) < 0.25, pe.pitch);
   const under = SY.overarm({ peakW: 20 });
   // the same action with the whip low behind the hip (an underarm flick): arm angle -2.4..-0.6
   const flick = under.samples.map(s => ({ t: s.t, q: B.armQuat(-1.5 + 0.9 * Math.tanh((s.t - 1000) / 120), 0, 0), a: s.a }));
   const ru = B.readRelease(flick, under.tUp);
-  check('a whip with the arm down by the hip: not a delivery (underarm)', !ru.ok && ru.why === 'underarm', ru.why);
+  check('a whip with the arm down by the hip: not a delivery (underarm / not toward the screen)', !ru.ok && (ru.why === 'underarm' || ru.why === 'backward'), ru.why);
 }
 
 // --- line from the swing plane
@@ -96,7 +129,7 @@ function real(i) {
   check('the phone rolled 25 deg in the fist does not move the line', Math.abs(deg(lean.az) - 10) < 1, deg(lean.az));
   const b = bowl({ peakW: 20, yaw: rad(10) }), s = bowl({ peakW: 20 });
   const off = b.end.p.x - s.end.p.x;
-  check('NORMAL control: 10 deg right lands 0.4-1.5 m right at the stumps', off > 0.4 && off < 1.5, off);
+  check('NORMAL control: 10 deg right lands 0.3-1.2 m right at the stumps', off > 0.3 && off < 1.2, off);
   const pro = bowl({ peakW: 20, yaw: rad(10) }, AIM, B.BOWL.GAIN.PRO);
   check('PRO: 10 deg right is 10 deg right (>2.5 m)', pro.end.p.x - s.end.p.x > 2.5, pro.end.p.x - s.end.p.x);
   check('the ball travels toward the batter (+z) when the arm swings at the TV', b.end.p.z >= 0);

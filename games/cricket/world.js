@@ -123,7 +123,7 @@
 
   // ------------------------------------------------------------------ rope, boards, sight screens
   function boundary(scene) {
-    const rope = new T.Mesh(new T.TorusGeometry(RB, 0.06, 6, 180), std({ color: 0xf4f0e6, roughness: 0.6 }));
+    const rope = new T.Mesh(new T.TorusGeometry(RB, 0.07, 6, 180), std({ color: 0xf4f0e6, roughness: 0.6, emissive: 0x000000 }));
     rope.rotation.x = Math.PI / 2; rope.position.set(0, 0.06, CZ);
     scene.add(rope);
     // LED boards: a ring of glowing panels just past the rope
@@ -150,7 +150,73 @@
       ss.position.set(0, 3.5, z); ss.receiveShadow = true;
       scene.add(ss);
     }
-    return { boards, tex };
+    return { boards, tex, rope };
+  }
+
+  /**
+   * A stadium big screen: a canvas the game draws on (score, then FOUR / SIX / OUT in big type,
+   * flashing), on a frame up in the stand. One faces each end so every view has one.
+   */
+  function bigScreen(scene, x, y, z, ry) {
+    const c = document.createElement('canvas'); c.width = 512; c.height = 256;
+    const g = c.getContext('2d'), tex = new T.CanvasTexture(c); tex.encoding = T.sRGBEncoding;
+    const grp = new T.Group();
+    const frame = new T.Mesh(new T.BoxGeometry(17, 9, 0.6), std({ color: 0x0c0d14, roughness: 0.6 }));
+    const scr = new T.Mesh(new T.PlaneGeometry(16, 8), new T.MeshBasicMaterial({ map: tex, toneMapped: false }));
+    scr.position.z = 0.31;
+    const leg = new T.Mesh(new T.BoxGeometry(1.2, y, 1.2), std({ color: 0x23262f }));
+    leg.position.y = -y / 2;
+    grp.add(frame, scr, leg); grp.position.set(x, y, z); grp.rotation.y = ry;
+    scene.add(grp);
+    const S = { big: '', sub: '', score: '', hot: 0, col: '#ffc24d' };
+    function draw(t) {
+      const hot = S.hot > 0, flick = hot && Math.floor(t * 8) % 2;
+      g.fillStyle = hot ? (flick ? '#140a2a' : '#22103d') : '#0b0c18'; g.fillRect(0, 0, 512, 256);
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      if (hot) {
+        g.fillStyle = flick ? '#ffffff' : S.col; g.font = 'italic 800 120px Bahnschrift, "Segoe UI", sans-serif';
+        g.fillText(S.big, 256, 112);
+        g.fillStyle = '#e6e0fb'; g.font = '600 30px Bahnschrift, "Segoe UI", sans-serif'; g.fillText(S.sub, 256, 210);
+      } else {
+        g.fillStyle = '#ffc24d'; g.font = 'italic 800 34px Bahnschrift, "Segoe UI", sans-serif'; g.fillText('WILLOWLIGHT', 256, 46);
+        g.fillStyle = '#ffffff'; g.font = '800 92px Bahnschrift, "Segoe UI", sans-serif'; g.fillText(S.score, 256, 140);
+        g.fillStyle = '#b2abcf'; g.font = '600 28px Bahnschrift, "Segoe UI", sans-serif'; g.fillText(S.sub, 256, 218);
+      }
+      tex.needsUpdate = true;
+    }
+    return { grp, S, draw };
+  }
+
+  /** Flags waved in the stands (team colours and a few others), harder when the crowd is up. */
+  function flags(scene, base) {
+    const pick = base.filter((b, i) => i % 11 === 3 && b.y > 2);
+    const n = pick.length;
+    const geo = new T.PlaneGeometry(0.9, 0.55, 6, 1); geo.translate(0.45, 1.6, 0);
+    const mat = new T.MeshBasicMaterial({ side: T.DoubleSide, vertexColors: false });
+    const uni = { uTime: { value: 0 }, uWave: { value: 0 } };
+    mat.onBeforeCompile = sh => {
+      Object.assign(sh.uniforms, uni);
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; uniform float uWave;')
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+          float ph = instanceMatrix[3].x * 0.37 + instanceMatrix[3].z * 0.21;
+          float a = (0.25 + uWave) * sin(uTime * (3.0 + uWave * 5.0) + ph);
+          float k = position.x / 0.9;
+          transformed.z += sin(uTime * 7.0 + ph + k * 4.0) * 0.12 * k * (0.3 + uWave);
+          float ca = cos(a), sa = sin(a);
+          vec3 p = transformed - vec3(0.0, 1.2, 0.0);
+          transformed = vec3(p.x * ca - p.y * sa, p.x * sa + p.y * ca, p.z) + vec3(0.0, 1.2, 0.0);`);
+    };
+    const mesh = new T.InstancedMesh(geo, mat, n);
+    const COLS = [0x2fd3c3, 0xff6b7e, 0xffc24d, 0xffffff, 0x6c8cff];
+    const m4 = new T.Matrix4(), q = new T.Quaternion(), col = new T.Color();
+    pick.forEach((b, i) => {
+      q.setFromAxisAngle(new T.Vector3(0, 1, 0), b.ry);
+      m4.compose(new T.Vector3(b.x, b.y, b.z), q, new T.Vector3(1, 1, 1));
+      mesh.setMatrixAt(i, m4); mesh.setColorAt(i, col.setHex(COLS[i % COLS.length]).convertSRGBToLinear());
+    });
+    mesh.frustumCulled = false;
+    scene.add(mesh);
+    return uni;
   }
 
   // ------------------------------------------------------------------ stands
@@ -247,46 +313,71 @@
 
   // ------------------------------------------------------------------ fireworks (sixes)
   function fireworks(scene) {
-    const N = 90, bursts = [];
+    const N = 160, bursts = [];
     const dot = canvasTex(32, 32, (c, w, h) => {
       const g = c.createRadialGradient(16, 16, 0, 16, 16, 16); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.4, 'rgba(255,255,255,0.6)'); g.addColorStop(1, 'rgba(255,255,255,0)');
       c.fillStyle = g; c.fillRect(0, 0, w, h);
     });
-    for (let b = 0; b < 8; b++) {
+    for (let b = 0; b < 12; b++) {
       const geo = new T.BufferGeometry();
       geo.setAttribute('position', new T.BufferAttribute(new Float32Array(N * 3), 3));
-      const mat = new T.PointsMaterial({ size: 2.2, map: dot, color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, blending: T.AdditiveBlending, toneMapped: false });
+      const mat = new T.PointsMaterial({ size: 2.6, map: dot, color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, blending: T.AdditiveBlending, toneMapped: false });
       const pts = new T.Points(geo, mat); pts.frustumCulled = false; pts.visible = false;
       scene.add(pts);
-      bursts.push({ pts, vel: new Float32Array(N * 3), t: 0, life: 0, delay: 0 });
+      bursts.push({ pts, vel: new Float32Array(N * 3), t: 0, life: 0, delay: 0, rise: 0, from: new T.Vector3(), to: new T.Vector3(), boom: false });
     }
-    const COLS = [0xffc24d, 0xff6b7e, 0x2fd3c3, 0xffffff, 0xc9a8ff, 0x7fe6ff];
+    const COLS = [0xffc24d, 0xff6b7e, 0x2fd3c3, 0xffffff, 0xc9a8ff, 0x7fe6ff, 0x5be38a];
     let next = 0;
+    function explode(B) {
+      const pos = B.pts.geometry.attributes.position.array, p = B.to;
+      const ring = Math.random() < 0.3;   // some shells burst as rings
+      for (let i = 0; i < N; i++) {
+        const u = ring ? (Math.random() - 0.5) * 0.15 : Math.random() * 2 - 1, a = Math.random() * Math.PI * 2, r = Math.sqrt(1 - u * u), sp = 16 + Math.random() * 7;
+        B.vel[i * 3] = Math.cos(a) * r * sp; B.vel[i * 3 + 1] = u * sp + 3; B.vel[i * 3 + 2] = Math.sin(a) * r * sp;
+        pos[i * 3] = p.x; pos[i * 3 + 1] = p.y; pos[i * 3 + 2] = p.z;
+      }
+      B.boom = true; B.t = 0; B.pts.material.size = 2.6;
+    }
     return {
-      /** A shell bursting at p (after delay s). */
+      /** A rocket from the stand roof up to p, bursting there (after delay s). */
       burst(p, delay) {
-        const B = bursts[next++ % bursts.length], pos = B.pts.geometry.attributes.position.array;
-        for (let i = 0; i < N; i++) {
-          const u = Math.random() * 2 - 1, a = Math.random() * Math.PI * 2, r = Math.sqrt(1 - u * u), sp = 14 + Math.random() * 6;
-          B.vel[i * 3] = Math.cos(a) * r * sp; B.vel[i * 3 + 1] = u * sp + 4; B.vel[i * 3 + 2] = Math.sin(a) * r * sp;
-          pos[i * 3] = p.x; pos[i * 3 + 1] = p.y; pos[i * 3 + 2] = p.z;
-        }
-        B.pts.geometry.attributes.position.needsUpdate = true;
+        const B = bursts[next++ % bursts.length];
+        B.to.set(p.x, p.y, p.z);
+        B.from.set(p.x * 0.96, 22, p.z + (PH.FIELD.CZ - p.z) * 0.04);
         B.pts.material.color.setHex(COLS[(Math.random() * COLS.length) | 0]);
-        B.t = 0; B.life = 1.8; B.delay = delay || 0; B.pts.visible = false;
+        B.t = 0; B.life = 2.2; B.delay = delay || 0; B.rise = 0.55; B.boom = false; B.pts.visible = false;
       },
       update(dt) {
         for (const B of bursts) {
           if (B.life <= 0) continue;
           if (B.delay > 0) { B.delay -= dt; continue; }
-          B.pts.visible = true; B.t += dt;
-          const pos = B.pts.geometry.attributes.position.array, k = Math.exp(-dt * 1.6);
+          B.pts.visible = true;
+          const pos = B.pts.geometry.attributes.position.array;
+          if (!B.boom) {
+            // the rocket: a tight bright spark climbing, its sparks trailing behind
+            B.t += dt;
+            const k = Math.min(1, B.t / B.rise);
+            for (let i = 0; i < N; i++) {
+              const kk = Math.max(0, k - (i % 20) * 0.012);
+              pos[i * 3] = B.from.x + (B.to.x - B.from.x) * kk + (Math.random() - 0.5) * 0.2;
+              pos[i * 3 + 1] = B.from.y + (B.to.y - B.from.y) * kk;
+              pos[i * 3 + 2] = B.from.z + (B.to.z - B.from.z) * kk + (Math.random() - 0.5) * 0.2;
+            }
+            B.pts.material.opacity = 0.9; B.pts.material.size = 1.1;
+            B.pts.geometry.attributes.position.needsUpdate = true;
+            if (k >= 1) explode(B);
+            continue;
+          }
+          B.t += dt;
+          const k = Math.exp(-dt * 1.5);
           for (let i = 0; i < N; i++) {
-            B.vel[i * 3] *= k; B.vel[i * 3 + 1] = B.vel[i * 3 + 1] * k - 6 * dt; B.vel[i * 3 + 2] *= k;
+            B.vel[i * 3] *= k; B.vel[i * 3 + 1] = B.vel[i * 3 + 1] * k - 5 * dt; B.vel[i * 3 + 2] *= k;
             pos[i * 3] += B.vel[i * 3] * dt; pos[i * 3 + 1] += B.vel[i * 3 + 1] * dt; pos[i * 3 + 2] += B.vel[i * 3 + 2] * dt;
           }
           B.pts.geometry.attributes.position.needsUpdate = true;
-          B.pts.material.opacity = Math.max(0, 1 - B.t / B.life);
+          const f = B.t / B.life;
+          // crackle near the end: the sparks flicker
+          B.pts.material.opacity = Math.max(0, 1 - f) * (f > 0.55 ? 0.5 + 0.5 * Math.random() : 1);
           if (B.t >= B.life) { B.life = 0; B.pts.visible = false; }
         }
       },
@@ -318,16 +409,32 @@
     scene.add(batEnd.group, bowlEnd.group);
     crowd.update = function (dt) { crowd.t += dt; crowd.excite = Math.max(0, crowd.excite - dt * 0.18); if (crowd.impUpdate) crowd.impUpdate(); };
     const fx = fireworks(scene);
-    // LED boards: flash through the team colours on a big moment
-    const flash = { t: 0 };
-    bd.flash = s => { flash.t = s || 2.4; };
+    const flagU = flags(scene, st.base);
+    // big screens: one over each sight screen, so the batter's view and the bowler's both see one
+    const screens = [bigScreen(scene, 0, 16, CZ - RB - 20, 0), bigScreen(scene, 0, 16, CZ + RB + 20, Math.PI)];
+    // LED boards and the rope: flash through the colours on a big moment
+    const flash = { t: 0, rope: 0 };
+    bd.flash = (s, rope) => { flash.t = s || 2.4; if (rope) flash.rope = s || 2.4; };
+    crowd.wave = { a: 0, t: 0 };
+    let screenT = 0;
     const tick = dt => {
       fx.update(dt);
       const m = bd.boards.material;
       if (flash.t > 0) { flash.t -= dt; const h = (crowd.t * 3) % 1; m.color.setHSL(h, 0.9, 0.62 + 0.25 * Math.sin(crowd.t * 30)); bd.tex.offset.x += dt * 0.8; }
       else m.color.setRGB(1, 1, 1);
+      const rm = bd.rope.material;
+      if (flash.rope > 0) { flash.rope -= dt; rm.emissive.setHSL(0.12, 1, 0.35 + 0.25 * Math.sin(crowd.t * 22)); } else rm.emissive.setRGB(0, 0, 0);
+      // the Mexican wave: a band of standing fans going round the ground once
+      const W = crowd.wave;
+      if (W.t > 0) { W.t -= dt; W.a = (W.a + dt * 1.25) % (Math.PI * 2); }
+      flagU.uTime.value = crowd.t; flagU.uWave.value = Math.min(1, crowd.excite);
+      screenT += dt;
+      screens.forEach(sc => { if (sc.S.hot > 0) sc.S.hot -= dt; });
+      if (screenT > 0.12) { screenT = 0; screens.forEach(sc => sc.draw(crowd.t)); }
     };
-    return { lights: { key, hemi, fill, rim }, crowd, stands: st, boards: bd, floods: fl, stumps: { bat: batEnd, bowl: bowlEnd }, fx, tick };
+    /** What the big screens show: the score, or a big moment for `hot` seconds. */
+    const screen = (o) => screens.forEach(sc => Object.assign(sc.S, o));
+    return { lights: { key, hemi, fill, rim }, crowd, stands: st, boards: bd, floods: fl, stumps: { bat: batEnd, bowl: bowlEnd }, fx, tick, screen };
   }
 
   CK.buildWorld = buildWorld;

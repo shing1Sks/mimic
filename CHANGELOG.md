@@ -39,6 +39,10 @@ Updated just before each approved release, not on every change.
   vs pitch, timing, line and movement. Players in front of the camera fade out and the field sits
   clear of the view. Broadcast cuts, short skippable replays, fireworks and LED boards on sixes, a
   roaring crowd, horns, drums, celebrations and commentary captions.
+  Round 3: you bowl from your own end (camera behind your arm) and two players get split screen;
+  the release reads the forward whip (25 of 26 real throws accepted, was 15 of 26) and LINE-UP learns
+  each bowler's habit; a heavier-looking ball; flags, a Mexican wave, chants, big screens, rocket
+  fireworks and cartwheeling stumps.
 - **IRONFERN: ADRENALINE.** Weak-spot hits, kills and dodges fill a meter; when it is full and an animal
   lunges at you the world slows to 0.28x for up to 3 s (aim stays 1:1, the phone beats like a heart)
   and a kill inside it is a CLUTCH. Rumble on every shot, kill, hurt, roar, charge and big footstep

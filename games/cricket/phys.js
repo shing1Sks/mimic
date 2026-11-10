@@ -20,9 +20,10 @@
   const AIR = { KD: 0.0062, KS: 0.0047, KM: 1.3e-4, SPIN_DECAY: 0.25 };
   const PITCH = { L: 20.12, HALF_W: 1.52, CREASE: 1.22, STUMP_HALF: 0.1143, STUMP_H: 0.711 };
   const SURF = {
-    // muSide: grip across the line of travel, higher than along it (a spinning seam bites the
+    // mu 0.22: a 140 km/h ball reaches the bat at ~115 (real deliveries lose roughly 12-18%). muSide: grip across
+    // the line of travel, higher than along it (a spinning seam bites the
     // dry surface; a skidding ball slides along it)
-    pitch: { e: 0.58, mu: 0.3, muSide: 0.65 },
+    pitch: { e: 0.58, mu: 0.22, muSide: 0.65 },
     grass: { e: 0.4, mu: 0.45, muSide: 0.45, roll: 2.4 },
   };
   const FIELD = { CX: 0, CZ: -PITCH.L / 2, R: 62 };   // boundary: a circle round the pitch's middle

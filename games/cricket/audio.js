@@ -189,7 +189,33 @@
       o.start(t); o.stop(t + dur + 0.1);
     }
   }
+  /** A terrace chant: "oh - oh - oh-oh-oh" from a few hundred voices, clapped on the beat. */
+  function chant(times) {
+    if (!ok()) return;
+    const ctx = A.ctx, t0 = ctx.currentTime;
+    const beats = [0, 0.42, 0.84, 1.05, 1.26];
+    for (let r = 0; r < (times || 2); r++) beats.forEach((b, j) => {
+      const t = t0 + r * 1.9 + b, dur = j < 2 ? 0.34 : 0.18;
+      for (let v = 0; v < 6; v++) {
+        const o = ctx.createOscillator(); o.type = 'sawtooth';
+        const f0 = (j < 2 ? 196 : 220) * (0.97 + Math.random() * 0.06) * (v % 2 ? 2 : 1);
+        o.frequency.setValueAtTime(f0, t);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.014, t + 0.04); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 520 + v * 60; bp.Q.value = 4;
+        o.connect(bp); bp.connect(g); g.connect(A.crowdBus); o.start(t); o.stop(t + dur + 0.05);
+      }
+      noise(t, 0.05, { freq: 1800, q: 0.8, gain: 0.18, bus: A.crowdBus });
+    });
+  }
+  /** The crowd's hum follows the moment: k 0 (between balls) .. 1 (the bowler arriving). */
+  function setTension(k) {
+    if (!A.murmur || !A.ctx) return;
+    A.murmur.gain.setTargetAtTime(0.02 + 0.05 * Math.max(0, Math.min(1, k)), A.ctx.currentTime, 0.35);
+  }
   const Crowd = {
+    chant,
+    setTension,
     react(kind, intensity) {
       if (kind === 'ooh') { cheer(0.45, 'ooh'); return; }
       if (kind === 'polite') { applause(0.3 * (intensity || 1), 1.6); return; }

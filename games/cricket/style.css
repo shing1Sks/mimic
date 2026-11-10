@@ -98,6 +98,12 @@ kbd { font-family: var(--display); font-size: 0.85em; background: rgba(255,255,2
 .toast.on { opacity: 1; }
 #replay-bug { position: absolute; left: 24px; top: 20px; display: flex; align-items: center; gap: 10px; padding: 8px 18px 8px 12px; background: var(--gold); color: var(--ink); font-weight: 800; font-style: italic; letter-spacing: 0.25em; font-size: 18px; border-radius: 8px; opacity: 0; transform: translateX(-12px); transition: opacity 0.2s, transform 0.2s; }
 #replay-bug.on { opacity: 1; transform: none; }
+#split-line, .half { display: none; }
+#hud.split #split-line { display: block; position: absolute; left: 50%; top: 0; bottom: 0; width: 4px; margin-left: -2px; background: linear-gradient(var(--teal), rgba(255,255,255,0.18) 50%, var(--coral)); box-shadow: 0 0 18px rgba(0,0,0,0.5); }
+#hud.split .half { --tc: var(--teal); display: flex; position: absolute; bottom: 116px; align-items: center; gap: 8px; padding: 5px 14px 5px 5px; border-radius: 99px; background: var(--panel); border: 1px solid var(--line); }
+#hud.split .half b { padding: 2px 10px; border-radius: 99px; background: var(--tc); color: var(--ink); font-size: 16px; }
+#hud.split .half span { font-size: 13px; letter-spacing: 0.18em; color: var(--muted); }
+#hud.split #half0 { left: 22px; } #hud.split #half1 { left: calc(50% + 18px); }
 #hud.replaying #prompts, #hud.replaying #shot { opacity: 0; }
 #prompts, #shot { transition: opacity 0.2s; }
 #replay-bug i { width: 10px; height: 10px; border-radius: 50%; background: #d4223a; animation: blink 1s infinite; }

@@ -47,7 +47,7 @@ function atStumps(b0) {
   const top = P.ball({ x: 0, y: P.BALL.R, z: -5 }, { x: 0, y: -6, z: 30 }, { w: { x: 800, y: 0, z: 0 } });
   const back = P.ball({ x: 0, y: P.BALL.R, z: -5 }, { x: 0, y: -6, z: 30 }, { w: { x: -800, y: 0, z: 0 } });
   P.bounce(top); P.bounce(back);
-  check('a ball rolling off topspin skids on, backspin never gains pace', top.v.z > b.v.z + 2 && back.v.z <= b.v.z, [top.v.z, b.v.z, back.v.z]);
+  check('a ball rolling off topspin skids on, backspin never gains pace', top.v.z > b.v.z + 1.5 && back.v.z <= b.v.z, [top.v.z, b.v.z, back.v.z]);
 }
 
 // --- spin turns the ball off the pitch

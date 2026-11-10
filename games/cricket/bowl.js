@@ -11,9 +11,16 @@
  * was often still behind the head: headings of 40-57 deg (huge wides) on two of four balls. Read
  * at the whip's peak, all four headed within 7 deg of straight. So:
  *
- *   whip     the fastest moment of the hand (the point L = 0.70 m along the phone's top, a
- *            symmetric least-squares fit of its positions) within -WIN_BEFORE..+WIN_AFTER ms of
- *            the key-up. The ball leaves the hand there.
+ *   whip     the fastest moment of the hand moving forward with the arm up (the point L =
+ *            0.70 m along the phone's top, a symmetric least-squares fit of its positions) within
+ *            -WIN_BEFORE..+WIN_AFTER ms of the key-up. The ball leaves the hand there. Session 2
+ *            (26 throws): the plain fastest moment was often the wind-up going back or the
+ *            follow-through coming down, which called 11 good throws "backward" / "underarm".
+ *   line-up  people let go at their own moment (session medians -29 / +52 ms) and swing in their
+ *            own plane (session 2: 17 deg left of the phone's zero on average, the bowling arm
+ *            coming across the body). With LINE-UP AUTO (a visible option) length and line are
+ *            measured from the player's own last 5 balls, so only a change from their habit
+ *            moves the ball; the first ball uses the defaults.
  *   pace     from the whip's hand speed (a standing player has no run-up: PACE adds its share)
  *   length   from when the key came up against the whip: earlier than the natural timing
  *            (DT_IDEAL) floats it fuller, later drags it shorter, GAIN.len metres per second
@@ -42,7 +49,9 @@
   const BOWL = {
     ARM: 0.70,                // shoulder to ball (m)
     WIN_BEFORE: 400, WIN_AFTER: 300,   // ms round the key-up where the whip is looked for
-    DT_IDEAL: -30,            // ms: key-up before the whip's peak on an on-time ball (real median -29)
+    // ms: key-up against the whip's peak on an on-time ball, until the player's own habit is
+    // learned (line-up). Session 1 let go 29 ms before the peak (median), session 2 52 ms after.
+    DT_IDEAL: 0,
     MIN_HAND: 5,              // m/s at the whip: slower is not a delivery (real whips 15-22)
     TAP_MS: 220,              // a shorter press with no whip is a stray tap, not a delivery
     MIN_UP: 0.2,              // the forearm must point at least this much up at the whip (overarm)
@@ -51,9 +60,10 @@
     SPIN: { K: 8, MIN_TWIST: 7, MAX: 300, SIDE: 0.62, TOP: 0.78, SCRAMBLE: 120 },
     SEAM: { FULL: 25 * Math.PI / 180, LOST: 70 * Math.PI / 180 },
     // visible option BOWLING CONTROL: metres of length per second of key timing off DT_IDEAL,
-    // and the share of the arm's heading error that reaches the ball. Real key timing scattered
-    // about +-50 ms round the median, so NORMAL misses the spot by ~0.8 m, PRO by ~1.5 m.
-    GAIN: { EASY: { len: 8, line: 0.15 }, NORMAL: { len: 15, line: 0.25 }, PRO: { len: 30, line: 1 } },
+    // and the share of the arm's heading error that reaches the ball. Session 2's key timing
+    // scattered +-80 ms and its line +-15 deg round the player's own habit: NORMAL then misses the
+    // spot by ~0.8 m either way, PRO by ~2 m.
+    GAIN: { EASY: { len: 5, line: 0.1 }, NORMAL: { len: 10, line: 0.2 }, PRO: { len: 25, line: 1 } },
     FROM_Z: -18.45,
   };
 
@@ -158,31 +168,38 @@
   function paceFrom(handSpeed) { return clamp(BOWL.PACE.A + BOWL.PACE.B * handSpeed, BOWL.PACE.MIN, BOWL.PACE.MAX); }
   function spinFrom(twist) { const t = Math.abs(twist); return t < BOWL.SPIN.MIN_TWIST ? 0 : Math.min(BOWL.SPIN.MAX, BOWL.SPIN.K * t); }
 
-  /** The whip: the hand's fastest moment within the window round the key-up (null if none yet). */
+  /**
+   * The whip: the hand's fastest moment moving forward with the arm up, within the window round
+   * the key-up (null if none yet). .any: the fastest moment of any kind (to say what went wrong).
+   */
   function findWhip(samples, tUp) {
-    let best = null;
+    let best = null, any = null;
     for (const s of samples) {
       if (s.t < tUp - BOWL.WIN_BEFORE || s.t > tUp + BOWL.WIN_AFTER) continue;
       const v = pointVelocity(samples, s.t, BOWL.ARM, 30);
       if (!v) continue;
-      const sp = len(v);
-      if (!best || sp > best.speed) best = { t: s.t, speed: sp, v };
+      const sp = len(v), up = rotate(s.q, { x: 0, y: 0, z: -1 }).y;
+      const c = { t: s.t, speed: sp, v, up, fwd: -v.z >= 0.25 * sp };
+      if (!any || sp > any.speed) any = c;
+      if (c.fwd && up >= BOWL.MIN_UP && (!best || sp > best.speed)) best = c;
     }
-    return best;
+    if (best) best.any = any;
+    return best || (any ? { none: true, any } : null);
   }
   /** Have enough samples arrived after the key-up to know the whip (it peaked and fell away)? */
   function whipKnown(samples, tUp) {
     const last = samples.length ? samples[samples.length - 1].t : 0;
     if (last >= tUp + BOWL.WIN_AFTER) return true;
     const w = findWhip(samples, tUp);
-    if (!w || last < w.t + 50) return false;
+    if (!w || w.none || last < w.t + 50) return false;
     const v = pointVelocity(samples, last - 15, BOWL.ARM, 15);
     return !!v && len(v) < 0.5 * w.speed;
   }
 
   /**
    * Read the release from the samples [{t, q}] (room frame), HOLD up at tUp (ms).
-   * o: { tPress (ms), seamRef (rad: the player's natural palm angle from earlier balls) }.
+   * o: { tPress (ms), seamRef (rad: the player's natural palm angle from earlier balls),
+   *      dtRef (ms: their natural key timing), azRef (rad: their natural line) }.
    * Returns { ok, why?, t (the whip), dt (key-up - whip, ms), w, r, palm, v, handSpeed, az,
    * lenErr (s off the natural timing, + = late = shorter), twist, alpha (raw palm angle), seam,
    * pace (m/s), spin, swing }. Signs in screen terms: az + = right, twist + = clockwise from the
@@ -193,7 +210,11 @@
     o = o || {};
     const held = o.tPress != null ? tUp - o.tPress : Infinity;
     const wh = findWhip(samples, tUp);
-    if (!wh || wh.speed < BOWL.MIN_HAND) return { ok: false, why: held < BOWL.TAP_MS ? 'tap' : 'nowhip', handSpeed: wh ? wh.speed : 0 };
+    if (!wh || wh.none || wh.speed < BOWL.MIN_HAND) {
+      const a = wh && wh.any, hs = a ? a.speed : 0;
+      const why = held < BOWL.TAP_MS && hs < BOWL.MIN_HAND ? 'tap' : !a || hs < BOWL.MIN_HAND ? 'nowhip' : !a.fwd ? 'backward' : 'underarm';
+      return { ok: false, why, handSpeed: hs, dt: a ? tUp - a.t : null };
+    }
     const f = fitOmega(samples, wh.t, 30, 30);
     if (!f) return { ok: false, why: 'nowhip', handSpeed: wh.speed };
     const w = f.w, q = f.q, v = wh.v;
@@ -208,9 +229,16 @@
     const seam = wrapPi(alpha - (o.seamRef != null ? o.seamRef : alpha));
     const pace = paceFrom(handSpeed), spin = spinFrom(twist);
     const spinness = clamp(spin / BOWL.SPIN.SCRAMBLE, 0, 1);
-    return Object.assign(base, { ok: true, az, lenErr: (dt - BOWL.DT_IDEAL) / 1000, twist, alpha, seam, pace, spin, swing: seamSwing(seam) * (1 - spinness) });
+    const dtRef = o.dtRef != null ? o.dtRef : BOWL.DT_IDEAL, azRef = o.azRef != null ? o.azRef : 0;
+    return Object.assign(base, { ok: true, azRaw: az, az: wrapPi(az - azRef), dtRef, azRef, lenErr: (dt - dtRef) / 1000, twist, alpha, seam, pace, spin, swing: seamSwing(seam) * (1 - spinness) });
   }
 
+  /** Median of a player's recent values (null when there are none). */
+  function median(a) {
+    if (!a.length) return null;
+    const s = a.slice().sort((x, y) => x - y), n = s.length;
+    return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2;
+  }
   /** The player's natural palm angle: the circular median of their recent balls' raw alpha. */
   function seamNeutral(alphas) {
     if (!alphas.length) return null;
@@ -222,26 +250,30 @@
   /**
    * The delivery for a release, in the game world. aim: { x, len } where the bowler means to
    * pitch it (len: metres in front of the batter's stumps). o: { arm: +1 the bowling arm on screen
-   * right, -1 left; gain: GAIN.*; rng: () -> 0..1 }.
+   * right, -1 left; gain: GAIN.*; rng: () -> 0..1; view: 'bowler' when the bowler watches from
+   * behind his own arm (screen right = world -x: the room is the world turned half round, no
+   * mirror) or 'batter' (camera behind the batter, the bowler mirrored into the screen) }.
    * Returns { from, speed, target, aim, w, swing, seamKick, azAdj, lenAdj, spinDir (+1 turns right) }.
    */
   function toDelivery(rel, aim, o) {
     o = o || {};
     const g = o.gain || BOWL.GAIN.NORMAL, rng = o.rng || Math.random;
-    const from = { x: 0.34 * (o.arm || 1), y: rel.pace > 30 ? 2.2 : 2.05, z: BOWL.FROM_Z };
+    const sx = o.view === 'bowler' ? -1 : 1;   // screen right in world x
+    const from = { x: 0.34 * (o.arm || 1) * sx, y: rel.pace > 30 ? 2.2 : 2.05, z: BOWL.FROM_Z };
     const lenAdj = clamp(g.len * (rel.lenErr || 0), -4, 4);
     const target = { x: aim.x, z: -clamp(aim.len + lenAdj, -1.5, 13) };
     const dx = target.x - from.x, dz = target.z - from.z, dl = Math.hypot(dx, dz) || 1;
     const d = { x: dx / dl, y: 0, z: dz / dl };
     const top = cross({ x: 0, y: 1, z: 0 }, d);      // overspin axis: the ball's top rolls forward
-    const sgn = Math.sign(rel.twist || 0);
+    const sgn = Math.sign(rel.twist || 0) * sx;
     const w = rel.spin > 0
       ? { x: -sgn * rel.spin * BOWL.SPIN.SIDE * d.x + rel.spin * BOWL.SPIN.TOP * top.x, y: 0, z: -sgn * rel.spin * BOWL.SPIN.SIDE * d.z + rel.spin * BOWL.SPIN.TOP * top.z }
       : { x: -18 * top.x, y: 0, z: -18 * top.z };      // a seamer's natural backspin
-    const upright = rel.spin > 0 ? 0 : 1 - Math.min(1, Math.abs(rel.swing) * 0.6);
+    const swing = (rel.swing || 0) * sx;
+    const upright = rel.spin > 0 ? 0 : 1 - Math.min(1, Math.abs(swing) * 0.6);
     const gauss = () => { let u = 0, v = 0; while (!u) u = rng(); while (!v) v = rng(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
     const seamKick = clamp(gauss() * 0.35 * upright, -0.8, 0.8);
-    return { from, speed: rel.pace, target, aim: { x: aim.x, len: aim.len }, w, swing: rel.swing || 0, seamKick, lenAdj, azAdj: g.line * (rel.az || 0), spinDir: rel.spin > 0 ? sgn : 0 };
+    return { from, speed: rel.pace, target, aim: { x: aim.x, len: aim.len }, w, swing, seamKick, lenAdj, azAdj: g.line * (rel.az || 0) * sx, spinDir: rel.spin > 0 ? sgn : 0 };
   }
 
   /** The ball as it leaves the hand: aim solved (with swing), then the release error added. */
@@ -280,7 +312,7 @@
   }
 
   const api = { BOWL, mul, conj, norm, rotate, axisAngle, log, cross, dot, len, scale, clamp, wrapPi, decodePad, encodePad, mirrorV, mirrorQ,
-    fitOmega, pointVelocity, heading, seamSwing, paceFrom, spinFrom, findWhip, whipKnown, readRelease, seamNeutral, toDelivery, launch, describe, armQuat };
+    fitOmega, pointVelocity, heading, seamSwing, paceFrom, spinFrom, findWhip, whipKnown, readRelease, median, seamNeutral, toDelivery, launch, describe, armQuat };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (root) { root.CK = root.CK || {}; root.CK.Bowl = api; }
 })(typeof window !== 'undefined' ? window : null);

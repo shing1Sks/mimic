@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gyrowing</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="stage"></div>
+<canvas id="hud"></canvas>
+<div id="fps"></div>
+<div id="toast"></div>
+<div id="vignette"></div>
+<div id="objective" class="hidden">
+  <div class="ob-title"></div>
+  <div class="ob-text"></div>
+  <div class="ob-nav hidden"><span class="ob-arrow"><svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><path d="M10 1 L17.5 18 L10 13.5 L2.5 18 Z" fill="currentColor"/></svg></span><span class="ob-dist"></span><span class="ob-turn"></span></div>
+</div>
+<div id="coach" class="hidden"><b>NEXT</b><span></span></div>
+<div id="turbChip" class="hidden">TURBULENCE</div>
+<div id="goalCard" class="hidden"><div class="gc-k">YOUR GOAL</div><div class="gc-t"></div><div class="gc-s"></div></div>
+<div id="attrib" class="hidden">Imagery: <a href="https://s2maps.eu" target="_blank" rel="noopener">Sentinel-2 cloudless 2016</a> by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2016), CC BY 4.0 &middot; Elevation: <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank" rel="noopener">Mapzen Terrain Tiles</a> (SRTM, GMTED2010, 3DEP courtesy USGS; ETOPO1 NOAA; EU-DEM Copernicus; others, see CREDITS.md) &middot; Airports: <a href="https://ourairports.com/data/" target="_blank" rel="noopener">OurAirports</a></div>
+<div id="soundHint" class="hidden">Click anywhere for sound</div>
+<div id="mbadge" class="mimic-badge hidden"><b>Mimic</b><i></i><span></span></div>
+<div id="mhint" class="mimic-hint hidden"></div>
+
+<aside id="legend" class="hidden">
+  <div class="lg-title" id="legendTitle">Controls</div>
+  <div id="legendRows"></div>
+</aside>
+
+<section id="loading" class="screen">
+  <div class="brand"><div class="logo">GYRO<span>WING</span></div></div>
+  <div class="small">Building the island and getting the real world ready&hellip;</div>
+</section>
+
+<section id="title" class="screen hidden">
+  <div class="title-card">
+    <div class="kicker">A Mimic flight simulator</div>
+    <div class="logo">GYRO<span>WING</span></div>
+    <div class="tag">Real terrain, real airports, flown from your phone.</div>
+    <div class="press" id="titlePress">Press any key or button</div>
+    <div class="pair" id="titlePair">Open Mimic, choose <b>Pad</b> and pair. Keyboard and gamepads work too.</div>
+    <div class="mimic-scan" data-mimic-join="pad" data-compact data-label="No app? Scan to fly"></div>
+  </div>
+</section>
+
+<section id="menu" class="screen hidden">
+  <div class="panel menu-panel">
+    <div class="menu-head"><div class="logo sm">GYRO<span>WING</span></div><div class="status" id="phoneStatus"></div></div>
+    <div class="menu-cols">
+      <div class="menu-col wide">
+        <div class="col-h">Fly the real world <span class="col-sub">satellite imagery, real airports</span></div>
+        <div id="placeGrid" class="place-grid"></div>
+        <div class="ap-search"><input id="apCode" type="text" placeholder="Any airport: KJFK, LHR, Paro" maxlength="40" autocomplete="off" spellcheck="false"><button class="btn slim" data-act="apGo">Go</button><div id="apHits"></div></div>
+        <div class="col-h">The island <span class="col-sub">offline, always ready</span></div>
+        <div class="island-grid">
+          <button class="btn primary" data-act="runway"><b>Takeoff</b><span>Runway 09, engine idling</span></button>
+          <button class="btn" data-act="air"><b>Air start</b><span>2,000 ft, trimmed for cruise</span></button>
+          <button class="btn" data-act="landing"><b>Landing challenge</b><span>Scored final. Best: <em id="bestScore"></em></span></button>
+          <button class="btn" data-act="options"><b>Options</b><span>Controls, assists, time, wind</span></button>
+        </div>
+      </div>
+      <div class="menu-col">
+        <div class="col-h">Island missions</div>
+        <div id="missionList"></div>
+        <button class="btn slim" id="rumbleBtn" data-act="rumble">Enable phone vibration</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="place" class="screen hidden">
+  <div class="panel place-panel">
+    <div class="pl-head"><div class="col-h">Real world</div><h2 id="plName"></h2><div class="small" id="plSub"></div><p id="plBlurb"></p></div>
+    <div class="col-h">Choose a flight</div>
+    <div id="plList"></div>
+    <div class="row"><button class="btn" data-act="back">Back</button></div>
+  </div>
+</section>
+
+<section id="rwload" class="screen hidden">
+  <div class="panel list-panel rwload-panel">
+    <h2 id="rwlTitle">Loading the real world</h2>
+    <div class="bar"><i id="rwlBar"></i></div>
+    <p class="small" id="rwlText"></p>
+    <button class="btn" data-act="rwCancel">Cancel</button>
+  </div>
+</section>
+
+<section id="options" class="screen hidden">
+  <div class="panel opt-panel">
+    <h2>Options</h2>
+    <div id="optRows"></div>
+    <p class="small">Sensitivity above 1.0x hits full deflection early. Expo softens the centre.</p>
+    <button class="btn" data-act="back">Done</button>
+  </div>
+</section>
+
+<section id="pause" class="screen hidden">
+  <div class="panel list-panel">
+    <div class="kicker">Holding position</div>
+    <h2>Paused</h2>
+    <button class="btn primary" data-act="resume">Resume</button>
+    <button class="btn" data-act="restart">Restart</button>
+    <button class="btn" data-act="pauseOptions">Options</button>
+    <button class="btn" data-act="quit">Main menu</button>
+  </div>
+</section>
+
+<section id="crash" class="screen hidden">
+  <div class="panel list-panel">
+    <div class="kicker warn">Flight ended</div>
+    <h2>That one didn&rsquo;t stick</h2>
+    <p class="reason" id="crashReason"></p>
+    <p>Nobody hurt. The insurers are less happy.</p>
+    <button class="btn primary" data-act="retry">Try again</button>
+    <button class="btn" data-act="quit">Main menu</button>
+  </div>
+</section>
+
+<section id="result" class="screen hidden">
+  <div class="panel list-panel result-panel">
+    <div class="res-head"><div class="score" id="resScore">0</div><div><h2 id="resTitle"></h2><div class="small" id="resBest"></div></div></div>
+    <table id="resRows"></table>
+    <button class="btn primary" data-act="retry">Fly it again</button>
+    <button class="btn" data-act="quit">Main menu</button>
+  </div>
+</section>
+
+<script src="../lib/three.min.js"></script>
+<script type="module" src="../lib/vendor/loaders.js"></script>
+<script src="../lib/mimic.js"></script>
+<script src="../lib/mimic-link.js"></script>
+<script src="../lib/recorder.js"></script>
+<script src="flightmodel.js"></script>
+<script src="geo.js"></script>
+<script src="terrain.js"></script>
+<script src="atmos.js"></script>
+<script src="world.js"></script>
+<script src="realworld.js"></script>
+<script src="aircraft.js"></script>
+<script src="audio.js"></script>
+<script src="input.js"></script>
+<script src="coach.js"></script>
+<script src="missions.js"></script>
+<script src="life.js"></script>
+<script src="cockpit.js"></script>
+<script src="hud.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

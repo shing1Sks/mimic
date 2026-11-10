@@ -29,7 +29,7 @@
       badge.style.cssText = 'position:fixed;right:10px;bottom:10px;z-index:2147483646;font:600 12px system-ui;color:#fff;background:rgba(200,30,30,.85);padding:4px 9px;border-radius:12px;pointer-events:none;letter-spacing:.06em';
       document.body.appendChild(badge);
     }
-    badge.textContent = text; badge.style.display = text ? 'block' : 'none';
+    badge.textContent = text; badge.style.display = text ? 'block' : 'none'; badge.style.opacity = autoRec ? '0.55' : '1';
   }
 
   // ------------------------------------------------------------------ input sampling
@@ -48,7 +48,7 @@
   const onWheel = e => log({ k: 'wh', dy: Math.sign(e.deltaY) });
 
   // ------------------------------------------------------------------ video
-  let videoKind = '';
+  let videoKind = '', autoRec = false;
   function startVideo(s, kind) {
     stream = s; videoKind = kind;
     const type = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find(t => MediaRecorder.isTypeSupported(t));
@@ -58,7 +58,7 @@
     rec.ondataavailable = e => { if (e.data && e.data.size) { post(file, e.data, !first.v, sess); first.v = false; } };
     rec.start(3000);
     log({ k: 'video', source: kind, w: s.getVideoTracks()[0] && s.getVideoTracks()[0].getSettings().width });
-    showBadge('● REC ' + (kind === 'tab' ? '' : '(canvas) ') + '· F8 stop');
+    showBadge(autoRec ? '● REC' : '● REC ' + (kind === 'tab' ? '' : '(canvas) ') + '· F8 stop');
     s.getVideoTracks().forEach(t => t.addEventListener('ended', () => stop()));
   }
   function canvasVideo() {
@@ -78,8 +78,9 @@
   }
 
   // ------------------------------------------------------------------ start / stop
-  function start() {
+  function start(auto) {
     if (session) return;
+    auto = autoRec = auto === true;
     const d = new Date();
     session = `${game}-${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
     t0 = performance.now(); seq = 0; lines = [];
@@ -87,6 +88,13 @@
     addEventListener('mousemove', onMove, true); addEventListener('mousedown', onDown, true); addEventListener('mouseup', onUp, true);
     addEventListener('keydown', onKey, true); addEventListener('keyup', onKey, true); addEventListener('wheel', onWheel, { capture: true, passive: true });
     samplePads();
+    if (auto) {
+      // automatic local recording: no share prompt, the game canvas only (wait for it to exist)
+      const tryCanvas = (n) => { if (!session || rec) return; if (document.querySelector('canvas')) canvasVideo(); else if (n < 20) setTimeout(() => tryCanvas(n + 1), 500); };
+      setTimeout(() => tryCanvas(0), 1500);
+      flusher = setInterval(flushLog, 2000);
+      return;
+    }
     showBadge('● REC · click once to share the tab');
     // tab capture needs a real click or key press; until then record inputs, and fall back to the
     // canvas if no click comes
@@ -123,7 +131,10 @@
     /** Games may report what happened: MimicRec.event('hit', {power: .8}). */
     event(name, data) { log(Object.assign({ k: 'ev', name }, data || {})); },
   };
-  if (q.get('rec') === '1') {
-    if (document.readyState === 'loading') addEventListener('DOMContentLoaded', start); else start();
-  }
+  // On this machine's own server every play is recorded (canvas video + inputs) so feedback can
+  // point at a real session; ?rec=1 adds the whole-tab video, ?rec=0 turns it off. Never under
+  // automation (headless tests) and never on a deployed site.
+  const local = /^(127\.0\.0\.1|localhost|\[::1\])$/.test(location.hostname) && location.port === '8765';
+  const go = q.get('rec') === '1' ? () => start() : local && q.get('rec') !== '0' && !navigator.webdriver ? () => start(true) : null;
+  if (go) { if (document.readyState === 'loading') addEventListener('DOMContentLoaded', go); else go(); }
 })();

@@ -174,5 +174,38 @@
     return m;
   }
 
-  window.LudusMat = { wood, burlap, rope, leather, linen, iron, stone, mat, normalFrom };
+  /**
+   * Fewer draw calls: merge an object's direct child meshes that share a material into one mesh
+   * (their transforms baked in). keep(child) -> true leaves a child alone (it moves on its own).
+   */
+  function mergeChildren(obj, keep) {
+    const groups = new Map();
+    for (const c of obj.children.slice()) {
+      if (!c.isMesh || c.isSkinnedMesh || c.children.length || (keep && keep(c)) || Array.isArray(c.material)) continue;
+      if (!groups.has(c.material)) groups.set(c.material, []);
+      groups.get(c.material).push(c);
+    }
+    for (const [material, list] of groups) {
+      if (list.length < 2) continue;
+      const parts = list.map(c => { c.updateMatrix(); const g = (c.geometry.index ? c.geometry.toNonIndexed() : c.geometry.clone()); g.applyMatrix4(c.matrix); return g; });
+      const names = ['position', 'normal', 'uv', 'color'].filter(n => parts.some(g => g.attributes[n]));
+      const total = parts.reduce((a, g) => a + g.attributes.position.count, 0), geo = new T.BufferGeometry();
+      for (const n of names) {
+        const size = n === 'uv' ? 2 : 3, arr = new Float32Array(total * size);
+        let o = 0;
+        for (const g of parts) {
+          const at = g.attributes[n], cnt = g.attributes.position.count;
+          if (at) arr.set(at.array.subarray(0, cnt * size), o * size); else if (n === 'color') arr.fill(1, o * size, (o + cnt) * size);
+          o += cnt;
+        }
+        geo.setAttribute(n, new T.BufferAttribute(arr, size));
+      }
+      const m = new T.Mesh(geo, material);
+      const f = list[0]; m.castShadow = f.castShadow; m.receiveShadow = f.receiveShadow; m.renderOrder = f.renderOrder; m.layers.mask = f.layers.mask;
+      for (const c of list) { obj.remove(c); c.geometry.dispose(); }
+      obj.add(m);
+    }
+  }
+
+  window.LudusMat = { mergeChildren, wood, burlap, rope, leather, linen, iron, stone, mat, normalFrom };
 })();

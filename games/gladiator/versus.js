@@ -117,7 +117,7 @@
         const R = core.makeRig(B.head, TEAM[k].tint);
         // your own arm and fist are for your eyes only; the other player sees your body holding the sword
         for (const m of R.armParts) m.traverse(o => o.layers.set(3 + k));
-        return { B, R };
+        return { B, R, trail: LudusArm.makeTrail(scene) };
       });
       cams.forEach((c, k) => { c.layers.enable(3 + k); c.layers.enable(1 + (1 - k)); });
     }
@@ -193,7 +193,7 @@
     function exit() {
       V.state = 'off';
       for (const P of V.players) if (P && P.avatar) { P.avatar.remove(); scene.remove(P.avatar.root); P.avatar = null; }
-      if (rigs) for (const r of rigs) scene.remove(r.B.body);
+      if (rigs) for (const r of rigs) { scene.remove(r.B.body); scene.remove(r.trail.mesh); }
       for (const c of cams) scene.remove(c);
       rigs = null;
       $('vs-hud').classList.add('hidden');
@@ -388,6 +388,7 @@
       for (const p of P) {
         core.updateSwordHand(p.hand, paused ? 0 : realDt, { fight: fighting, freeze: frozen, keyLunge: fighting && p.ctl === mouseCtl && core.takeKeyLunge() });
         core.poseRig(p.R, cams[p.k], p.hand.q, p.hand.arm, { ext: p.hand.ext, dt: realDt });
+        LudusArm.updateTrail(rigs[p.k].trail, fighting ? p.hand.blade : null, p.hand.tipVel.length());
       }
       if (V.state === 'intro' && !paused) {
         V.introT += realDt;

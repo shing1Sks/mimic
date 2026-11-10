@@ -171,6 +171,7 @@
     R.forearm = buildForearm(R.limbMats[0], R.limbMats[1], R.limbMats[2]); R.rig.add(R.forearm);
     R.upperArm = buildUpperArm(R.limbMats[3], R.limbMats[2], R.limbMats[0]); R.rig.add(R.upperArm);
     R.armParts = [R.forearm, R.upperArm, R.fist];
+    for (const g of [R.swordGrp, R.fist, R.forearm, R.upperArm]) LudusMat.mergeChildren(g);
     return R;
   }
 

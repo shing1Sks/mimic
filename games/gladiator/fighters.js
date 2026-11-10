@@ -258,6 +258,7 @@
         this.dagger = new T.Group(); this.dagger.add(makeSword(0.34)); this.root.add(this.dagger);
         this.dHand = DAGGER_POSE.rest.hand.clone(); this.dDir = DAGGER_POSE.rest.dir.clone();
       }
+      if (window.LudusCreatures && profile.model !== 'dummy') LudusCreatures.dress(this);
       // the weapon's planned pose in the fighter's frame, eased toward the brain's wish every frame
       this.wHand = GUARD.mid.hand.clone().multiplyScalar(this.sc); this.wDir = GUARD.mid.dir.clone();
       this.from = null; this.planKey = '';
@@ -394,6 +395,8 @@
       if (this.walk) this.walk.setEffectiveWeight(this.walkW * (1 - this.atkW));
       if (this.idle && !this.dead) this.idle.setEffectiveWeight((1 - this.walkW) * (1 - this.atkW));
       this.mixer.update(dt);
+      // the skeleton's jaw: it chatters, and gapes as it winds up
+      if (this.jaw && !this.dead) this.jaw.quaternion.copy(this.jawQ0).multiply(_q.setFromAxisAngle(_a.set(1, 0, 0), this.mode === 'windup' ? 0.3 : 0.04 + Math.max(0, Math.sin(this.modeT * 9)) * 0.07));
       // breathing: the chest rises and falls, faster after effort
       if (!this.dead && this.chest) { this.breath = (this.breath || 0) + dt * (this.mode === 'idle' ? 1.6 : 2.6); const k = 1 + Math.sin(this.breath) * 0.018; this.chest.scale.set(k, 1 + (k - 1) * 0.5, k); }
 

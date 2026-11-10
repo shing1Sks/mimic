@@ -1278,7 +1278,7 @@
       world = LudusWorld.build(scene, renderer, assets);
       renderer.shadowMap.type = T.PCFSoftShadowMap;
       applyGfx();
-      fx = LudusFx.create(scene);
+      fx = LudusFx.create(scene); fx.setCamera(camera);
       clashLight = new T.PointLight(0xffe2a8, 0, 4, 2); scene.add(clashLight);
       $('loading').classList.add('hidden');
       $('title').classList.remove('hidden');

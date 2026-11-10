@@ -63,6 +63,51 @@
     }
   }
 
+  /**
+   * Sparks as streaks: each a thin quad from where it is back along its flight, turned to the camera,
+   * white hot at the head cooling to orange; alpha fades it out (never a dark speck on the sand).
+   */
+  class Streaks {
+    constructor(scene, n) {
+      this.n = n; this.i = 0; this.cam = null;
+      this.p = new Float32Array(n * 3); this.v = new Float32Array(n * 3); this.life = new Float32Array(n); this.max = new Float32Array(n);
+      this.pos = new Float32Array(n * 12); this.col = new Float32Array(n * 16);
+      const idx = []; for (let k = 0; k < n; k++) { const a = k * 4; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+      const geo = new T.BufferGeometry(); geo.setIndex(idx);
+      geo.setAttribute('position', new T.BufferAttribute(this.pos, 3)); geo.setAttribute('color', new T.BufferAttribute(this.col, 4));
+      this.mesh = new T.Mesh(geo, new T.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: T.DoubleSide, toneMapped: false }));
+      this.mesh.frustumCulled = false; this.mesh.renderOrder = 7; scene.add(this.mesh);
+      this.a = new T.Vector3(); this.b = new T.Vector3(); this.d = new T.Vector3(); this.s = new T.Vector3();
+    }
+    emit(p, v, color, life) {
+      const k = this.i++ % this.n, j = k * 3;
+      this.p[j] = p.x; this.p[j + 1] = p.y; this.p[j + 2] = p.z; this.v[j] = v.x; this.v[j + 1] = v.y; this.v[j + 2] = v.z;
+      this.life[k] = life; this.max[k] = life;
+    }
+    update(dt) {
+      const cam = this.cam;
+      for (let k = 0; k < this.n; k++) {
+        const j = k * 3, o = k * 12, c = k * 16;
+        if (this.life[k] <= 0) { this.col.fill(0, c, c + 16); continue; }
+        this.life[k] -= dt;
+        this.v[j + 1] -= 6 * dt; const dr = 1 - 1.5 * dt; this.v[j] *= dr; this.v[j + 1] *= dr; this.v[j + 2] *= dr;
+        this.p[j] += this.v[j] * dt; this.p[j + 1] += this.v[j + 1] * dt; this.p[j + 2] += this.v[j + 2] * dt;
+        const f = Math.max(0, this.life[k] / this.max[k]);
+        this.a.set(this.p[j], this.p[j + 1], this.p[j + 2]);
+        this.d.set(this.v[j], this.v[j + 1], this.v[j + 2]);
+        const sp = this.d.length() || 1;
+        this.b.copy(this.a).addScaledVector(this.d, -(0.018 + 0.011 * sp) / sp);
+        if (cam) this.s.copy(this.a).sub(cam.position); else this.s.set(0, 0, 1);
+        this.s.cross(this.d).normalize().multiplyScalar(0.0045);
+        this.pos.set([this.a.x + this.s.x, this.a.y + this.s.y, this.a.z + this.s.z, this.a.x - this.s.x, this.a.y - this.s.y, this.a.z - this.s.z,
+          this.b.x + this.s.x, this.b.y + this.s.y, this.b.z + this.s.z, this.b.x - this.s.x, this.b.y - this.s.y, this.b.z - this.s.z], o);
+        const g = 0.55 + 0.45 * f, bl = 0.15 + 0.8 * f * f, al = Math.min(1, f * 1.6);
+        this.col.set([1, g, bl, al, 1, g, bl, al, 1, 0.45 * g, 0.1, 0, 1, 0.45 * g, 0.1, 0], c);
+      }
+      this.mesh.geometry.attributes.position.needsUpdate = true; this.mesh.geometry.attributes.color.needsUpdate = true;
+    }
+  }
+
   function create(scene) {
     const fx = {};
     // blood pools on the sand
@@ -83,7 +128,8 @@
       const s = size || (0.05 + Math.random() * 0.12); m.scale.set(s, s * (0.7 + Math.random() * 0.6), 1);
       m.rotation.z = Math.random() * 6;
     }
-    fx.sparks = new Particles(scene, 400, { gravity: 6, size: 0.012, additive: true, drag: 1.5 });
+    fx.sparks = new Streaks(scene, 300);
+    fx.setCamera = c => { fx.sparks.cam = c; };
     fx.blood = new Particles(scene, 600, { gravity: 9.8, size: 0.06, additive: false, drag: 0.6, soft: true, floorHit: (x, z) => decal(x, z) });
     fx.dust = new Particles(scene, 200, { gravity: -0.15, size: 0.5, additive: false, drag: 2.5, soft: true });
     fx.dust.mat.opacity = 0.35;
@@ -94,7 +140,7 @@
     fx.clash = (p, strength, dir) => {
       const n = Math.round(18 + 40 * strength);
       for (let k = 0; k < n; k++) {
-        tmp.set(Math.random() - 0.5, Math.random() - 0.2, Math.random() - 0.5).normalize().multiplyScalar(1.5 + Math.random() * 4 * strength);
+        tmp.set(Math.random() - 0.5, Math.random() - 0.2, Math.random() - 0.5).normalize().multiplyScalar(2.5 + Math.random() * 6 * strength);
         if (dir) tmp.addScaledVector(dir, 1.5);
         c1.setRGB(1, 0.72 + Math.random() * 0.28, 0.32 + Math.random() * 0.35);
         fx.sparks.emit(p, tmp, c1, 0.15 + Math.random() * 0.3);

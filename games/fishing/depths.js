@@ -15,7 +15,7 @@
   // ------------------------------------------------------------------ zones
   const ZONES = [
     { id: 'reef', name: 'Sunlit Reef', top: 0, bottom: 20, fog: '#3aaaba', deep: '#17668c', density: 0.022, light: 1.0 },
-    { id: 'kelp', name: 'Kelp Forest', top: 20, bottom: 60, fog: '#1f5e52', deep: '#0f3a3c', density: 0.034, light: 0.5 },
+    { id: 'kelp', name: 'Kelp Forest', top: 20, bottom: 60, fog: '#2a7a64', deep: '#134a44', density: 0.026, light: 0.62 },
     { id: 'twilight', name: 'Twilight', top: 60, bottom: 200, fog: '#0c1d38', deep: '#060e22', density: 0.05, light: 0.12 },
     { id: 'abyss', name: 'The Abyss', top: 200, bottom: 400, fog: '#03050c', deep: '#010206', density: 0.07, light: 0.0 },
   ];

@@ -33,45 +33,45 @@
    */
   const P = (...pts) => pts;
   const DESIGN = {
-    perch: { top: P([0, .02], [.12, .13], [.4, .21], [.75, .1], [1, .045]), bot: P([0, .02], [.15, .09], [.45, .15], [.8, .07], [1, .04]), wid: .1,
+    perch: { top: P([0, .02], [.12, .11], [.4, .17], [.75, .085], [1, .04]), bot: P([0, .02], [.15, .075], [.45, .12], [.8, .06], [1, .035]), wid: .11,
       dorsal: P([.18, 0], [.22, .12], [.3, .14], [.38, .12], [.42, .05], [.46, .09], [.62, .1], [.7, 0]), anal: P([.6, 0], [.66, -.08], [.74, -.07], [.78, 0]),
       tail: 'fork', tailH: .19, eye: .028, mouth: 'small', motion: { amp: .045, wave: 6, beat: 2.2, fin: 7 }, sheen: .2 },
-    mackerel: { top: P([0, .01], [.18, .065], [.5, .085], [.82, .035], [1, .012]), bot: P([0, .012], [.2, .06], [.5, .075], [.85, .03], [1, .01]), wid: .085,
+    mackerel: { top: P([0, .01], [.18, .065], [.5, .085], [.82, .035], [1, .012]), bot: P([0, .012], [.2, .06], [.5, .075], [.85, .03], [1, .01]), wid: .12,
       dorsal: P([.3, 0], [.33, .07], [.42, .03], [.46, 0]), dorsal2: P([.58, 0], [.6, .05], [.66, .02], [.68, 0]), anal: P([.6, 0], [.62, -.045], [.68, -.02], [.7, 0]),
       finlets: true, tail: 'lunate', tailH: .2, eye: .022, mouth: 'small', motion: { amp: .03, wave: 7, beat: 3.4, fin: 4 }, sheen: .75 },
-    puffer: { top: P([0, .07], [.15, .21], [.45, .27], [.8, .15], [1, .05]), bot: P([0, .06], [.2, .2], [.5, .26], [.8, .12], [1, .045]), wid: .25,
+    puffer: { top: P([0, .07], [.15, .21], [.45, .27], [.8, .15], [1, .05]), bot: P([0, .06], [.2, .2], [.5, .26], [.8, .12], [1, .045]), wid: .42,
       dorsal: P([.78, 0], [.82, .1], [.88, .08], [.9, 0]), anal: P([.78, 0], [.82, -.09], [.88, -.07], [.9, 0]),
       tail: 'round', tailH: .14, eye: .05, mouth: 'beak', pect: 1.2, motion: { amp: .012, wave: 4, beat: .8, fin: 14 }, sheen: .15 },
-    snapper: { top: P([0, .03], [.1, .17], [.3, .23], [.7, .12], [1, .042]), bot: P([0, .02], [.2, .1], [.5, .14], [.85, .06], [1, .036]), wid: .09,
+    snapper: { top: P([0, .03], [.1, .15], [.3, .2], [.7, .1], [1, .04]), bot: P([0, .02], [.2, .09], [.5, .12], [.85, .055], [1, .034]), wid: .1,
       dorsal: P([.2, 0], [.24, .13], [.35, .14], [.5, .1], [.64, .12], [.72, 0]), anal: P([.62, 0], [.66, -.1], [.74, -.08], [.78, 0]),
       tail: 'fork', tailH: .22, eye: .03, mouth: 'jaw', motion: { amp: .04, wave: 6, beat: 2, fin: 6 }, sheen: .35 },
-    eel: { top: P([0, .02], [.06, .04], [.5, .042], [.9, .03], [1, .01]), bot: P([0, .018], [.06, .036], [.5, .038], [.9, .026], [1, .008]), wid: .036,
+    eel: { top: P([0, .02], [.06, .04], [.5, .042], [.9, .03], [1, .01]), bot: P([0, .018], [.06, .036], [.5, .038], [.9, .026], [1, .008]), wid: .06,
       ribbon: true, tail: 'none', eye: .014, mouth: 'jaw', motion: { amp: .085, wave: 14, beat: 1.4, fin: 3 }, sheen: .4 },
-    tarpon: { top: P([0, .025], [.2, .1], [.5, .125], [.85, .05], [1, .02]), bot: P([0, .035], [.2, .095], [.5, .105], [.85, .04], [1, .02]), wid: .08,
+    tarpon: { top: P([0, .025], [.2, .1], [.5, .125], [.85, .05], [1, .02]), bot: P([0, .035], [.2, .095], [.5, .105], [.85, .04], [1, .02]), wid: .1,
       dorsal: P([.48, 0], [.5, .1], [.53, .16], [.56, .05], [.6, 0]), anal: P([.66, 0], [.68, -.08], [.74, -.04], [.76, 0]),
       tail: 'fork', tailH: .3, eye: .026, mouth: 'up', motion: { amp: .032, wave: 6.5, beat: 2.6, fin: 4 }, sheen: .9 },
-    bass: { top: P([0, .02], [.15, .1], [.45, .15], [.8, .07], [1, .036]), bot: P([0, .02], [.2, .08], [.5, .11], [.85, .05], [1, .03]), wid: .085,
+    bass: { top: P([0, .02], [.15, .1], [.45, .15], [.8, .07], [1, .036]), bot: P([0, .02], [.2, .08], [.5, .11], [.85, .05], [1, .03]), wid: .12,
       dorsal: P([.24, 0], [.28, .1], [.36, .11], [.44, .06], [.48, .09], [.64, .08], [.7, 0]), anal: P([.62, 0], [.66, -.07], [.74, -.06], [.77, 0]),
       tail: 'fork', tailH: .18, eye: .025, mouth: 'jaw', motion: { amp: .042, wave: 6, beat: 2, fin: 6 }, sheen: .4 },
-    pike: { top: P([0, .008], [.18, .04], [.5, .068], [.85, .06], [1, .03]), bot: P([0, .006], [.2, .036], [.5, .058], [.85, .045], [1, .025]), wid: .06,
+    pike: { top: P([0, .008], [.18, .04], [.5, .068], [.85, .06], [1, .03]), bot: P([0, .006], [.2, .036], [.5, .058], [.85, .045], [1, .025]), wid: .09,
       dorsal: P([.72, 0], [.76, .09], [.86, .07], [.9, 0]), anal: P([.74, 0], [.78, -.07], [.88, -.05], [.9, 0]),
       tail: 'fork', tailH: .14, eye: .016, mouth: 'duck', motion: { amp: .05, wave: 5.5, beat: 2.4, fin: 3 }, sheen: .3 },
-    scorpion: { top: P([0, .05], [.15, .17], [.4, .2], [.8, .1], [1, .05]), bot: P([0, .045], [.2, .12], [.5, .13], [.85, .07], [1, .042]), wid: .15,
+    scorpion: { top: P([0, .05], [.15, .17], [.4, .2], [.8, .1], [1, .05]), bot: P([0, .045], [.2, .12], [.5, .13], [.85, .07], [1, .042]), wid: .2,
       spines: true, dorsal: P([.5, 0], [.54, .09], [.7, .08], [.76, 0]), anal: P([.6, 0], [.64, -.08], [.72, -.06], [.75, 0]),
       tail: 'round', tailH: .16, eye: .03, mouth: 'jaw', pect: 2.6, flaps: true, motion: { amp: .025, wave: 5, beat: 1.4, fin: 3 }, sheen: .1 },
     ray: { top: P([0, .01], [.2, .03], [.5, .035], [.8, .02], [1, .01]), bot: P([0, .008], [.2, .02], [.5, .024], [.8, .014], [1, .008]), wid: 1,
       widCurve: P([0, .06], [.25, .48], [.5, .44], [.75, .16], [1, .03]), tail: 'whip', eye: .014, eyeTop: true, mouth: 'none',
       motion: { amp: 0, wave: 0, beat: 1, fin: 0, flap: .1 }, sheen: .15 },
-    lantern: { top: P([0, .03], [.2, .11], [.5, .13], [.8, .07], [1, .03]), bot: P([0, .03], [.2, .1], [.5, .12], [.8, .06], [1, .028]), wid: .07,
+    lantern: { top: P([0, .03], [.2, .11], [.5, .13], [.8, .07], [1, .03]), bot: P([0, .03], [.2, .1], [.5, .12], [.8, .06], [1, .028]), wid: .09,
       dorsal: P([.42, 0], [.45, .09], [.55, .06], [.58, 0]), anal: P([.62, 0], [.64, -.06], [.74, -.04], [.76, 0]),
       tail: 'fork', tailH: .2, eye: .06, mouth: 'small', photo: true, motion: { amp: .04, wave: 7, beat: 3, fin: 6 }, sheen: .6 },
     squid: { squid: true, eye: .05, motion: { amp: .02, wave: 4, beat: 1, fin: 5 }, sheen: .3 },
-    gulper: { top: P([0, .1], [.2, .22], [.45, .16], [.8, .05], [1, .02]), bot: P([0, .17], [.2, .24], [.45, .12], [.8, .04], [1, .02]), wid: .18,
+    gulper: { top: P([0, .1], [.2, .22], [.45, .16], [.8, .05], [1, .02]), bot: P([0, .17], [.2, .24], [.45, .12], [.8, .04], [1, .02]), wid: .24,
       dorsal: P([.62, 0], [.66, .06], [.76, .03], [.78, 0]), tail: 'whip2', eye: .012, mouth: 'fangs', motion: { amp: .05, wave: 5, beat: 1.4, fin: 4 }, sheen: .2 },
-    grouper: { top: P([0, .045], [.15, .17], [.45, .21], [.8, .11], [1, .05]), bot: P([0, .05], [.2, .14], [.5, .17], [.85, .08], [1, .045]), wid: .14,
+    grouper: { top: P([0, .04], [.15, .14], [.45, .17], [.8, .09], [1, .045]), bot: P([0, .045], [.2, .12], [.5, .14], [.85, .07], [1, .04]), wid: .17,
       dorsal: P([.22, 0], [.26, .1], [.4, .1], [.55, .07], [.7, .1], [.78, 0]), anal: P([.64, 0], [.68, -.1], [.76, -.08], [.79, 0]),
       tail: 'round', tailH: .2, eye: .022, mouth: 'lips', motion: { amp: .03, wave: 5, beat: 1.4, fin: 4 }, sheen: .3 },
-    angler: { top: P([0, .13], [.25, .24], [.55, .18], [.85, .07], [1, .03]), bot: P([0, .17], [.25, .24], [.55, .15], [.85, .05], [1, .03]), wid: .25,
+    angler: { top: P([0, .13], [.25, .24], [.55, .18], [.85, .07], [1, .03]), bot: P([0, .17], [.25, .24], [.55, .15], [.85, .05], [1, .03]), wid: .4,
       dorsal: P([.72, 0], [.76, .06], [.84, .04], [.86, 0]), tail: 'round', tailH: .12, eye: .014, mouth: 'fangs', lure: true, motion: { amp: .025, wave: 4, beat: 1, fin: 5 }, sheen: .15 },
   };
   /** A smooth (Catmull-Rom) curve through the profile points, so bodies have no kinks. */
@@ -90,52 +90,94 @@
     for (let i = 0; i < uv.count; i++) uv.setXY(i, (pos.getZ(i) - b.min.z) / sx, (pos.getY(i) - b.min.y) / sy);
     return g;
   }
+  /*
+   * Skins. v runs round the body (0 and 1 on the back, 0.5 on the belly), u from nose to tail.
+   * Per species: how big its scales read (0 = smooth or tiny), its eye colour, an optional sheen.
+   */
+  const SKIN = {
+    perch: { scale: 8, eye: '#f0a020' }, mackerel: { scale: 0, eye: '#dfe8ea', sheen: 0.5 }, puffer: { scale: 0, eye: '#7ac040' },
+    snapper: { scale: 10, eye: '#ff5030' }, eel: { scale: 0, eye: '#f0e05a' }, tarpon: { scale: 22, eye: '#e8eef4', sheen: 0.7 },
+    bass: { scale: 9, eye: '#e0a830' }, pike: { scale: 5, eye: '#e8c040' }, scorpion: { scale: 0, eye: '#ff6a3a' }, ray: { scale: 0, eye: '#a08050' },
+    lantern: { scale: 10, eye: '#1a2a48', sheen: 0.5 }, squid: { scale: 0, eye: '#1a1a1a' }, gulper: { scale: 0, eye: '#3a3a50' },
+    grouper: { scale: 6, eye: '#d09030' }, angler: { scale: 0, eye: '#6a5058' },
+  };
   function skin(sp) {
-    const look = sp.look;
-    return canvasTex(512, 256, (g, w, h) => {
-      // countershading: back to flank to belly
-      for (let y = 0; y < h; y++) {
-        const t = Math.abs(y / h - 0.5) * 2;
-        const c = t < 0.4 ? col(look.belly).lerp(col(look.side), t / 0.4) : col(look.side).lerp(col(look.back), Math.min(1, (t - 0.4) / 0.5));
-        g.fillStyle = '#' + c.getHexString(T.SRGBColorSpace); g.fillRect(0, y, w, 1);
-      }
-      let s = look.back.length * 977 + look.side.charCodeAt(2) * 31;
+    const look = sp.look, sk = SKIN[sp.id] || { scale: 8 };
+    return canvasTex(512, 512, (g, w, h) => {
+      // countershading, smooth: back, flank, belly, flank, back
+      const gr = g.createLinearGradient(0, 0, 0, h);
+      [[0, look.back], [0.2, look.side], [0.42, look.belly], [0.58, look.belly], [0.8, look.side], [1, look.back]].forEach(([k, c]) => gr.addColorStop(k, c));
+      g.fillStyle = gr; g.fillRect(0, 0, w, h);
+      let s = look.back.length * 977 + look.side.charCodeAt(2) * 31 + sp.id.length * 7;
       const r = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
-      const both = (fn) => { fn(false); fn(true); };   // the texture wraps round the body: mark both flanks
-      g.fillStyle = look.back; g.strokeStyle = look.back;
-      if (look.mark === 'bars') { g.globalAlpha = 0.5; for (let i = 0; i < 7; i++) { const x = w * (0.22 + i * 0.1); both(m => { g.beginPath(); g.moveTo(x, m ? h : 0); g.lineTo(x + w * 0.05, m ? h : 0); g.lineTo(x + w * 0.035, m ? h * 0.62 : h * 0.38); g.lineTo(x + w * 0.012, m ? h * 0.62 : h * 0.38); g.fill(); }); } }
-      if (look.mark === 'stripes') { g.globalAlpha = 0.45; g.lineWidth = 5; [0.28, 0.36, 0.64, 0.72].forEach(v => { g.beginPath(); g.moveTo(w * 0.15, h * v); g.lineTo(w * 0.98, h * v + (r() - 0.5) * 4); g.stroke(); }); }
-      if (look.mark === 'waves') { g.globalAlpha = 0.8; g.lineWidth = 5; for (let k = 0; k < 16; k++) both(m => { const x0 = w * (0.2 + k * 0.05); g.beginPath(); for (let y = 0; y < h * 0.24; y += 4) g.lineTo(x0 + Math.sin(y * 0.09 + k) * 9, m ? h - y : y); g.stroke(); }); }
-      if (look.mark === 'spots') { g.globalAlpha = 0.6; for (let i = 0; i < 110; i++) { const y = r() < 0.5 ? r() * h * 0.42 : h - r() * h * 0.42; g.beginPath(); g.arc(w * (0.08 + r() * 0.9), y, 3 + r() * 5, 0, Math.PI * 2); g.fill(); } }
-      if (look.mark === 'speckle') { g.globalAlpha = 0.5; for (let i = 0; i < 700; i++) { g.fillStyle = r() < 0.5 ? look.back : look.fin; g.fillRect(w * r(), h * r(), 2 + r() * 3, 2 + r() * 3); } }
-      // scales everywhere, finer on small fish
-      g.globalAlpha = look.mark === 'scales' ? 0.32 : 0.14; g.strokeStyle = '#ffffff'; g.lineWidth = 1;
-      const sc = sp.cls <= 1 ? 7 : 10;
-      for (let x = 30; x < w; x += sc) for (let y = 4; y < h; y += sc * 0.75) { g.beginPath(); g.arc(x + ((y / (sc * 0.75)) % 2 ? sc / 2 : 0), y, sc * 0.55, 0.4, Math.PI - 0.4); g.stroke(); }
-      // the lateral line and the gill cover
-      g.globalAlpha = 0.45; g.strokeStyle = look.back; g.lineWidth = 2;
-      both(m => { g.beginPath(); for (let x = w * 0.18; x < w * 0.98; x += 8) g.lineTo(x, m ? h * 0.66 + Math.sin(x * 0.01) * 6 : h * 0.34 - Math.sin(x * 0.01) * 6); g.stroke(); });
-      g.globalAlpha = 0.5; g.lineWidth = 3;
-      g.beginPath(); g.moveTo(w * 0.17, h * 0.12); g.quadraticCurveTo(w * 0.23, h * 0.5, w * 0.17, h * 0.88); g.stroke();
-      // a darker, glossier head
-      const hg = g.createLinearGradient(0, 0, w * 0.18, 0); hg.addColorStop(0, 'rgba(0,0,0,0.3)'); hg.addColorStop(1, 'rgba(0,0,0,0)');
-      g.globalAlpha = 1; g.fillStyle = hg; g.fillRect(0, 0, w * 0.18, h);
+      const both = fn => { fn(false); fn(true); };   // the texture wraps round the body: mark both flanks
+      const Y = (m, y) => m ? h - y : y;
+      // a soft silver or gold band along each flank on the shiny swimmers
+      if (sk.sheen) both(m => { const b = g.createLinearGradient(0, Y(m, h * 0.18), 0, Y(m, h * 0.36)); b.addColorStop(0, 'rgba(255,255,255,0)'); b.addColorStop(0.5, `rgba(255,255,255,${sk.sheen * 0.35})`); b.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = b; g.fillRect(w * 0.15, Math.min(Y(m, h * 0.18), Y(m, h * 0.36)), w * 0.85, h * 0.18); });
+      // markings, with soft edges
+      g.filter = 'blur(2px)'; g.fillStyle = look.back; g.strokeStyle = look.back;
+      if (look.mark === 'bars') { g.globalAlpha = 0.55; for (let i = 0; i < 6; i++) { const x = w * (0.26 + i * 0.105); both(m => { g.beginPath(); g.moveTo(x, Y(m, 0)); g.lineTo(x + w * 0.05, Y(m, 0)); g.lineTo(x + w * 0.03, Y(m, h * 0.3)); g.lineTo(x + w * 0.012, Y(m, h * 0.3)); g.fill(); }); } }
+      if (look.mark === 'stripes') { g.globalAlpha = 0.5; g.lineWidth = 6; both(m => [0.2, 0.3].forEach(v => { g.beginPath(); g.moveTo(w * 0.12, Y(m, h * v)); g.bezierCurveTo(w * 0.4, Y(m, h * (v - 0.02)), w * 0.7, Y(m, h * (v + 0.02)), w, Y(m, h * v)); g.stroke(); })); }
+      if (look.mark === 'waves') { g.globalAlpha = 0.85; g.lineWidth = 4; for (let k = 0; k < 18; k++) both(m => { const x0 = w * (0.22 + k * 0.042); g.beginPath(); for (let y = 0; y < h * 0.2; y += 4) g.lineTo(x0 + Math.sin(y * 0.08 + k) * 8, Y(m, y)); g.stroke(); }); }
+      if (look.mark === 'spots') { g.globalAlpha = 0.65; for (let i = 0; i < 90; i++) { const m = r() < 0.5, y = Y(m, h * (0.02 + r() * 0.3)); g.beginPath(); g.ellipse(w * (0.1 + r() * 0.85), y, 3 + r() * 5, 2.5 + r() * 4, 0, 0, Math.PI * 2); g.fill(); } }
+      if (look.mark === 'speckle') { g.globalAlpha = 0.45; for (let i = 0; i < 900; i++) { g.fillStyle = r() < 0.5 ? look.back : look.fin; g.beginPath(); g.arc(w * r(), h * r(), 1 + r() * 3, 0, Math.PI * 2); g.fill(); } }
+      g.filter = 'none';
+      // scales: overlapping soft scallops with jitter, each lit on its leading edge; no grid
+      if (sk.scale) {
+        const sc = sk.scale;
+        for (let y = sc * 0.5; y < h; y += sc * 0.62) for (let x = w * 0.2; x < w; x += sc * 0.8) {
+          const ox = x + ((y / (sc * 0.62)) % 2 < 1 ? 0 : sc * 0.4) + (r() - 0.5) * sc * 0.15, oy = y + (r() - 0.5) * sc * 0.12;
+          const a = 0.05 + r() * 0.05;
+          g.globalAlpha = 1;
+          const rg = g.createRadialGradient(ox - sc * 0.15, oy, 0, ox, oy, sc * 0.6);
+          rg.addColorStop(0, `rgba(255,255,255,${a})`); rg.addColorStop(0.75, 'rgba(255,255,255,0)'); rg.addColorStop(1, `rgba(0,0,0,${a * 1.4})`);
+          g.fillStyle = rg; g.beginPath(); g.arc(ox, oy, sc * 0.6, -Math.PI / 2, Math.PI / 2); g.fill();
+        }
+      }
+      // the lateral line: a fine row of pores following the back's curve
+      g.globalAlpha = 0.5; g.fillStyle = look.back;
+      both(m => { for (let x = w * 0.2; x < w * 0.97; x += 5) { const y = h * 0.24 - Math.sin((x / w) * Math.PI) * h * 0.04; g.fillRect(x, Y(m, y), 2.4, 1.6); } });
+      // the gill cover: a darker crescent with a lit rim, and the head darker above the eye
+      both(m => {
+        const gx = w * 0.17;
+        const gg = g.createLinearGradient(gx - w * 0.05, 0, gx + w * 0.01, 0); gg.addColorStop(0, 'rgba(0,0,0,0)'); gg.addColorStop(1, 'rgba(0,0,0,0.22)');
+        g.globalAlpha = 1; g.fillStyle = gg; g.beginPath(); g.moveTo(gx - w * 0.06, Y(m, h * 0.06)); g.quadraticCurveTo(gx + w * 0.03, Y(m, h * 0.25), gx - w * 0.04, Y(m, h * 0.46)); g.lineTo(gx - w * 0.08, Y(m, h * 0.46)); g.lineTo(gx - w * 0.08, Y(m, h * 0.06)); g.fill();
+        g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(gx - w * 0.055, Y(m, h * 0.07)); g.quadraticCurveTo(gx + w * 0.035, Y(m, h * 0.25), gx - w * 0.035, Y(m, h * 0.45)); g.stroke();
+      });
+      const hg = g.createLinearGradient(0, 0, w * 0.16, 0); hg.addColorStop(0, 'rgba(0,0,0,0.25)'); hg.addColorStop(1, 'rgba(0,0,0,0)');
+      g.globalAlpha = 1; g.fillStyle = hg; g.fillRect(0, 0, w * 0.16, h);
     });
   }
-  /** Fin texture: translucent membrane with rays radiating from the base. */
+  /** Fin membrane: translucent, tinted toward the edge, with dark rays fanning from the base and a soft rim. */
   const finTexCache = {};
   function finTex(color) {
     if (finTexCache[color]) return finTexCache[color];
-    return (finTexCache[color] = canvasTex(128, 128, (g, w, h) => {
-      const c = col(color);
-      g.fillStyle = `rgba(${c.r * 255 | 0},${c.g * 255 | 0},${c.b * 255 | 0},0.7)`; g.fillRect(0, 0, w, h);
-      g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 2;
-      for (let i = 0; i < 14; i++) { g.beginPath(); g.moveTo(w * 0.5, h); g.lineTo(i / 13 * w, 0); g.stroke(); }
-      const e = g.createLinearGradient(0, 0, 0, h); e.addColorStop(0, 'rgba(255,255,255,0.25)'); e.addColorStop(0.3, 'rgba(255,255,255,0)'); g.fillStyle = e; g.fillRect(0, 0, w, h);
+    return (finTexCache[color] = canvasTex(256, 256, (g, w, h) => {
+      const c = col(color), lc = col(color).lerp(col('#ffffff'), 0.35), rgba = (q, a) => `rgba(${q.r * 255 | 0},${q.g * 255 | 0},${q.b * 255 | 0},${a})`;
+      // the base (bottom of the texture) is dense, the edge thin and light
+      const gr = g.createLinearGradient(0, h, 0, 0); gr.addColorStop(0, rgba(c, 0.92)); gr.addColorStop(0.6, rgba(c, 0.62)); gr.addColorStop(1, rgba(lc, 0.28));
+      g.fillStyle = gr; g.fillRect(0, 0, w, h);
+      g.strokeStyle = 'rgba(20,10,5,0.45)'; g.lineWidth = 2.2; g.lineCap = 'round';
+      for (let i = 0; i < 16; i++) { const x = i / 15 * w; g.beginPath(); g.moveTo(w * 0.5 + (x - w * 0.5) * 0.3, h); g.quadraticCurveTo(w * 0.5 + (x - w * 0.5) * 0.7, h * 0.5, x, 0); g.stroke(); }
+      g.strokeStyle = 'rgba(255,255,255,0.18)'; g.lineWidth = 1;
+      for (let i = 0; i < 16; i++) { const x = i / 15 * w + 3; g.beginPath(); g.moveTo(w * 0.5 + (x - w * 0.5) * 0.3, h); g.quadraticCurveTo(w * 0.5 + (x - w * 0.5) * 0.7, h * 0.5, x, 0); g.stroke(); }
     }));
   }
-  /** Half the body's width at u: real fish are thick (about half as wide as deep), not cut-outs. */
-  const WF = 1.6;
+  /** An eye texture for a sphere (+x faces out): a coloured iris with a dark rim, a black pupil and a catch-light. */
+  const eyeTexCache = {};
+  function eyeTex(color) {
+    if (eyeTexCache[color]) return eyeTexCache[color];
+    return (eyeTexCache[color] = canvasTex(256, 128, (g, w, h) => {
+      g.fillStyle = '#141008'; g.fillRect(0, 0, w, h);
+      const cx = w * 0.5, cy = h * 0.5, R = h * 0.42;
+      const ir = g.createRadialGradient(cx, cy, R * 0.3, cx, cy, R); ir.addColorStop(0, col(color).lerp(col('#ffffff'), 0.3).getStyle()); ir.addColorStop(0.75, color); ir.addColorStop(1, '#1a1208');
+      g.fillStyle = ir; g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#020202'; g.beginPath(); g.arc(cx, cy, R * 0.48, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.85)'; g.beginPath(); g.ellipse(cx - R * 0.22, cy - R * 0.25, R * 0.14, R * 0.1, -0.5, 0, Math.PI * 2); g.fill();
+    }));
+  }
+  /** Half the body's width at u (wid is the real width as a fraction of length). */
+  const WF = 1;
   function halfW(d, u) {
     if (d.widCurve) return lerpPts(d.widCurve, u);
     const topMax = Math.max(...d.top.map(p => p[1])), botMax = Math.max(...d.bot.map(p => p[1]));
@@ -149,7 +191,7 @@
       const ww = halfW(d, u);
       const nose = u < 0.04 ? Math.sqrt(u / 0.04) : 1;
       for (let j = 0; j <= NV; j++) {
-        const a = j / NV * Math.PI * 2, ca = sp08(Math.cos(a)), sa = sp08(Math.sin(a));
+        const a = j / NV * Math.PI * 2, ca = Math.cos(a), sa = sp08(Math.sin(a));
         const y = (ca > 0 ? ca * t : ca * b) * nose, x = sa * ww * nose;
         pos.push(x, y, -0.5 + u); uv.push(u, j / NV);
       }
@@ -182,7 +224,7 @@
   function parts(sp) {
     if (cache[sp.id]) return cache[sp.id];
     const d = DESIGN[sp.id] || DESIGN.perch, look = sp.look;
-    const out = { d, map: skin(sp), fin: new T.MeshStandardMaterial({ map: finTex(look.fin), transparent: true, opacity: 0.85, side: T.DoubleSide, roughness: 0.6, depthWrite: false, emissive: sp.glow ? col(look.fin) : 0x000000, emissiveIntensity: sp.glow ? 0.3 : 0 }) };
+    const out = { d, map: skin(sp), fin: new T.MeshStandardMaterial({ map: finTex(look.fin), transparent: true, side: T.DoubleSide, roughness: 0.5, depthWrite: false, emissive: sp.glow ? col(look.fin) : 0x000000, emissiveIntensity: sp.glow ? 0.3 : 0 }) };
     if (d.squid) out.geo = squidGeo();
     else {
       out.geo = bodyGeo(d);
@@ -198,26 +240,16 @@
     const d = { top: P([0, .005], [.12, .05], [.45, .085], [.62, .09], [.7, .07], [.8, .085], [.9, .06], [1, .04]), bot: P([0, .005], [.12, .05], [.45, .085], [.62, .09], [.7, .07], [.8, .085], [.9, .06], [1, .04]), wid: .17 };
     return bodyGeo(d);
   }
-  const eyeMat = new T.MeshStandardMaterial({ color: 0x050505, roughness: 0.05, metalness: 0.5 });
-  const ringMats = {};
-  const ringMat = c => ringMats[c] || (ringMats[c] = new T.MeshStandardMaterial({ color: c, roughness: 0.3, metalness: 0.6 }));
   const toothMat = new T.MeshStandardMaterial({ color: 0xf4efe0, roughness: 0.3 });
   const glowBulb = new T.MeshBasicMaterial({ color: 0xc8fff4 });
   const RIM = { value: new T.Color(0x9fe8ff) };   // shared by every fish; the world below dims it with the light
   const glint = new T.MeshBasicMaterial({ color: 0xffffff });
-  /** Scales as relief: rows of overlapping arcs that catch the light as the fish turns. */
-  const scaleBump = canvasTex(512, 256, (g, w, h) => {
-    g.fillStyle = '#808080'; g.fillRect(0, 0, w, h); g.lineWidth = 2;
-    for (let x = 0; x < w + 12; x += 9) for (let y = 0; y < h + 8; y += 7) {
-      const ox = (Math.round(y / 7) % 2) * 4.5;
-      g.strokeStyle = '#d0d0d0'; g.beginPath(); g.arc(x + ox, y, 5, 0.3, Math.PI - 0.3); g.stroke();
-      g.strokeStyle = '#404040'; g.beginPath(); g.arc(x + ox, y + 1.5, 5, 0.5, Math.PI - 0.5); g.stroke();
-    }
-  });
+  const eyeGeo = new T.SphereGeometry(1, 20, 14), eyeMats = {};
+  const eyeMatFor = sp => { const c = (SKIN[sp.id] || {}).eye || '#d0a030'; return eyeMats[c] || (eyeMats[c] = new T.MeshStandardMaterial({ map: eyeTex(c), roughness: 0.08, metalness: 0.1 })); };
   const cyl = new T.CylinderGeometry(1, 1, 1, 8);
 
   /** A body material that swims: a travelling wave sideways, stronger toward the tail; rays flap their wings. */
-  function waveMat(base, u) {
+  function waveMat(base, u, fin) {
     const m = base.clone();
     m.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, u);
@@ -225,14 +257,15 @@
         `#include <begin_vertex>
          float kk = clamp(position.z + 0.5, 0.0, 1.2);
          transformed.x += sin(position.z * uFreq - uT) * uAmp * (0.15 + kk * kk);
-         transformed.y += sin(uT * 0.35 - abs(position.x) * 3.0) * uFlap * position.x * position.x * 6.0;`);
+         transformed.y += sin(uT * 0.35 - abs(position.x) * 3.0) * uFlap * position.x * position.x * 6.0;` + (fin ? `
+         transformed.x += sin(position.y * 28.0 + position.z * 16.0 - uT * 1.6) * 0.01 * (0.4 + uAmp * 12.0);` : ''));
       // rim light: water-lit edges that show the body's roundness, and a little light through the skin
       sh.fragmentShader = 'uniform vec3 uRim;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
          float ndv = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
          float rim = pow(1.0 - ndv, 2.6);
          totalEmissiveRadiance += (uRim * 0.28 + diffuseColor.rgb * uRim * 0.5) * rim;`);
     };
-    m.customProgramCacheKey = () => 'tide-wave3';
+    m.customProgramCacheKey = () => fin ? 'tide-wave3f' : 'tide-wave3';
     return m;
   }
 
@@ -247,27 +280,30 @@
     const body = new T.Mesh(Pt.geo, waveMat(new T.MeshStandardMaterial({ map: Pt.map, roughness: 0.38 - d.sheen * 0.18, metalness: 0.06 + d.sheen * 0.4,
       transparent: !!d.squid, opacity: d.squid ? 0.78 : 1, emissive: sp.glow ? col(look.side) : 0x000000, emissiveIntensity: sp.glow ? 0.35 : 0 }), u));
     g.add(body);
-    const finM = waveMat(Pt.fin, u);
+    const finM = waveMat(Pt.fin, u, true);
     for (const k of ['dorsal', 'dorsal2', 'anal', 'tail']) if (Pt[k]) g.add(new T.Mesh(Pt[k], finM));
     const ud = { u, sp, mo, pect: [], body };
     // eyes: a dark lens in a coloured iris, set where this species carries them
     const eyeR = d.eye || 0.025, ez = d.squid ? 0.18 : -0.5 + (d.mouth === 'duck' ? 0.12 : 0.085), ey = d.eyeTop ? lerpPts(d.top, 0.2) : d.squid ? 0 : lerpPts(d.top, ez + 0.5) * 0.35;
     [-1, 1].forEach(s => {
       const ex = d.eyeTop ? s * 0.06 : s * (d.squid ? 0.1 : Math.max(0.01, (d.widCurve ? 0.04 : halfW(d, ez + 0.5)) * 0.9));
-      const iris = new T.Mesh(new T.SphereGeometry(eyeR * 1.25, 12, 8), ringMat(sp.glow ? 0x9fe0ff : look.fin)); iris.position.set(ex, ey, ez); iris.scale.x = 0.45; g.add(iris);
-      const pupil = new T.Mesh(new T.SphereGeometry(eyeR * 0.8, 10, 8), eyeMat); pupil.position.set(ex * 1.06, ey, ez); pupil.scale.x = 0.6; g.add(pupil);
-      const hi = new T.Mesh(new T.SphereGeometry(eyeR * 0.22, 6, 4), glint); hi.position.set(ex * 1.06 + s * eyeR * 0.45, ey + eyeR * 0.35, ez - eyeR * 0.3); g.add(hi);   // the wet glint that makes it look alive
+      const ball = new T.Mesh(eyeGeo, eyeMatFor(sp)); ball.scale.set(eyeR * 0.38, eyeR * 1.1, eyeR * 1.1); ball.position.set(ex * 0.9, ey, ez);   // set into the head, only the face of it showing
+      if (s < 0) ball.rotation.y = Math.PI; g.add(ball);
+      const hi = new T.Mesh(new T.SphereGeometry(eyeR * 0.16, 6, 4), glint); hi.position.set(ex + s * eyeR * 0.5, ey + eyeR * 0.4, ez - eyeR * 0.35); g.add(hi);   // the wet glint that makes it look alive
     });
     // mouths that tell you what it eats
+    const jawMat = new T.MeshStandardMaterial({ color: col(look.side).lerp(col(look.back), 0.35), roughness: 0.4 });
     if (d.mouth === 'fangs') {
       const jaw = new T.Group(); jaw.position.set(0, -lerpPts(d.bot, 0.1) * 0.3, -0.42); g.add(jaw); ud.jaw = jaw;
       for (let i = 0; i < 14; i++) {
         const a = (i / 13 - 0.5) * 2.6, tt = new T.Mesh(new T.ConeGeometry(0.008, 0.04 + (i % 3) * 0.025, 4), toothMat);
         tt.position.set(Math.sin(a) * d.wid * 0.4, i % 2 ? 0.02 : -0.02, -0.07 + Math.abs(Math.sin(a)) * 0.05); tt.rotation.x = i % 2 ? Math.PI : 0; (i % 2 ? g : jaw).add(tt);
       }
-    } else if (d.mouth === 'lips') { const lip = new T.Mesh(new T.TorusGeometry(0.045, 0.02, 6, 14), body.material); lip.position.set(0, -0.01, -0.49); g.add(lip); }
+    } else if (d.mouth === 'lips') {   // a grouper's heavy jaw: thick lips, the lower one jutting
+      [[0.012, 0.05, 0.016], [-0.022, 0.055, 0.02]].forEach(([y, w, t], k) => { const lp = new T.Mesh(new T.SphereGeometry(1, 12, 8), jawMat); lp.scale.set(w, t, 0.035); lp.position.set(0, y, -0.488 - k * 0.008); g.add(lp); });
+    }
     else if (d.mouth === 'beak') { const bk = new T.Mesh(new T.SphereGeometry(0.035, 10, 6), new T.MeshStandardMaterial({ color: 0xf0e8d0, roughness: 0.4 })); bk.position.set(0, 0, -0.5); bk.scale.z = 0.6; g.add(bk); }
-    else if (d.mouth === 'up') { const lj = new T.Mesh(new T.ConeGeometry(0.03, 0.08, 6), body.material); lj.rotation.x = -Math.PI / 2 - 0.4; lj.position.set(0, -0.01, -0.5); g.add(lj); }
+    else if (d.mouth === 'up') { const lj = new T.Mesh(new T.SphereGeometry(1, 10, 6), jawMat); lj.scale.set(0.022, 0.012, 0.05); lj.rotation.x = 0.45; lj.position.set(0, -0.012, -0.5); g.add(lj); }   // the tarpon's jutting lower jaw
     if (!opts.simple && !d.squid && d.tail !== 'whip') {
       // pectoral fins scull at the sides, behind the gill cover
       const pz = -0.5 + 0.2, py = -lerpPts(d.bot, 0.2) * 0.3;
@@ -384,7 +420,10 @@
     // hollows and a slope up to the wall; ripples and grain live in the sand texture
     const noise2 = (x, z) => Math.sin(x * 0.41 + Math.sin(z * 0.23) * 1.7) * Math.cos(z * 0.37 - Math.sin(x * 0.19) * 1.3);
     const ridge = (x, z) => 1 - Math.abs(Math.sin(x * 0.21 + z * 0.13 + Math.sin(z * 0.09 + x * 0.05) * 2.2));
-    const floorY = (d, r0, x, z) => -d + (Math.hypot(x, z) - r0) * 0.12 + noise2(x, z) * 0.9 + ridge(x, z) * 0.7 + Math.sin(x * 1.1 + z * 0.7) * 0.12;
+    const floorY = (d, r0, x, z) => {
+      const r = Math.hypot(x, z), lip = Math.max(0, (r0 + 2.2 - r) / 2.2);
+      return -d + (r - r0) * 0.12 + noise2(x, z) * 0.9 + ridge(x, z) * 0.7 + Math.sin(x * 1.1 + z * 0.7) * 0.12 - lip * lip * 3.2;
+    };
     const reefY = (x, z) => floorY(19.3, 13, x, z), kelpY = (x, z) => floorY(58.3, 9, x, z);
     const TAU = Math.PI * 2;
     const sandTex = canvasTex(512, 512, (g, w, h) => {
@@ -621,11 +660,15 @@
         transformed.z += cos(uTime * 0.5 + wp.z * 0.3 + position.y * 0.1) * hk * hk * 1.6;`);
     };
     kelpMat.customProgramCacheKey = () => 'tide-kelp';
-    for (let i = 0; i < 46; i++) {
-      const h = 22 + rnd() * 12, g = new T.PlaneGeometry(1.4 + rnd() * 0.5, h, 1, 16); g.translate(0, h / 2, 0);
-      const p = pol(10, 26, 0), m = new T.Mesh(g, kelpMat); p.y = kelpY(p.x, p.z) - 0.1;
+    const kelpMats = [kelpMat, kelpMat.clone(), kelpMat.clone()], kelpExtra = [];
+    kelpMats[1].color = col('#c8d890'); kelpMats[2].color = col('#8aa070');
+    kelpMats.forEach((m, i) => { m.onBeforeCompile = kelpMat.onBeforeCompile; m.customProgramCacheKey = kelpMat.customProgramCacheKey; m.emissive = col('#1a2a10'); });
+    for (let i = 0; i < 84; i++) {
+      const h = 18 + rnd() * 18, g = new T.PlaneGeometry(1.3 + rnd() * 0.7, h, 1, 16); g.translate(0, h / 2, 0);
+      const p = pol(10, 26.5, 0), m = new T.Mesh(g, kelpMats[i % 3]); p.y = kelpY(p.x, p.z) - 0.1;
       m.position.copy(p); m.rotation.y = rnd() * 3; env.add(m);
-      const m2 = new T.Mesh(g, kelpMat); m2.position.copy(p); m2.rotation.y = m.rotation.y + Math.PI / 2; env.add(m2);
+      const m2 = new T.Mesh(g, m.material); m2.position.copy(p); m2.rotation.y = m.rotation.y + Math.PI / 2; env.add(m2);
+      if (i % 2) kelpExtra.push(m, m2);   // thinned out when the frame rate needs it
       for (let y = 4; y < h; y += 6) covers.push({ x: p.x, y: p.y + y, z: p.z, r: 1.4, kind: 'kelp' });
     }
     // rocks on both shelves: lumpy, cracked and speckled, with moss and algae on the faces that look up
@@ -678,6 +721,12 @@
       const halo = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: c, transparent: true, depthWrite: false, blending: T.AdditiveBlending, opacity: 0.6 })); halo.scale.setScalar(3); g.add(halo);
       g.position.copy(pol(4, 20, 70 + rnd() * 120)); g.userData.ph = rnd() * 6; env.add(g); jellies.push(g);
     }
+    // comb jellies: little drifting lights that ripple through the rainbow
+    const combs = [];
+    for (let i = 0; i < 36; i++) {
+      const s = new T.Sprite(new T.SpriteMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: T.AdditiveBlending, fog: false }));
+      s.scale.set(0.35, 0.5, 1); s.position.set(0, 999, 0); root.add(s); combs.push(s);
+    }
     // abyss: vents and tube worms glowing on the floor
     for (let i = 0; i < 24; i++) {
       const p = pol(2, 30, DZ.FLOOR - 0.2), c = i % 3 ? 0xff5040 : 0x60ffd0;
@@ -687,11 +736,11 @@
 
     // the surface seen from below: through Snell's window (a 97 degree cone straight up) the sky,
     // warm and bright with the sun in it; outside it the surface is a rippling mirror of the deep
-    const ceilU = { uTime: causticU.uTime, uSky: { value: col('#ffd7a0') }, uDeep: { value: col('#1f6f80') }, uFog: { value: col('#2f9fb2') }, uFar: { value: 60 } };
+    const ceilU = { uTime: causticU.uTime, uSky: { value: col('#ffe2b0') }, uDeep: { value: col('#1f6f80') }, uFog: { value: col('#2f9fb2') }, uFar: { value: 60 }, uDepth: { value: 0 } };
     const ceiling = new T.Mesh(new T.PlaneGeometry(600, 600, 1, 1), new T.ShaderMaterial({
       side: T.BackSide, depthWrite: false, uniforms: ceilU, fog: false,
       vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix*vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix*viewMatrix*w; }',
-      fragmentShader: `uniform float uTime, uFar; uniform vec3 uSky, uDeep, uFog; varying vec3 vW;
+      fragmentShader: `uniform float uTime, uFar, uDepth; uniform vec3 uSky, uDeep, uFog; varying vec3 vW;
         void main(){
           vec3 V = normalize(vW - cameraPosition);
           vec2 p = vW.xz;
@@ -699,18 +748,34 @@
           float n2 = sin(p.x * 3.1 - uTime * 2.1 + n1) * sin(p.y * 2.7 + uTime * 1.7);
           float up = V.y + n1 * 0.035 + n2 * 0.012;
           float win = smoothstep(0.63, 0.69, up);
-          vec3 sky = mix(uSky * 0.9, vec3(1.0, 0.97, 0.88), smoothstep(0.8, 1.0, up));
-          vec3 refl = uDeep * (0.55 + 0.25 * n1);
-          vec3 c = mix(refl, sky * (1.15 + 0.25 * n2), win);
-          c += vec3(1.0, 0.95, 0.8) * smoothstep(0.66, 0.67, up) * (1.0 - smoothstep(0.67, 0.71, up)) * 0.6;   // the bright rim of the window
           float d = length(vW - cameraPosition);
-          c = mix(c, uFog, smoothstep(uFar * 0.25, uFar, d) * (1.0 - win * 0.7));
+          vec3 sky = mix(uSky, vec3(1.0, 0.98, 0.92), smoothstep(0.8, 1.0, up)) * 1.7;
+          // outside the window the surface mirrors the lit water: pale and bright toward the window's rim
+          vec3 refl = mix(uFog * 1.35, vec3(0.72, 0.95, 1.0), smoothstep(0.15, 0.66, up) * 0.65) * (0.9 + 0.2 * n1);
+          // glitter: tiny sharp highlights where the wavelets tilt toward the sun
+          float gl = pow(max(0.0, sin(p.x * 6.1 + n1 * 3.0 + uTime * 2.3) * sin(p.y * 5.3 - n2 * 2.0 - uTime * 1.9)), 18.0);
+          refl += vec3(1.0, 0.98, 0.9) * gl * (1.0 - smoothstep(0.0, uFar * 0.6, d));
+          vec3 c = mix(refl, sky * (1.0 + 0.2 * n2), win);
+          c += vec3(1.0, 0.95, 0.8) * smoothstep(0.66, 0.67, up) * (1.0 - smoothstep(0.67, 0.71, up)) * 0.8;   // the bright rim of the window
+          c *= 0.3 + 0.7 * exp(-uDepth / 22.0);   // brightest just below; it dims as you go down
+          c = mix(c, uFog, smoothstep(uFar * 0.6, uFar * 1.3, d) * (1.0 - win * 0.8));
           gl_FragColor = vec4(c, 1.0);
           #include <tonemapping_fragment>
           #include <encodings_fragment>
         }`,
     }));
     ceiling.rotation.x = -Math.PI / 2; ceiling.position.y = -0.02; root.add(ceiling);
+    const backU = { uFog: { value: new T.Color() } };
+    const backdrop = new T.Mesh(new T.SphereGeometry(180, 24, 16), new T.ShaderMaterial({
+      side: T.BackSide, depthWrite: false, depthTest: false, fog: false, uniforms: backU,
+      vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: `uniform vec3 uFog; varying vec3 vD;
+        void main(){ vec3 c = mix(uFog * 0.22, uFog * 1.12, smoothstep(-0.75, 0.25, vD.y)); gl_FragColor = vec4(c, 1.0);
+          #include <tonemapping_fragment>
+          #include <encodings_fragment>
+        }`,
+    }));
+    backdrop.renderOrder = -10; backdrop.frustumCulled = false; root.add(backdrop);
     // god rays: tall soft shafts hanging from the surface around the camera
     const rayTex = canvasTex(32, 256, (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(255,255,240,0.55)'); gr.addColorStop(1, 'rgba(255,255,240,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); const gx = g.createLinearGradient(0, 0, w, 0); gx.addColorStop(0, 'rgba(0,0,0,1)'); gx.addColorStop(0.5, 'rgba(0,0,0,0)'); gx.addColorStop(1, 'rgba(0,0,0,1)'); g.globalCompositeOperation = 'destination-out'; g.fillStyle = gx; g.fillRect(0, 0, w, h); });
     const rays = [];
@@ -787,7 +852,7 @@
     })();
     function makeRig(color) {
       const g = new T.Group();
-      const spoon = new T.Mesh(spoonGeo, new T.MeshStandardMaterial({ map: spoonTex, metalness: 0.85, roughness: 0.18, emissive: col(color), emissiveIntensity: 0.08 }));
+      const spoon = new T.Mesh(spoonGeo, new T.MeshStandardMaterial({ map: spoonTex, metalness: 0.85, roughness: 0.18, emissive: col(color).lerp(col('#ffffff'), 0.7), emissiveIntensity: 0.08 }));
       g.add(spoon);
       const ringF = new T.Mesh(new T.TorusGeometry(0.006, 0.0011, 5, 12), steel); ringF.position.z = -0.045; ringF.rotation.y = Math.PI / 2; g.add(ringF);
       const ringB = ringF.clone(); ringB.position.z = 0.045; g.add(ringB);
@@ -805,7 +870,7 @@
     }
     function makeLure(color) {
       const g = new T.Group();
-      const rig = makeRig(color); rig.scale.setScalar(1.8); g.add(rig);
+      const rig = makeRig(color); rig.scale.setScalar(2.6); g.add(rig);
       const glow = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: col(color), transparent: true, depthWrite: false, blending: T.AdditiveBlending, opacity: 0.5 })); glow.scale.setScalar(0.5); g.add(glow);
       const lamp = new T.PointLight(0xd8fff4, 0, 10, 1.6); g.add(lamp);
       const tag = new T.Sprite(new T.SpriteMaterial({ map: tagTex, color: col(color), transparent: true, depthWrite: false, depthTest: false, fog: false }));
@@ -870,10 +935,10 @@
       fogC.multiplyScalar(0.35 + 0.65 * Math.min(1, zm.light * 1.6 + 0.05));
       scene.fog.color.copy(fogC);
       scene.background = fogC;
-      ceilU.uFog.value.copy(fogC); ceilU.uDeep.value.copy(tmpA).multiplyScalar(0.8);
+      ceilU.uFog.value.copy(fogC); backU.uFog.value.copy(fogC); backdrop.position.copy(W.camera.position); ceilU.uDeep.value.copy(tmpA).multiplyScalar(0.8);
       scene.fog.near = 1;
       scene.fog.far = Math.max(9, 1.0 / zm.density) * (camDepth > 60 ? 0.8 + (lamp || 0) * 0.02 : 1);
-      ceilU.uFar.value = scene.fog.far * 1.2;
+      ceilU.uFar.value = scene.fog.far * 1.2; ceilU.uDepth.value = camDepth;
       // a strong high sun (warm near the top, blue-green lower) over a dim ambient: lit tops, shaded sides
       W.lights.hemi.color.set(0x9fe8ff).multiplyScalar(0.3 + zm.light);
       W.lights.hemi.groundColor.copy(fogC).multiplyScalar(0.35);
@@ -885,9 +950,13 @@
       W.lights.sun.position.set(cam.x + 8, cam.y + 30, cam.z + 6); W.lights.sun.target.position.copy(cam);
       rays.forEach((m, i) => {
         // shafts lean with the sun, sweep slowly as the surface swells, and breathe in width
-        const u = m.userData; m.position.set(cam.x + u.ox + Math.sin(time.v * 0.15 + u.ph) * 2, -15, cam.z + u.oz); m.lookAt(cam.x, -15, cam.z);
+        // in the kelp they come down through gaps in the canopy, green-gold
+        const u = m.userData, ry = Math.min(-15, cam.y + 6);
+        m.position.set(cam.x + u.ox + Math.sin(time.v * 0.15 + u.ph) * 2, ry, cam.z + u.oz); m.lookAt(cam.x, ry, cam.z);
         m.rotateZ(0.28 + Math.sin(time.v * 0.21 + u.ph) * 0.06); m.scale.x = 0.8 + 0.4 * Math.sin(time.v * 0.5 + u.ph * 2);
-        m.material.opacity = Math.max(0, 0.3 - camDepth * 0.009) * (0.5 + 0.5 * Math.sin(time.v * 0.4 + u.ph));
+        const base = camDepth < 20 ? 0.3 - camDepth * 0.008 : camDepth < 62 ? 0.15 * (i % 2 ? 1 : 0.5) : Math.max(0, 0.15 - (camDepth - 62) * 0.01);
+        m.material.color.set(camDepth < 20 ? 0xffffff : 0xd8f0a0);
+        m.material.opacity = base * (0.5 + 0.5 * Math.sin(time.v * 0.4 + u.ph));
       });
       // snow and plankton wrap around the camera
       snow.position.set(Math.floor(cam.x / 36) * 36, Math.floor(cam.y / 36) * 36, Math.floor(cam.z / 36) * 36);
@@ -904,6 +973,7 @@
       snowMat.color.set(camDepth > 60 ? 0x5a7090 : 0xdff6ff); snowMat.opacity = camDepth > 200 ? 0.25 : 0.55;
       plankMat.opacity = camDepth < 55 ? 0 : Math.min(0.85, (camDepth - 55) / 30) * (0.6 + 0.4 * Math.sin(time.v * 2.2));
       shallowOnly.forEach(o => { o.visible = camDepth < 85 && !low.on; });
+      kelpExtra.forEach(o => { o.visible = !low.on; });
       RIM.value.set(0x9fe8ff).multiplyScalar(0.12 + zm.light * 0.8);
       for (let i = 0; i < NSP; i++) {
         if (sLife[i] <= 0) continue;
@@ -914,7 +984,26 @@
         if (sLife[i] <= 0) sPos[i * 3 + 1] = 99;
       }
       sGeo.attributes.position.needsUpdate = true; sGeo.attributes.color.needsUpdate = true;
-      jellies.forEach(j => { j.position.y += Math.sin(time.v * 0.8 + j.userData.ph) * dt * 0.3; j.children[0].scale.y = 0.85 + Math.sin(time.v * 2 + j.userData.ph) * 0.15; });
+      const lx = cam.x - env.position.x, lz = cam.z - env.position.z, twi = camDepth > 55 && camDepth < 215;
+      jellies.forEach(j => {
+        j.position.y += Math.sin(time.v * 0.8 + j.userData.ph) * dt * 0.3; j.position.x += Math.sin(time.v * 0.1 + j.userData.ph) * dt * 0.15;
+        j.children[0].scale.y = 0.85 + Math.sin(time.v * 2 + j.userData.ph) * 0.15;
+        if (twi && Math.hypot(j.position.x - lx, j.position.y - cam.y, j.position.z - lz) > 26) {
+          const a = rnd() * TAU, r = 7 + rnd() * 15;
+          j.position.set(lx + Math.cos(a) * r, Math.max(-195, Math.min(-66, cam.y + (rnd() - 0.5) * 18)), lz + Math.sin(a) * r);
+        }
+      });
+      combs.forEach((s, i) => {
+        if (!twi) { s.visible = false; return; }
+        s.visible = true;
+        s.material.color.setHSL((time.v * 0.15 + i * 0.13) % 1, 0.9, 0.6);
+        s.material.opacity = 0.4 + 0.4 * Math.sin(time.v * 3 + i);
+        s.position.y += Math.sin(time.v * 0.6 + i) * dt * 0.2;
+        if (Math.hypot(s.position.x - cam.x, s.position.y - cam.y, s.position.z - cam.z) > 16) {
+          const a = rnd() * TAU, r = 3 + rnd() * 11;
+          s.position.set(cam.x + Math.cos(a) * r, cam.y + (rnd() - 0.5) * 10, cam.z + Math.sin(a) * r);
+        }
+      });
       for (let i = 0; i < NB; i++) { if (bLife[i] <= 0) continue; bLife[i] -= dt; bPos[i * 3 + 1] += bVel[i] * dt; bPos[i * 3] += Math.sin(time.v * 3 + i) * dt * 0.1; if (bLife[i] <= 0 || bPos[i * 3 + 1] > -0.1) { bLife[i] = 0; bPos[i * 3 + 1] = 99; } }
       bGeo.attributes.position.needsUpdate = true;
       for (let i = puffs.length - 1; i >= 0; i--) { const p = puffs[i]; p.t += dt; p.s.material.opacity = Math.max(0, 0.9 - p.t * 0.4); p.s.scale.multiplyScalar(1 + dt * 0.5); if (p.t > 2.4) { root.remove(p.s); puffs.splice(i, 1); } }

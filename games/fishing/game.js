@@ -643,7 +643,7 @@
         showBob = false;
         const s = p.lastCatch, len = s.cm / 100;
         p.holder.position.copy(p.a.tip).add(new T.Vector3(0, -0.12, 0));
-        p.holder.rotation.y = -2.14 + Math.sin(nowS * 0.7) * 0.45;   // it turns on the line, but keeps its flank to you
+        p.holder.rotation.y = -2.43 + Math.sin(nowS * 0.7) * 0.45;   // it turns on the line, but keeps its flank to you
         p.fishMesh.rotation.set(Math.PI / 2 - 0.05, 0, Math.sin(nowS * 9) * 0.12);
         p.fishMesh.position.set(0, -len / 2, 0);
         p.fishMesh.swim(dt, 1.5);
@@ -692,8 +692,10 @@
       p.lv.g.position.set(L0.x, L0.y, L0.z);
       p.lv.g.quaternion.setFromUnitVectors(_m.set(0, 0, -1), up);
       if (p.st === 'dive' || p.st === 'bite') p.lv.g.rotateZ(Math.sin(L0.phase) * (0.25 + L0.flutter * 0.7) * (p.st === 'bite' ? 2 : 1));
+      const wink = p.st === 'dive' ? Math.pow(Math.max(0, Math.sin(L0.phase)), 8) * (0.4 + L0.flutter + Math.min(1, Math.hypot(L0.vx, L0.vy, L0.vz) * 0.4)) : 0;
+      p.lv.rig.userData.spoon.material.emissiveIntensity = 0.08 + wink * 1.4;
       if (p.st === 'bite') p.lv.g.position.x += Math.sin(nowS * 45) * 0.04;
-      p.lv.glow.material.opacity = (p.st === 'fight' ? 0.15 : 0.35) + p.halo * 0.5; p.lv.glow.scale.setScalar(0.4 + p.halo * 1.0 + (sess.party ? 0.8 : 0));
+      p.lv.glow.material.opacity = (p.st === 'fight' ? 0.15 : 0.3) + p.halo * 0.5 + wink * 0.5; p.lv.glow.scale.setScalar(0.4 + p.halo * 1.0 + (sess.party ? 0.8 : 0));
       p.lv.tag.visible = !!sess.party;
       deep.drawLine(p.ul, R, p.lv.tieWorld(), p.st === 'fight' && p.fight ? p.fight.T : p.st === 'bite' ? 0.7 : 0);
       if (Math.hypot(L0.vx, L0.vy, L0.vz) > 2.2 && Math.random() < dt * 8 && p.st === 'dive') deep.bubble(L0, 1, 0.1);
@@ -982,7 +984,9 @@
     el.innerHTML = text + (sub ? '<small>' + sub + '</small>' : '');
     if (p && sess && sess.players.length > 1) el.style.color = cls === 'bad' ? '' : p.color;
     $('floats').appendChild(el);
-    floats.push({ el, at: at.clone(), t: 0, life: cls === 'big' ? 1.6 : 1.9 });
+    // one message per player at a time: a new one retires the last instead of stacking on it
+    for (const o of floats) if (o.p === p && o.t < o.life - 0.25) o.t = o.life - 0.25;
+    floats.push({ el, p, at: at.clone(), t: 0, life: cls === 'big' ? 1.6 : 1.9 });
   }
   function updateFloats(dt) {
     for (let i = floats.length - 1; i >= 0; i--) {
@@ -1394,11 +1398,11 @@
     }
     const p = sess.players[0];
     if (p.st === 'catch' && p.holder) {
-      const len = p.lastCatch.cm / 100, d = 1.0 + len * 1.9;
-      _F.copy(p.holder.position); _F.y -= len * 0.42;
-      shot.pos.set(_F.x - d * 0.55, _F.y + d * 0.12, _F.z + d * 0.85);
-      shot.look.set(_F.x + 0.84 * d * 0.38, _F.y, _F.z + 0.54 * d * 0.38);   // fish left of centre, clear of the catch card
-      shot.key = _k.set(_F.x - d * 0.4, _F.y + 0.3, _F.z + d * 0.6); shot.speed = 2.5;
+      const len = p.lastCatch.cm / 100, d = 0.55 + len * 2.4;
+      _F.copy(p.holder.position); _F.y -= len * 0.5;
+      shot.pos.set(_F.x - d * 0.75, _F.y + d * 0.12, _F.z + d * 0.65);   // from the sea side, clear of the angler
+      shot.look.set(_F.x + 0.65 * d * 0.38, _F.y, _F.z + 0.75 * d * 0.38);   // fish left of centre, clear of the catch card
+      shot.key = _k.set(_F.x - d * 0.5, _F.y + 0.3, _F.z + d * 0.5); shot.speed = 4;
     } else if (p.st === 'flight') {
       shot.look.lerp(_F.set(p.lure.x, p.lure.y, p.lure.z), 0.6); shot.pos.y += 0.5; shot.speed = 3;
     } else if (p.st === 'dive' && p.stT < 0.6 && p.lureD) {
@@ -1406,7 +1410,7 @@
       const lu = p.lureD;
       shot.pos.set(lu.ox - Math.sin(lu.heading) * 3.2, 1.1, lu.oz + Math.cos(lu.heading) * 3.2); shot.look.set(lu.ox, -0.3, lu.oz); shot.speed = 6; shot.fov = base * 0.9;
     } else if ((p.st === 'dive' || p.st === 'bite') && p.lureD) {
-      const lu = p.lureD, h = lu.heading, back = p.st === 'bite' ? 2.4 : 3.3;
+      const lu = p.lureD, h = lu.heading, back = p.st === 'bite' ? 2.2 : 2.5;
       // behind and a little above it, leading by where it is heading (down, when it sinks fast)
       const lead = clamp(lu.vy * 0.35, -1.2, 0.6);
       shot.pos.set(lu.x - Math.sin(h) * back, Math.min(-1.8, lu.y + 0.8 + lead * 0.5), lu.z + Math.cos(h) * back);

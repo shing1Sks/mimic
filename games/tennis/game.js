@@ -125,10 +125,18 @@
   let keyCtrl = null;
   const isPhone = c => !!c && c.connected && c.source === 'phone';
   function ctrlMode(c) { return c && c.source === 'phone' ? (c.mode || 'wand') : 'mouse'; }
-  // button wording for whichever controller this is (Grip: only the volume keys are reachable)
-  function btnA(c) { return ctrlMode(c) === 'grip' ? 'Vol Down' : 'A'; }
-  function btnB(c) { const m = ctrlMode(c); return m === 'grip' ? 'Vol Up' : m === 'mouse' ? 'Esc' : 'B'; }
-  function alignHow(c) { return ctrlMode(c) === 'grip' ? 'hold Vol Up' : 'tap Center'; }
+  // button wording for whichever controller this is (app Grip: only the volume keys are reachable;
+  // a browser phone's Grip has on-screen HOLD / B / CENTRE / SWITCH)
+  const webGrip = c => ctrlMode(c) === 'grip' && c.via === 'browser';
+  function btnA(c) { return ctrlMode(c) === 'grip' ? c.keyName('a') : 'A'; }
+  function btnB(c) { const m = ctrlMode(c); return m === 'grip' ? c.keyName('b') : m === 'mouse' ? 'Esc' : 'B'; }
+  function alignHow(c) { return ctrlMode(c) === 'grip' ? (webGrip(c) ? 'press CENTRE' : 'hold Vol Up') : 'tap Center'; }
+  /** Grip's A for a phone that has not joined yet: the volume key, HOLD on a browser phone, or both. */
+  function gripJoinKey() {
+    const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(p => p && p.connected && p.buttons.length === 12) : [];
+    const web = pads.some(p => /mimic web/i.test(p.id)), app = pads.some(p => !/mimic web/i.test(p.id));
+    return web && app ? 'Vol Down / HOLD' : web ? 'HOLD' : 'Vol Down';
+  }
 
   // the Wand points at menus like a mouse; A clicks (created once the page exists)
   let wandCursor = null;
@@ -1477,7 +1485,7 @@
   let ctrlKey = null;
   function updateCtrlStatus() {
     const phone = mc.connected, mode = ctrlMode(mc);
-    const key = phone + mode;
+    const key = phone + mode + mc.via;
     if (key === ctrlKey) return;
     ctrlKey = key;
     const label = phone ? (mode === 'grip' ? 'Phone connected · Grip' : 'Phone connected · Wand') : 'Using mouse';
@@ -1489,6 +1497,11 @@
     $('title-ctrl').querySelector('small').innerHTML = phone
       ? `Point at the screen and ${alignHow(mc)} to align. Point + <b>${btnA(mc)}</b> picks.`
       : "Open Mimic on your phone, pick <b>Wand</b> or <b>Grip</b>.";
+    // the how-to table's Grip column: app volume keys, or a browser phone's on-screen buttons
+    document.querySelectorAll('[data-web]').forEach(k => {
+      if (k.dataset.app == null) k.dataset.app = k.innerHTML;
+      k.innerHTML = webGrip(mc) ? k.dataset.web : k.dataset.app;
+    });
     refreshTitle();
   }
   function refreshPlayerTags() {
@@ -1562,14 +1575,14 @@
         el.querySelector('.s-bar i').style.width = (sp * 100).toFixed(0) + '%';
       } else {
         el.querySelector('.s-state').textContent = 'PRESS A TO JOIN';
-        el.querySelector('.s-help').innerHTML = 'Wand: <b>A</b> · Grip: <b>Vol Down</b> · keyboard: <kbd>Space</kbd>';
+        el.querySelector('.s-help').innerHTML = `Wand: <b>A</b> · Grip: <b>${gripJoinKey()}</b> · keyboard: <kbd>Space</kbd>`;
         el.querySelector('.s-bar i').style.width = '0%';
       }
     }
     const full = slots.every(Boolean);
     const phones = inputs.filter(p => p.kind === 'phone').length;
     $('lobby-status').innerHTML = full
-      ? `Everyone in. <b>Hold ${'A'}</b> (Grip: Vol Down) to start` + `<span class="hold"><i style="width:${(lobby.st.hold / TN.Lobby.HOLD_TO_START * 100).toFixed(0)}%"></i></span>`
+      ? `Everyone in. <b>Hold ${'A'}</b> (Grip: ${gripJoinKey()}) to start` + `<span class="hold"><i style="width:${(lobby.st.hold / TN.Lobby.HOLD_TO_START * 100).toFixed(0)}%"></i></span>`
       : phones < 2 ? `${phones} of 2 phones connected. Pair in Mimic (Wand or Grip), then press A.` : 'Press A on each phone to join.';
     $('lobby-start').classList.toggle('hidden', !full);
   }

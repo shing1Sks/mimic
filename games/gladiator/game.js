@@ -317,17 +317,25 @@
   const WORDS = {
     wand: { a: 'A', b: 'B', center: 'Center', pause: '+ / Home', thrust: '1', side: 'Left / Right', name: 'Wand' },
     grip: { a: 'Vol Down', b: 'Vol Up', center: 'hold Vol Up', pause: 'blade at the floor + hold Vol Down', thrust: 'double-tap Vol Up', side: 'Vol Up', name: 'Grip' },
+    // a browser phone's Grip (games/phone): on-screen HOLD / B / CENTRE / SWITCH instead of the volume keys
+    gripWeb: { a: 'HOLD', b: 'B', center: 'CENTRE', pause: 'blade at the floor + hold HOLD', thrust: 'SWITCH', side: 'B', name: 'Grip' },
     mouse: { a: 'left mouse', b: 'right mouse', center: 'C', pause: 'Esc', thrust: 'F', side: '← / →', name: 'mouse' },
   };
   function ctlMode(c) { c = c || mc; return c.source !== 'phone' ? 'mouse' : (c.mode === 'grip' ? 'grip' : 'wand'); }
-  function word(key, c) { return WORDS[ctlMode(c)][key]; }
-  function modeName(c) { return WORDS[ctlMode(c)].name; }
+  function wordsFor(c) { c = c || mc; const m = ctlMode(c); return WORDS[m === 'grip' && c.via === 'browser' ? 'gripWeb' : m]; }
+  function word(key, c) { return wordsFor(c)[key]; }
+  function modeName(c) { return wordsFor(c).name; }
   let wordsMode = null;
   function applyWords(force) {
-    const m = ctlMode();
-    if (m === wordsMode && !force) return;
-    wordsMode = m;
-    document.querySelectorAll('[data-w]').forEach(el => { el.textContent = WORDS[m][el.dataset.w]; });
+    const m = ctlMode(), W = wordsFor(), wk = W === WORDS.gripWeb ? 'gripWeb' : m;
+    if (wk === wordsMode && !force) return;
+    wordsMode = wk;
+    document.querySelectorAll('[data-w]').forEach(el => { el.textContent = W[el.dataset.w]; });
+    // the how-to table's Grip column: app volume keys, or a browser phone's on-screen buttons
+    document.querySelectorAll('[data-web]').forEach(el => {
+      if (el.dataset.app == null) el.dataset.app = el.innerHTML;
+      el.innerHTML = wk === 'gripWeb' ? el.dataset.web : el.dataset.app;
+    });
     document.body.dataset.ctl = m;
     for (const el of [$('ctrl-pill'), $('title-ctrl')]) {
       el.classList.toggle('phone', m !== 'mouse');
@@ -335,7 +343,7 @@
     }
     $('title-ctrl').querySelector('small').innerHTML = m === 'mouse'
       ? 'Open Mimic, pair over Bluetooth, pick <b>Wand</b> or <b>Grip</b>.'
-      : 'Point at the screen, <kbd>' + WORDS[m].center + '</kbd> to line up the blade.';
+      : 'Point at the screen, <kbd>' + W.center + '</kbd> to line up the blade.';
   }
   let hintTimer = 0;
   function hint(text, secs) { $('hint').innerHTML = text || ''; hintTimer = secs || 0; }

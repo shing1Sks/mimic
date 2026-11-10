@@ -79,25 +79,33 @@
       const i = V.joined.indexOf(mouseCtl);
       if (i >= 0) leave(i); else join(mouseCtl);
     }
+    /** Grip's A in lobby hints: the volume key, HOLD on a browser phone, or both when both are here. */
+    function gripA() {
+      const g = (ctls || []).filter(c => isPhone(c) && c.mode === 'grip');
+      const web = g.some(c => c.via === 'browser'), app = g.some(c => c.via !== 'browser');
+      return web && app ? 'Vol Down / HOLD' : web ? 'HOLD' : 'Vol Down';
+    }
     function renderLobby() {
+      const ga = V.gripA = gripA();
       for (let i = 0; i < 2; i++) {
         const el = $('slot' + i), c = V.joined[i];
         el.classList.toggle('joined', !!c);
         el.querySelector('.sl-ctl').textContent = c ? (c === mouseCtl ? 'Mouse + keyboard' : 'Phone ' + (ctls.indexOf(c) + 1) + ' · ' + core.modeName(c)) : 'Waiting for a phone';
         el.querySelector('.sl-state').innerHTML = c
           ? (c === mouseCtl ? 'Ready. Click LEAVE to give up the slot.' : `Ready. <kbd>${core.word('b', c)}</kbd> to leave.`)
-          : 'Press <kbd>A</kbd> / <kbd>Vol Down</kbd> to join';
+          : `Press <kbd>A</kbd> / <kbd>${ga}</kbd> to join`;
       }
       const both = V.joined[0] && V.joined[1];
       $('lobby-go').classList.toggle('hidden', !both);
       $('lobby-hint').innerHTML = both
-        ? 'Both ready. Either player: <b>hold</b> <kbd>A</kbd> / <kbd>Vol Down</kbd> to enter the sand.'
+        ? `Both ready. Either player: <b>hold</b> <kbd>A</kbd> / <kbd>${ga}</kbd> to enter the sand.`
         : 'Pair each phone in Mimic (Wand or Grip). Testing alone? The mouse can take a slot.';
       const mb = $('lobby-mouse'); if (mb) mb.firstChild.textContent = V.joined.includes(mouseCtl) ? 'LEAVE (MOUSE)' : 'JOIN WITH MOUSE';
     }
     function lobbyFrame(dt) {
       for (const c of ctls) if (c !== core.mc) c.update();
       mouseCtl.update();
+      if (gripA() !== V.gripA) renderLobby();   // a phone joined or switched: keep the key names right
       let anyHeld = false;
       ctls.forEach(c => {
         if (!isPhone(c)) { const i = V.joined.indexOf(c); if (i >= 0) leave(i); return; }

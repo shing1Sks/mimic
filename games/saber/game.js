@@ -1129,9 +1129,11 @@
   }
 
   /** The device in hand, in its own words. Grip (one-hand mode) only has a = Vol Down, b = Vol Up tap,
-   * center = hold Vol Up; until the lib tells Wand from Grip (mc.mode), name both. */
+   * center = hold Vol Up (a browser phone's Grip: on-screen HOLD / B / CENTRE); until the lib tells
+   * Wand from Grip (mc.mode), name both. */
   function keyWords() {
     const m = mc.mode;
+    if (m === 'grip' && mc.via === 'browser') return { grip: true, dev: 'Grip', a: mc.keyName('a'), b: mc.keyName('b'), center: mc.keyName('center') };
     if (m === 'grip') return { grip: true, dev: 'Grip', a: 'Vol Down', b: 'Vol Up', center: 'CENTRE or hold Vol Up' };
     if (m === 'wand') return { grip: false, dev: 'Wand', a: 'A', b: 'B', center: 'CENTER' };
     return { grip: false, dev: 'Wand / Grip', a: 'A / Vol Down', b: 'B / Vol Up', center: 'CENTER / hold Vol Up' };

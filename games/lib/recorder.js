@@ -70,7 +70,10 @@
     s.getVideoTracks().forEach(t => t.addEventListener('ended', () => stop()));
   }
   function canvasVideo() {
-    const c = [...document.querySelectorAll('canvas')].sort((a, b) => b.width * b.height - a.width * a.height)[0];
+    // the canvas that covers most of the screen (the 3D view), not the one with the most pixels (a
+    // high-resolution 2D instrument overlay won that, and the video showed only gauges)
+    const area = c => { const r = c.getBoundingClientRect(); return Math.max(0, Math.min(r.right, innerWidth) - Math.max(r.left, 0)) * Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0)); };
+    const c = [...document.querySelectorAll('canvas')].sort((a, b) => area(b) - area(a) || b.width * b.height - a.width * a.height)[0];
     if (!c || !c.captureStream) { showBadge('● REC input only · F8 stop'); return; }
     startVideo(c.captureStream(30), 'canvas');
   }

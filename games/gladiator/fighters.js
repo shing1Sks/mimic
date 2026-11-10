@@ -26,11 +26,11 @@
   const RIGS = {
     dummy: { parts: [] },
     recruit:  { idle: 'Idle_Sword', attack: 'Sword_Slash', hit: 'HitRecieve', hit2: 'HitRecieve_2', death: 'Death', walk: 'Walk', raise: 0.32, strike: 0.55,
-      hand: 'WristR', ik: ['UpperArmR', 'LowerArmR'], offIk: ['UpperArmL', 'LowerArmL'], offHand: 'WristL', shoulder: 'UpperArmR', hide: ['Sword_1', 'Sword_2', 'Sword_3', 'Sword'], parts: HUMAN_PARTS },
+      hand: 'WristR', palm: 'Middle1R', ik: ['UpperArmR', 'LowerArmR'], offIk: ['UpperArmL', 'LowerArmL'], offHand: 'WristL', shoulder: 'UpperArmR', hide: ['Sword_1', 'Sword_2', 'Sword_3', 'Sword'], parts: HUMAN_PARTS },
     champion: { idle: 'Idle_Sword', attack: 'Sword_Slash', hit: 'HitRecieve', hit2: 'HitRecieve_2', death: 'Death', walk: 'Walk', raise: 0.32, strike: 0.55,
-      hand: 'WristR', ik: ['UpperArmR', 'LowerArmR'], offIk: ['UpperArmL', 'LowerArmL'], offHand: 'WristL', shoulder: 'UpperArmR', parts: HUMAN_PARTS },
+      hand: 'WristR', palm: 'Middle1R', ik: ['UpperArmR', 'LowerArmR'], offIk: ['UpperArmL', 'LowerArmL'], offHand: 'WristL', shoulder: 'UpperArmR', parts: HUMAN_PARTS },
     axeman:   { idle: 'Idle_Sword', attack: 'Sword_Slash', hit: 'HitRecieve', hit2: 'HitRecieve_2', death: 'Death', walk: 'Walk', raise: 0.32, strike: 0.55,
-      hand: 'WristR', ik: ['UpperArmR', 'LowerArmR'], offIk: ['UpperArmL', 'LowerArmL'], offHand: 'WristL', shoulder: 'UpperArmR', hide: ['Backpack'], parts: HUMAN_PARTS },
+      hand: 'WristR', palm: 'Middle1R', ik: ['UpperArmR', 'LowerArmR'], offIk: ['UpperArmL', 'LowerArmL'], offHand: 'WristL', shoulder: 'UpperArmR', hide: ['Backpack'], parts: HUMAN_PARTS },
     skeleton: { idle: 'Skeleton_Idle', attack: 'Skeleton_Attack', death: 'Skeleton_Death', walk: 'Skeleton_Running', raise: 0.35, strike: 0.6, walkRate: 0.6,
       hand: 'RDownLeg001', handExt: true, ik: ['RUpperLeg001', 'RDownLeg001'], offIk: ['LUpperLeg001', 'LDownLeg001'], offHand: 'LDownLeg001', offExt: true, shoulder: 'RUpperLeg001',
       parts: [{ zone: 'head', a: 'Head', up: 0.22, r: 0.12 }, { zone: 'torso', a: 'Hips', b: 'Neck', r: 0.15 },
@@ -216,6 +216,10 @@
       if (profile.weapon === 'sword' || profile.weapon === 'axe') {
         this.ikChain = (this.rig.ik || []).map(bone).filter(Boolean);
         this.ikEnd = this.rig.handExt ? endOf(bone(this.rig.hand), this.rig.ik[0]) : bone(this.rig.hand);
+        // the grip sits in the palm, not at the wrist: a point between the wrist and the finger roots
+        this.palm = this.ikEnd;
+        const fingers = bone(this.rig.palm);
+        if (fingers && this.ikEnd && fingers.parent === this.ikEnd) { this.palm = new T.Object3D(); this.ikEnd.add(this.palm); this.palm.position.copy(fingers.position).multiplyScalar(0.7); }
         const wpn = profile.weapon === 'axe' ? makeAxe(1.05) : profile.model === 'dummy' ? makeSword(0.7, true) : makeSword(0.75);
         this.blade = profile.weapon === 'axe' ? [0.3, 0.95] : [0.12, 0.85];
         this.weapon = new T.Group(); this.weapon.add(wpn); this.root.add(this.weapon);
@@ -422,7 +426,7 @@
       this.pose.position.set(0, py, this.lunge);
       this.root.updateMatrixWorld(true);
       if (this.driveTarget && this.ikChain && this.ikChain.length && !this.dead) {
-        ccd(this.ikChain, this.ikEnd, this.driveTarget, 3);
+        ccd(this.ikChain, this.palm || this.ikEnd, this.driveTarget, 4);
       } else if (!this.dead) this.poseWeapon(b);
       if (this.dead && this.weapon && this.weapon.parent === this.root) this.dropWeapon();
       this.flash = Math.max(0, this.flash - dt * 5);
@@ -444,7 +448,11 @@
         const side = b && b.state === 'strike' && b.attack && C.TRAVEL[b.attack.line] ? _c.set(C.TRAVEL[b.attack.line].x, C.TRAVEL[b.attack.line].y, 0) : _c.set(0, 0, 1);
         basisQ(this.weapon.quaternion, this.wDir, side);
         this.weapon.updateMatrixWorld(true);
-        if (this.ikChain && this.ikChain.length) { _a.copy(this.weapon.position); this.root.localToWorld(_a); ccd(this.ikChain, this.ikEnd, _a.clone(), 4); }
+        // the arm reaches for the grip, then the weapon goes where the hand actually got to: never out of it
+        if (this.ikChain && this.ikChain.length) {
+          _a.copy(this.weapon.position); this.root.localToWorld(_a); ccd(this.ikChain, this.palm, _a.clone(), 6);
+          this.palm.getWorldPosition(_a); this.root.worldToLocal(_a); this.weapon.position.copy(_a); this.weapon.updateMatrixWorld(true);
+        }
         this.segH.set(0, this.blade[0], 0); this.weapon.localToWorld(this.segH);
         this.segT.set(0, this.blade[1], 0); this.weapon.localToWorld(this.segT);
       }

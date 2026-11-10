@@ -34,7 +34,8 @@
       <div class="lbl"><span>WOUNDS</span><span>HEALTH &middot; BALANCE</span></div>
     </div><svg class="doll" id="foe-doll" viewBox="0 0 40 64" aria-hidden="true"><circle class="z-head" cx="20" cy="8" r="6"/><rect class="z-torso" x="13" y="16" width="14" height="21" rx="3"/><path class="z-arm" d="M11 18 L5 34"/><path class="z-off" d="M29 18 L35 34"/><path class="z-legs" d="M16 40 L14 61 M24 40 L26 61"/></svg></div>
   </div>
-  <div id="readout" class="hidden"></div>
+  <div id="verdict"><b></b><span></span></div>
+  <div id="tut" class="panel hidden"><div id="tut-step"></div><div id="tut-text"></div><div id="tut-hold" class="hidden"><i id="tut-fill"></i></div><div id="tut-tip"></div><div id="tut-pips"></div></div>
   <div id="practice" class="panel hidden"><div><b id="pr-hits">0</b><span>HITS</span></div><div><b id="pr-best">0</b><span>FASTEST M/S</span></div><div><b id="pr-dmg">0</b><span>BEST HIT</span></div><div><b id="pr-par">0</b><span>PARRIES</span></div></div>
   <div id="hint"></div>
   <div id="ctrl-pill"><i></i><span>Using mouse</span></div>
@@ -52,7 +53,8 @@
       <p class="t-sub">Your phone is the sword. Six bouts in the Ashen Circus.</p>
     </header>
     <div class="menu" id="title-menu">
-      <button class="mi primary" data-act="ladder">FIGHT THE LADDER</button>
+      <button class="mi primary" data-act="tutorial">LEARN TO FIGHT <small>1 minute</small></button>
+      <button class="mi" data-act="ladder">FIGHT THE LADDER</button>
       <button class="mi" data-act="practice">PRACTICE <small>no death</small></button>
       <button class="mi" data-act="versus">VERSUS <small>two phones</small></button>
       <button class="mi opt" data-act="hand">SWORD HAND <b id="opt-hand">RIGHT</b></button>
@@ -183,6 +185,7 @@
 <script src="combat.js"></script>
 <script src="audio.js"></script>
 <script src="world.js"></script>
+<script src="arm.js"></script>
 <script src="fighters.js"></script>
 <script src="fx.js"></script>
 <script src="versus.js"></script>

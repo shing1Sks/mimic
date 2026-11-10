@@ -222,6 +222,30 @@ console.log('the opponent');
   check('...a hard sword-arm cut can disarm him', db.state === 'disarmed' && !db.armed);
 }
 
+console.log('tutorial');
+{
+  const t = C.tutorialStart();
+  C.tutorialEvent(t, { type: 'aligned' });
+  check('lining up finishes the first step', t.step === 1);
+  let r = C.tutorialEvent(t, { type: 'hit', kind: 'flat', dmg: 3, speed: 9 });
+  check('a flat hit does not count, and says why', t.count === 0 && /flat/.test(r.tip));
+  r = C.tutorialEvent(t, { type: 'whiff' });
+  check('a miss says the post is in reach', /reach/.test(r.tip));
+  for (let i = 0; i < 3; i++) r = C.tutorialEvent(t, { type: 'hit', kind: 'edge', dmg: 20, speed: 18 });
+  check('three clean cuts move on to blocking', t.step === 2 && r.advanced);
+  r = C.tutorialEvent(t, { type: 'hurt' });
+  check('getting hit while learning to block explains what to do', /across/.test(r.tip) && t.count === 0);
+  C.tutorialEvent(t, { type: 'blocked' }); C.tutorialEvent(t, { type: 'parry' });
+  check('two blocks (a parry counts) move on to parrying', t.step === 3);
+  r = C.tutorialEvent(t, { type: 'blocked' });
+  check('a block is not a parry, and says so', t.step === 3 && /into/.test(r.tip));
+  C.tutorialEvent(t, { type: 'parry' });
+  r = C.tutorialEvent(t, { type: 'hit', kind: 'edge', dmg: 20, speed: 18 });
+  check('a cut does not finish the thrust step', t.step === 4 && /cut/.test(r.tip));
+  C.tutorialEvent(t, { type: 'hit', kind: 'thrust', dmg: 25, speed: 5 });
+  check('a thrust finishes the tutorial', t.done);
+}
+
 console.log('versus');
 check('two blades: the one beating into the other wins', C.bladeMeet({ into: 8, u: 0.5 }, { into: 1, u: 0.5 }) === 'aBeats' && C.bladeMeet({ into: 3, u: 0.5 }, { into: 3, u: 0.5 }) === 'clash');
 check('round winner by knockout, else health at the bell', C.pvpRoundWinner(50, 0, false) === 0 && C.pvpRoundWinner(40, 60, true) === 1 && C.pvpRoundWinner(40, 60, false) === null);

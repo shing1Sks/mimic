@@ -234,7 +234,7 @@
     function placeCameras(dt) {
       for (const P of V.players) {
         const O = V.players[1 - P.k], cam = cams[P.k];
-        const eye = P.B.head.getWorldPosition(pv);
+        const eye = LudusArm.cameraAt(P.B, pv);
         const sx = P.shake > 0 ? (Math.random() - 0.5) * P.shake * 0.3 : 0, sy = P.shake > 0 ? (Math.random() - 0.5) * P.shake * 0.3 : 0;
         P.shake = Math.max(0, P.shake - dt * 0.8);
         cam.position.set(eye.x + sx, eye.y + sy, eye.z);
@@ -388,7 +388,7 @@
       const fighting = V.state === 'fight' && !paused;
       for (const p of P) {
         core.updateSwordHand(p.hand, paused ? 0 : realDt, { fight: fighting, freeze: frozen, keyLunge: fighting && p.ctl === mouseCtl && core.takeKeyLunge() });
-        core.poseRig(p.R, cams[p.k], p.hand.q, p.hand.arm, { ext: p.hand.ext, edgeRoll: p.hand.mouse ? 0 : p.hand.edgeRoll, dt: realDt });
+        core.poseRig(p.R, cams[p.k], p.hand.q, p.hand.arm, { ext: p.hand.ext, dt: realDt });
       }
       if (V.state === 'intro' && !paused) {
         V.introT += realDt;

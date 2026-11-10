@@ -23,6 +23,40 @@
   // from the arm model, crossguard and blade length along the phone's forward axis
   const BODY = { eye: 1.62, rigOffset: [-0.03, 0.1, -0.06], guardZ: -0.09, blade: 0.82 };
 
+  /*
+   * Your sword arm (arm.js draws it): a fixed shoulder, upper arm and forearm, the wrist behind and
+   * below the fist (a hammer grip bends the wrist down from the blade), the elbow bending down and out.
+   */
+  const ARM = { shoulder: { x: 0.18, y: -0.25, z: 0.1 }, upper: 0.31, fore: 0.29, armExt: 0.45, wrist: { x: 0.012, y: -0.036, z: 0.074 }, pole: { x: 0.55, y: -0.8, z: 0.25 } };
+  /**
+   * Where the arm is for a sword orientation q, the arm model's pose of q (MimicMath.armPose) and a
+   * lunge extension: { shoulder, elbow, wrist, hand } in the rig's space. The hand comes from the arm
+   * model; if the wrist would be out of reach, hand and wrist are drawn in together (the sword's angle
+   * never changes). rotate(q, v): quaternion rotation.
+   */
+  function solveArm(q, pose, ext, rotate) {
+    const A = ARM, S = A.shoulder, UPPER = A.upper, FORE = A.fore;
+    const hand = { x: pose.hand.x, y: pose.hand.y, z: pose.hand.z - (ext || 0) * A.armExt };
+    const w = rotate(q, A.wrist);
+    const wrist = { x: hand.x + w.x, y: hand.y + w.y, z: hand.z + w.z };
+    const L = UPPER + FORE - 0.004;
+    let dx = wrist.x - S.x, dy = wrist.y - S.y, dz = wrist.z - S.z, d = Math.hypot(dx, dy, dz);
+    if (d > L) {
+      const k = 1 - L / d;
+      for (const p of [hand, wrist]) { p.x -= dx * k; p.y -= dy * k; p.z -= dz * k; }
+      dx *= 1 - k; dy *= 1 - k; dz *= 1 - k; d = L;
+    }
+    d = Math.max(d, Math.abs(UPPER - FORE) + 0.01);
+    const ux = dx / d, uy = dy / d, uz = dz / d;
+    const ca = Math.max(-1, Math.min(1, (UPPER * UPPER + d * d - FORE * FORE) / (2 * UPPER * d))), sa = Math.sqrt(1 - ca * ca);
+    const pn = Math.hypot(A.pole.x, A.pole.y, A.pole.z);
+    let px = A.pole.x / pn, py = A.pole.y / pn, pz = A.pole.z / pn;
+    const pd = px * ux + py * uy + pz * uz; px -= ux * pd; py -= uy * pd; pz -= uz * pd;
+    const pl = Math.hypot(px, py, pz) || 1; px /= pl; py /= pl; pz /= pl;
+    const elbow = { x: S.x + (ux * ca + px * sa) * UPPER, y: S.y + (uy * ca + py * sa) * UPPER, z: S.z + (uz * ca + pz * sa) * UPPER };
+    return { shoulder: { x: S.x, y: S.y, z: S.z }, elbow, wrist, hand };
+  }
+
   /* --------------------------------------------------------------- vectors */
   const v3 = (x, y, z) => ({ x, y, z });
   const add = (a, b) => ({ x: a.x + b.x, y: a.y + b.y, z: a.z + b.z });
@@ -216,7 +250,7 @@
    * beaten a heavy blow on the weak of your blade (or a blade going the wrong way): it drives
    *        through, your blade is knocked aside and you take part of the blow
    */
-  const PARRY = { into: 2.2, intoHeavy: 4.5, maxU: 0.88, strongU: 0.55, wrongWay: -2.5, beatenShare: 0.4 };
+  const PARRY = { into: 1.8, intoHeavy: 4, maxU: 0.88, strongU: 0.55, wrongWay: -2.5, beatenShare: 0.4 };
   function judgeBlock(o) {
     const into = o.into || 0, u = o.u === undefined ? 0.5 : o.u;
     if (!o.offBalance && u <= PARRY.maxU && into >= (o.heavy ? PARRY.intoHeavy : PARRY.into)) return 'parry';
@@ -696,6 +730,55 @@
     guards: null, react: [500, 600], punish: 0, aim: 0.4, staggerMs: 900, balance: 1e9,
     range: { idle: 1.3, strike: 1.3, thrust: 1.3, wobble: 0 }, footSpeed: 0, armor: {} };
 
+  /* ------------------------------------------------------------ tutorial */
+  /*
+   * Five short steps at the training post, each finished by doing it, each with a tip that answers
+   * what you just did. Events: aligned, hit {kind, dmg, speed}, whiff, blocked, parry, beaten, hurt, lunge.
+   */
+  const TUTORIAL = [
+    { id: 'align', title: 'HOLD THE SWORD', need: 1, text: 'Hold the phone like a sword hilt and point it at the post. Hold still.' },
+    { id: 'cut', title: 'CUT', need: 3, text: 'Swing through the post, hard. Speed is damage. Lead with the edge.' },
+    { id: 'block', title: 'BLOCK', need: 2, text: 'Its arm swings at you. Put your blade in the way and hold it there.' },
+    { id: 'parry', title: 'PARRY', need: 1, text: 'Now swing into its blow just as it lands. That is a parry.' },
+    { id: 'thrust', title: 'THRUST', need: 1, text: 'Point at its chest and push the phone straight forward.' },
+  ];
+  function tutorialStart() { return { step: 0, count: 0, done: false, tip: null, good: false }; }
+  /** Feed one thing that happened. Returns { advanced, tip, good } and updates t. */
+  function tutorialEvent(t, ev) {
+    if (t.done) return { advanced: false, tip: null, good: false };
+    const id = TUTORIAL[t.step].id;
+    let ok = false, tip = null;
+    switch (id) {
+      case 'align': if (ev.type === 'aligned') { ok = true; tip = 'Lined up.'; } break;
+      case 'cut':
+        if (ev.type === 'hit') {
+          if (ev.kind === 'flat') tip = 'That hit with the flat. Turn your wrist so the edge leads.';
+          else if (ev.dmg < 8) tip = 'Too soft. Swing faster: speed is damage.';
+          else { ok = true; tip = 'Clean cut, ' + Math.round(ev.speed) + ' m/s.'; }
+        } else if (ev.type === 'whiff') tip = 'Missed. The post is in reach: swing through its body.';
+        break;
+      case 'block':
+        if (ev.type === 'blocked' || ev.type === 'parry') { ok = true; tip = ev.type === 'parry' ? 'Parried, even better.' : 'Blocked.'; }
+        else if (ev.type === 'hurt') tip = 'It got through. Hold your blade across the line it swings on.';
+        else if (ev.type === 'beaten') tip = 'Beaten through. Catch it nearer your hilt.';
+        break;
+      case 'parry':
+        if (ev.type === 'parry') { ok = true; tip = 'Parry! It is wide open.'; }
+        else if (ev.type === 'blocked') tip = 'Blocked. Now swing into it as it lands.';
+        else if (ev.type === 'hurt' || ev.type === 'beaten') tip = 'Too late. Start your swing as its arm comes round.';
+        break;
+      case 'thrust':
+        if (ev.type === 'hit' && ev.kind === 'thrust') { ok = true; tip = 'Thrust, ' + Math.round(ev.speed) + ' m/s.'; }
+        else if (ev.type === 'hit') tip = 'That was a cut. Point at it and push straight forward.';
+        else if (ev.type === 'lunge') tip = 'Aim at the middle of the post.';
+        break;
+    }
+    let advanced = false;
+    if (ok && ++t.count >= TUTORIAL[t.step].need) { t.step++; t.count = 0; advanced = true; if (t.step >= TUTORIAL.length) t.done = true; }
+    if (tip || ok) { t.tip = tip; t.good = ok; }   // an unrelated event leaves the last tip up
+    return { advanced, tip, good: ok };
+  }
+
   /* --------------------------------------------------------------- fame */
   const FAME = { hit: d => Math.round(20 + 6 * d), counter: 120, parry: 250, block: 30, beat: 200, kill: 500, flawless: 600, taken: -4, disarm: 300, kneel: 200 };
   function rankFor(fame, won) {
@@ -724,14 +807,14 @@
     return 'clash';
   }
 
-  const api = { BODY, v3, add, sub, scale, dot, cross, len, norm, lerp, rng, clamp, smooth,
+  const api = { BODY, ARM, solveArm, v3, add, sub, scale, dot, cross, len, norm, lerp, rng, clamp, smooth,
     closestSegSeg, sweepSegSeg, sweepBody, sweepDisc, pointVel,
     STRIKE, classifyContact, cutPower, thrustPower, strikeDamage, ZONE_MUL, PARRY, judgeBlock, judgeCut,
     SWING, swingTracker, swingStep, lineOf,
     TRAVEL, LINE_GUARD, LINE_DIR, aimPoint, attackPose, impactAt,
     woundState, applyWound, woundMods,
     createBrain, brainStep, brainSee, brainSwing, brainBeaten, brainBlocked, brainParriedYou, brainOpening, brainHit, brainKill,
-    brainParrying, endStrike, stagger, LADDER, DUMMY, FAME, rankFor, PVP, pvpRoundWinner, bladeMeet };
+    brainParrying, endStrike, stagger, TUTORIAL, tutorialStart, tutorialEvent, LADDER, DUMMY, FAME, rankFor, PVP, pvpRoundWinner, bladeMeet };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.LudusCombat = api;
 })(typeof window !== 'undefined' ? window : this);

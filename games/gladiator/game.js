@@ -65,157 +65,9 @@
   }
 
   /* ------------------------------------------------------- your sword arm */
-  // A rig is the sword, the gloved fist round its grip, the forearm and upper arm, in the space of
-  // your head (the arm model's space). The head sits on your body, which faces your opponent.
-  const BLADE = C.BODY.blade, GUARD_Z = C.BODY.guardZ;
-  const RIG_OFFSET = new T.Vector3(...C.BODY.rigOffset); // bring the hand and hilt into view
-  function buildSword() {
-    const g = new T.Group();
-    const steel = new T.MeshStandardMaterial({ color: 0xe4e8ee, metalness: 1, roughness: 0.22, envMapIntensity: 1.3 });
-    const shape = new T.Shape();
-    shape.moveTo(-0.027, 0); shape.lineTo(-0.024, BLADE - 0.13); shape.lineTo(0, BLADE); shape.lineTo(0.024, BLADE - 0.13); shape.lineTo(0.027, 0); shape.lineTo(-0.027, 0);
-    const bg = new T.ExtrudeGeometry(shape, { depth: 0.003, bevelEnabled: true, bevelThickness: 0.0035, bevelSize: 0.006, bevelSegments: 1, steps: 1 });
-    bg.translate(0, 0, -0.0015); bg.rotateX(-Math.PI / 2); bg.rotateZ(Math.PI / 2);
-    const blade = new T.Mesh(bg, steel); blade.position.z = GUARD_Z - 0.005; g.add(blade);
-    const fuller = new T.Mesh(new T.BoxGeometry(0.0072, 0.012, BLADE * 0.62), new T.MeshStandardMaterial({ color: 0x9aa3ad, metalness: 1, roughness: 0.35 }));
-    fuller.position.z = GUARD_Z - 0.03 - BLADE * 0.31; g.add(fuller);
-    const brass = new T.MeshStandardMaterial({ color: 0xc89b45, metalness: 1, roughness: 0.3 });
-    const guard = new T.Mesh(new T.BoxGeometry(0.026, 0.17, 0.026), brass); guard.position.z = GUARD_Z; g.add(guard);
-    for (const s of [-1, 1]) { const k = new T.Mesh(new T.SphereGeometry(0.014, 10, 8), brass); k.position.set(0, s * 0.085, GUARD_Z); g.add(k); }
-    const grip = new T.Mesh(new T.CylinderGeometry(0.017, 0.019, 0.16, 10), new T.MeshStandardMaterial({ color: new T.Color(0x3b2314).convertSRGBToLinear(), roughness: 0.75 }));
-    grip.rotation.x = Math.PI / 2; grip.position.z = GUARD_Z + 0.09; g.add(grip);
-    const pommel = new T.Mesh(new T.SphereGeometry(0.03, 12, 10), brass); pommel.position.z = GUARD_Z + 0.18; g.add(pommel);
-    g.traverse(o => { if (o.isMesh) { o.castShadow = false; o.renderOrder = 5; } });
-    return g;
-  }
-  /** A leather gauntlet closed round the grip: four curled fingers, a riveted back plate, the thumb over the top. */
-  function buildFist(glove, plate) {
-    const g = new T.Group();
-    const finger = new T.TorusGeometry(0.027, 0.0115, 8, 14, Math.PI * 1.45);
-    for (let i = 0; i < 4; i++) {
-      const f = new T.Mesh(finger, glove);
-      f.position.z = GUARD_Z + 0.036 + i * 0.024;
-      f.rotation.z = Math.PI * 0.32 + i * 0.05;
-      f.scale.set(1, 1, 1.05 - i * 0.06);
-      g.add(f);
-    }
-    const back = new T.Mesh(new T.BoxGeometry(0.026, 0.07, 0.105), glove);
-    back.position.set(0.033, -0.004, GUARD_Z + 0.085); back.rotation.z = 0.15; g.add(back);
-    const knuckles = new T.Mesh(new T.CylinderGeometry(0.018, 0.018, 0.1, 10, 1, false, 0, Math.PI), plate);
-    knuckles.rotation.x = Math.PI / 2; knuckles.rotation.y = -Math.PI / 2 + 0.15; knuckles.position.set(0.042, -0.004, GUARD_Z + 0.082); g.add(knuckles);
-    for (let i = 0; i < 3; i++) { const r = new T.Mesh(new T.SphereGeometry(0.0045, 6, 4), plate); r.position.set(0.06, -0.004, GUARD_Z + 0.05 + i * 0.03); g.add(r); }
-    const thumb = new T.Mesh(new T.CapsuleGeometry(0.013, 0.045, 4, 8), glove);
-    thumb.rotation.x = Math.PI / 2 - 0.25; thumb.position.set(-0.012, 0.03, GUARD_Z + 0.055); g.add(thumb);
-    const cuff = new T.Mesh(new T.CylinderGeometry(0.05, 0.043, 0.06, 14, 1, true), glove);
-    cuff.rotation.x = Math.PI / 2; cuff.position.set(0.012, -0.004, GUARD_Z + 0.165); g.add(cuff);
-    return g;
-  }
-  /** A body (Group facing -Z at the feet) with a head at eye height; the rig hangs off the head. */
-  function makeBody(parent) {
-    const body = new T.Group(); parent.add(body);
-    const head = new T.Group(); head.position.y = EYE; body.add(head);
-    return { body, head };
-  }
-  function makeRig(head, tint) {
-    const R = { armState: {}, fadeLimb: 1 };
-    R.rig = new T.Group(); R.rig.position.copy(RIG_OFFSET); head.add(R.rig);
-    R.head = head;
-    R.hand = new T.Group(); R.rig.add(R.hand);
-    R.swordGrp = buildSword(); R.hand.add(R.swordGrp);
-    const mat = (color, rough, env, metal) => { // colours are picked by eye (sRGB); the renderer works in linear
-      const m = new T.MeshStandardMaterial({ color, roughness: rough, envMapIntensity: env, metalness: metal || 0, transparent: true });
-      m.color.convertSRGBToLinear(); return m;
-    };
-    R.limbMats = [mat(0x4a2d1a, 0.8, 0.35), mat(0x3a3029, 0.42, 0.7, 0.65), mat(tint || 0x6b1a14, 0.9, 0.3)];
-    R.handMats = [mat(0x3b2416, 0.72, 0.4), mat(0x8a7350, 0.35, 0.9, 0.85)];
-    R.handMats.forEach(m => { m.transparent = false; });
-    R.fist = buildFist(R.handMats[0], R.handMats[1]); R.hand.add(R.fist);
-    R.forearm = new T.Mesh(new T.CylinderGeometry(0.044, 0.035, 1, 14), R.limbMats[0]); R.rig.add(R.forearm);
-    R.bracer = new T.Mesh(new T.CylinderGeometry(0.049, 0.043, 0.13, 14), R.limbMats[1]); R.rig.add(R.bracer);
-    R.upperArm = new T.Mesh(new T.CylinderGeometry(0.058, 0.047, 1, 14), R.limbMats[2]); R.rig.add(R.upperArm);
-    R.armParts = [R.forearm, R.bracer, R.upperArm, R.fist];
-    for (const m of R.armParts) m.traverse(o => { o.renderOrder = 5; });
-    return R;
-  }
-
+  // the sword, gauntlet and arm live in arm.js; the camera sits just above and behind your eyes
+  const { makeBody, makeRig, poseRig, bladeWorld, bodyCapsules } = LudusArm;
   const UP = new T.Vector3(0, 1, 0), tmpV = new T.Vector3(), tmpV2 = new T.Vector3(), tmpQ = new T.Quaternion();
-  function placeLimb(mesh, a, b) {
-    tmpV.set(b.x - a.x, b.y - a.y, b.z - a.z);
-    const len = tmpV.length();
-    mesh.position.set((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
-    mesh.quaternion.setFromUnitVectors(UP, tmpV.normalize());
-    mesh.scale.set(1, len, 1);
-  }
-  /*
-   * The arm must never block the fight: any part of it that comes close to the eyes inside the
-   * middle of the view fades out, and returns as it leaves. The sword and the fist never fade.
-   */
-  const smooth01 = (a, b, v) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
-  function intrusion(cam, p) {
-    const x = p.x + RIG_OFFSET.x, y = p.y + RIG_OFFSET.y, d = -(p.z + RIG_OFFSET.z);
-    if (d < 0.01) return 0;
-    const tv = Math.tan(cam.fov * Math.PI / 360), th = tv * cam.aspect;
-    const r = 0.06;
-    const edge = Math.max((Math.abs(x) - r) / (d * th), (Math.abs(y) - r) / (d * tv));
-    return (1 - smooth01(0.35, 0.8, edge)) * (1 - smooth01(0.3, 0.55, d));
-  }
-  function fadeArm(R, cam, arm, wrist, dt) {
-    let limb = 0;
-    const L = (a, b, f) => ({ x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, z: a.z + (b.z - a.z) * f });
-    for (let k = 0; k <= 4; k++) limb = Math.max(limb, intrusion(cam, L(arm.elbow, wrist, k / 4)));
-    for (let k = 1; k <= 2; k++) limb = Math.max(limb, intrusion(cam, L(arm.shoulder, arm.elbow, k / 2)));
-    const e = Math.min(1, dt * 14);
-    R.fadeLimb += (1 - Math.min(1, limb * 1.6) - R.fadeLimb) * e;
-    R.limbMats.forEach(m => { m.opacity = R.fadeLimb; m.depthWrite = R.fadeLimb > 0.98; });
-    R.forearm.visible = R.bracer.visible = R.upperArm.visible = R.fadeLimb > 0.03;
-  }
-  /** Hand position in head space for an arm pose and a lunge extension (m, along the body's forward). */
-  const ARM_EXT = 0.45;   // of a lunge, the arm's share; the body steps in the rest
-  function handAt(arm, ext) { return { x: arm.hand.x, y: arm.hand.y, z: arm.hand.z - ext * ARM_EXT }; }
-  /**
-   * The blade in world space for an orientation q (plain quaternion), arm pose and extension, without
-   * moving any mesh (used for the in-between steps of a fast swing). edgeRoll: CENTRE calibration.
-   */
-  function bladeWorld(R, q, arm, ext, edgeRoll) {
-    const hp = handAt(arm, ext);
-    const base = tmpV.set(hp.x + RIG_OFFSET.x, hp.y + RIG_OFFSET.y, hp.z + RIG_OFFSET.z);
-    const hd = MM.rotate(q, { x: 0, y: 0, z: GUARD_Z }), td = MM.rotate(q, { x: 0, y: 0, z: GUARD_Z - BLADE });
-    const h = new T.Vector3(base.x + hd.x, base.y + hd.y, base.z + hd.z).applyMatrix4(R.head.matrixWorld);
-    const t = new T.Vector3(base.x + td.x, base.y + td.y, base.z + td.z).applyMatrix4(R.head.matrixWorld);
-    const e = MM.rotate(q, { x: Math.sin(edgeRoll || 0), y: Math.cos(edgeRoll || 0), z: 0 });
-    const edge = new T.Vector3(e.x, e.y, e.z).transformDirection(R.head.matrixWorld);
-    return { h, t, edge };
-  }
-  /** Put a rig's sword and arm where the phone says. q: display orientation (THREE.Quaternion). */
-  function poseRig(R, cam, q, arm, o) {
-    R.hand.quaternion.copy(q);
-    const hp = handAt(arm, o.ext || 0);
-    R.hand.position.set(hp.x, hp.y, hp.z);
-    R.swordGrp.rotation.z = -(o.edgeRoll || 0);   // the edges where your grip put them at CENTRE
-    const wrist = { x: hp.x - (arm.hand.x - arm.wrist.x), y: hp.y - (arm.hand.y - arm.wrist.y), z: hp.z - (arm.hand.z - arm.wrist.z) };
-    placeLimb(R.forearm, arm.elbow, wrist);
-    const bp = { x: arm.elbow.x + (wrist.x - arm.elbow.x) * 0.8, y: arm.elbow.y + (wrist.y - arm.elbow.y) * 0.8, z: arm.elbow.z + (wrist.z - arm.elbow.z) * 0.8 };
-    placeLimb(R.bracer, arm.elbow, wrist); R.bracer.position.set(bp.x, bp.y, bp.z); R.bracer.scale.y = 1;
-    placeLimb(R.upperArm, arm.shoulder, arm.elbow);
-    if (cam) fadeArm(R, cam, arm, wrist, o.dt || 0.016);
-    R.rig.updateMatrixWorld(true);
-  }
-  /** Your body's hit capsules in world space: head, torso, sword arm (from the arm model), legs. */
-  function bodyCapsules(R, B, arm, ext) {
-    const p = B.body.position, hw = v => new T.Vector3(v.x + RIG_OFFSET.x, v.y + RIG_OFFSET.y, v.z + RIG_OFFSET.z).applyMatrix4(R.head.matrixWorld);
-    const fz = new T.Vector3(0, 0, -1).transformDirection(B.body.matrixWorld), sx = new T.Vector3(1, 0, 0).transformDirection(B.body.matrixWorld);
-    const at = (x, y, z) => new T.Vector3(p.x, y, p.z).addScaledVector(sx, x).addScaledVector(fz, z);
-    const hand = handAt(arm, ext);
-    return [
-      { zone: 'head', a: at(0, EYE - 0.06, -0.02), b: at(0, EYE + 0.1, -0.02), r: 0.12 },
-      { zone: 'torso', a: at(0, 0.98, -0.02), b: at(0, EYE - 0.24, -0.02), r: 0.19 },
-      { zone: 'swordArm', a: hw(arm.shoulder), b: hw(arm.elbow), r: 0.055 },
-      { zone: 'swordArm', a: hw(arm.elbow), b: hw(hand), r: 0.055 },
-      { zone: 'offArm', a: at(-0.22, 1.36, 0), b: at(-0.25, 1.02, -0.12), r: 0.05 },
-      { zone: 'legs', a: at(-0.12, 0.92, 0), b: at(-0.13, 0.08, 0.02), r: 0.085 },
-      { zone: 'legs', a: at(0.12, 0.92, 0), b: at(0.13, 0.08, 0.02), r: 0.085 },
-    ];
-  }
   function slerpQ(a, b, t) {
     let d = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w, bx = b.x, by = b.y, bz = b.z, bw = b.w;
     if (d < 0) { d = -d; bx = -bx; by = -by; bz = -bz; bw = -bw; }
@@ -257,7 +109,8 @@
     if (Math.hypot(g.x, g.y) < 0.5) return;
     const phi = Math.atan2(g.x, g.y);
     if (now) { H.edgeRoll = phi; H.calibrated = true; H.rollSin = Math.sin(phi); H.rollCos = Math.cos(phi); return; }
-    H.rollSin += (Math.sin(phi) - H.rollSin) * 0.02; H.rollCos += (Math.cos(phi) - H.rollCos) * 0.02;
+    const k = H.rollSeen ? 0.03 : 1; H.rollSeen = true;   // the first still moment sets it, later ones refine it
+    H.rollSin += (Math.sin(phi) - H.rollSin) * k; H.rollCos += (Math.cos(phi) - H.rollCos) * k;
     H.edgeRoll = Math.atan2(H.rollSin, H.rollCos);
   }
   /**
@@ -268,10 +121,14 @@
     const c = H.ctl;
     let q, arm;
     if (c.source === 'phone') {
-      q = c.quat;
+      const qp = c.quat;
+      if (!H.calibrated && !o.fight && c.angularSpeed < 1.2) calibrate(H, qp, false);
+      if (c.pressed('center')) { calibrate(H, qp, true); H.yaw0 = 0; rec('align', { roll: r2(H.edgeRoll * 180 / Math.PI) }); }
+      // the sword is the phone with your grip's roll taken out: a natural grip shows knuckles up, edges top and bottom
+      const h = -H.edgeRoll / 2, rz = { x: 0, y: 0, z: Math.sin(h), w: Math.cos(h) };
+      q = MM.mul(qp, rz);
+      if (H.yaw0) { const y = -H.yaw0 / 2; q = MM.mul({ x: 0, y: Math.sin(y), z: 0, w: Math.cos(y) }, q); }
       arm = H.side === 'left' ? MM.armPose(q, 'left') : continuousArm(q, MM.armPose(q, 'right'), dt, H.R.armState, H.angSpeed);
-      if (!H.calibrated && !o.fight && c.angularSpeed < 1.2) calibrate(H, q, false);
-      if (c.pressed('center')) { calibrate(H, q, true); rec('align', { roll: r2(H.edgeRoll * 180 / Math.PI) }); }
     } else {
       // mouse: the tip follows the cursor; the blade rides a little raised, like a guard
       const yaw = c.yaw * 1.15, pitch = c.pitch * 1.25 + 0.45;
@@ -287,6 +144,7 @@
     if (o.fight && H.lungeCd <= 0 && H.ext < 0.05 && ((push > 14 && c.angularSpeed < 7) || (o.keyLunge))) {
       H.extGoal = Math.min(1, o.keyLunge ? 0.9 : (push - 8) / 18) * 0.42 * H.lungeMul;
       H.lungeCd = 0.55; H.lungeT = 0; rec('lunge', { push: r2(push), ext: r2(H.extGoal) });
+      if (o.onLunge) o.onLunge();
       Sfx.play('step', { vol: 0.5 });
     }
     if (H.extGoal > 0) {
@@ -303,15 +161,21 @@
     // the blade's steps from last frame's pose to this one (a fast swing turns ~0.5 rad a frame)
     const from = H.dispQ || dqp, steps = Math.max(1, Math.min(12, Math.ceil(qAngle(from, dqp) / 0.07)));
     const ext0 = H.prevExt === undefined ? H.ext : H.prevExt;
-    H.path = [H.blade || bladeWorld(H.R, from, MM.armPose(from, H.side), ext0, H.edgeRoll)];
+    H.path = [H.blade || bladeWorld(H.R, from, MM.armPose(from, H.side), ext0)];
     for (let k = 1; k < steps; k++) {
       const qk = slerpQ(from, dqp, k / steps);
-      H.path.push(bladeWorld(H.R, qk, MM.armPose(qk, H.side), ext0 + (H.ext - ext0) * k / steps, H.edgeRoll));
+      H.path.push(bladeWorld(H.R, qk, MM.armPose(qk, H.side), ext0 + (H.ext - ext0) * k / steps));
     }
-    const cur = bladeWorld(H.R, dqp, arm, H.ext, H.edgeRoll);
+    const cur = bladeWorld(H.R, dqp, arm, H.ext);
     H.path.push(cur);
     H.prevBlade = H.blade; H.blade = cur; H.arm = arm; H.dispQ = dqp; H.prevQ = { x: q.x, y: q.y, z: q.z, w: q.w }; H.prevExt = H.ext;
-    if (dt > 0 && H.prevBlade) H.tipVel.copy(cur.t).sub(H.prevBlade.t).divideScalar(dt);
+    if (dt > 0 && H.prevBlade) {
+      H.tipVel.copy(cur.t).sub(H.prevBlade.t).divideScalar(dt);
+      // the blade's middle over the last fifth of a second: a beat that lands just before his blow still parries
+      const mv = cur.h.clone().lerp(cur.t, 0.5).sub(H.prevBlade.h.clone().lerp(H.prevBlade.t, 0.5)).divideScalar(dt);
+      const now = performance.now();
+      H.velHist = (H.velHist || []).filter(e => now - e[0] < 200); H.velHist.push([now, mv]);
+    }
     H.q = dq;
   }
 
@@ -337,6 +201,9 @@
     $('opt-hand').textContent = S.hand.toUpperCase();
     document.querySelectorAll('.opt-vol').forEach(el => { el.textContent = volText(prefs.volume); });
     document.querySelectorAll('.opt-assist').forEach(el => { el.textContent = prefs.assist ? 'ON' : 'OFF'; });
+    // until the tutorial is done it is the first thing offered
+    const tb = document.querySelector('#title-menu [data-act=tutorial]'), lb = document.querySelector('#title-menu [data-act=ladder]');
+    if (tb && lb) { tb.classList.toggle('primary', !prefs.tutDone); lb.classList.toggle('primary', !!prefs.tutDone); }
   }
   const freshStats = () => ({ hits: 0, parries: 0, blocks: 0, beats: 0, taken: 0, bestHit: 0, bestSpeed: 0, counters: 0, time: 0, fame: 0, whiffs: 0, swings: 0, disarms: 0 });
 
@@ -347,7 +214,7 @@
   let HAND = makeSwordHand(mc, R0, ME, 'right');
   window.__ludus = S; // for tests
   window.__ludusDebug = { gfx: () => ({ renderer, scene, camera, world }), hand: () => HAND,
-    bladeFor: q => { ME.body.updateMatrixWorld(true); const b = bladeWorld(R0, q, MM.armPose(q, S.hand), 0, HAND.edgeRoll); return { h: b.h, t: b.t }; },
+    bladeFor: q => { ME.body.updateMatrixWorld(true); const b = bladeWorld(R0, q, MM.armPose(q, S.hand), 0); return { h: b.h, t: b.t }; },
     start: (i, mode) => { ['title', 'results', 'pause'].forEach(id => $(id).classList.add('hidden')); $('hud').classList.remove('hidden'); newRun(mode || 'ladder'); if (i) startBout(i); } };
 
   /* ----------------------------------------------------------- utilities */
@@ -380,6 +247,20 @@
     if (at && at.isVector3) { const p = worldPx(at); if (p) { popAt(text, cls, p.x, p.y); return; } at = 'center'; }
     const p = POP_POS[at || 'center']; popAt(text, cls, p[0] * W, p[1] * H);
   }
+  /*
+   * Every exchange gets one word in one place (top centre), replacing the last: BLOCKED, PARRY!,
+   * BEATEN THROUGH, EDGE, FLAT... with a short line under it saying what it was or what to change.
+   */
+  let verdictT = 0;
+  function verdict(word, sub, tone) {
+    const el = $('verdict');
+    el.className = '';
+    el.querySelector('b').textContent = word; el.querySelector('span').textContent = sub || '';
+    void el.offsetWidth;   // restart the animation
+    el.className = 'show ' + (tone || '');
+    verdictT = 1.8; S.lastBigPop = S.realT;
+  }
+  function say(word, sub, tone) { verdict(word, S.tut ? '' : sub, tone); }
   function popOnce(key, gap, text, cls, at) {
     if (S.realT - (S.lastPop[key] || -99) < gap) return;
     S.lastPop[key] = S.realT; pop(text, cls, at);
@@ -422,6 +303,7 @@
   const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI'];
   function boutLabel(i) { return C.LADDER[i].title.toUpperCase(); }
   function newRun(mode) {
+    S.tutAttacks = false;
     S.mode = mode; S.boutIdx = 0; S.hp = S.maxHp; S.fame = 0; S.won = 0; S.wounds = C.woundState();
     S.total = freshStats();
     if (fx) fx.clearDecals();
@@ -477,6 +359,11 @@
         ? `<button class="mi primary" data-act="fight">BEGIN</button><button class="mi" data-act="swap-practice">${S.practiceFoe === 'dummy' ? 'SPAR INSTEAD' : 'TRAINING POST'}</button>`
         : '<button class="mi primary" data-act="fight">FIGHT</button>';
       renderLadder();
+    } else if (kind === 'tutDone') {
+      $('card-kicker').textContent = 'TRAINING DONE';
+      $('card-title').textContent = 'READY FOR THE SAND';
+      $('card-text').innerHTML = 'Cut through him, fast and edge first. Meet his blade with yours: in its way to block, into it to parry. Push forward to thrust. Watch his sword hand: it draws back where the blow comes from.';
+      $('card-menu').innerHTML = '<button class="mi primary" data-act="ladder">FIGHT THE LADDER</button><button class="mi" data-act="tutorial">AGAIN</button>';
     } else if (kind === 'between') {
       const st = S.stats;
       $('card-kicker').textContent = 'THE CROWD ROARS';
@@ -513,7 +400,7 @@
     hideCard();
     S.state = 'fight';
     S.fighter.setWalking(false);
-    pop(S.mode === 'practice' ? 'TRAIN' : 'FIGHT!', 'big');
+    verdict(S.mode === 'practice' ? 'TRAIN' : 'FIGHT!', '', 'good');
     Sfx.play('cheer', { vol: 0.7 }); S.excite = 0.8;
     rec('bout', { idx: S.boutIdx, mode: S.mode, foe: S.foe.p.id, roll: r2(HAND.edgeRoll * 180 / Math.PI), calibrated: HAND.calibrated });
     if (S.boutIdx === 0 && S.won === 0 && S.mode !== 'practice') hint('Watch her <b>sword hand draw back</b>: the blow comes from that side. Put your blade in its way, or beat into it to parry. Then cut where her blade is not.', 9);
@@ -531,7 +418,7 @@
       $('foe-name').textContent = S.foe.p.name.toUpperCase(); updateHud(true);
       Sfx.play('beastHurt', { vol: 1 }); Sfx.play('cheer', { vol: 0.8, delay: 0.2 }); Sfx.play('wolf', { vol: 0.9, delay: 0.5 });
       S.excite = 1.2; slowMo(0.6, 0.35); rumble(1, 200, 2);
-      addFame(C.FAME.kill); pop('ONE DOWN!', 'big', 'high');
+      addFame(C.FAME.kill); verdict('ONE DOWN!', 'the other one is coming', 'good');
       return;
     }
     Sfx.play(p.beast ? 'beastHurt' : p.model === 'troll' ? 'troll' : 'die', { vol: 1 });
@@ -539,7 +426,7 @@
     S.excite = 1.3; slowMo(1.3, 0.25);
     rumble(1, 255, 2);
     addFame(C.FAME.kill);
-    pop('VICTORY', 'big', 'high');
+    verdict('VICTORY', '', 'good');
     S.state = 'down'; S.endT = 0;
   }
   function addFame(n) { S.fame = Math.max(0, S.fame + n); S.stats.fame += n; }
@@ -557,7 +444,7 @@
     for (const k in S.stats) S.total[k] = k === 'bestHit' || k === 'bestSpeed' ? Math.max(S.total[k], S.stats[k]) : S.total[k] + S.stats[k];
     Sfx.play('die', { vol: 1, rate: 0.85 }); Sfx.play('shout', { vol: 0.8 });
     rumble(1, 255, 1);
-    pop('YOU FALL', 'bad');
+    verdict('YOU FALL', '', 'bad');
     slowMo(1.5, 0.35);
     rec('defeat', { bout: S.boutIdx });
   }
@@ -642,7 +529,7 @@
     if (!f || f.dead || !H.blade) return;
     const { cur, prev } = foeShapes();
     const path = H.path, K = path.length - 1;
-    const myCaps1 = bodyCapsules(H.R, ME, H.arm, H.ext), myCaps0 = S.myCapsPrev || myCaps1; S.myCapsPrev = myCaps1;
+    const myCaps1 = bodyCapsules(H.R, ME, H.dispQ, H.arm, H.ext), myCaps0 = S.myCapsPrev || myCaps1; S.myCapsPrev = myCaps1;
     const strikeLive = b.state === 'strike' && !S.strikeDone && cur.w && prev.w;
     const subDt = dt / Math.max(1, K);
     S.cdt = Math.round(dt * 1000); S.csteps = K;
@@ -681,7 +568,9 @@
     const b = S.brain, f = S.fighter, p = S.foe.p, a = b.attack;
     S.strikeDone = true;
     const myV = C.pointVel(A0, A1, hit.w, subDt), hisV = C.pointVel(W0, W1, hit.u, Math.max(1e-3, subDt * S.timeScale));
-    const hisDir = C.norm(hisV), into = -C.dot(myV, hisDir);
+    const hisDir = C.norm(hisV);
+    let into = -C.dot(myV, hisDir);
+    for (const e of HAND.velHist || []) into = Math.max(into, -C.dot(e[1], hisDir) * 0.85);
     const at = new T.Vector3(hit.point.x, hit.point.y, hit.point.z);
     if (p.weapon === 'jaws' || p.weapon === 'fist') {
       // a beast runs onto your blade: it is cut by how hard the two of you meet
@@ -706,7 +595,8 @@
       rumble(1, 150, 3); flashLight(at, 1.2);
       slowMo(0.45, 0.22); S.flash = 0.7; S.shake = 0.1;
       S.excite = Math.min(1.4, S.excite + 0.5);
-      pop('PARRY!', 'big', 'high');
+      say('PARRY!', 'he is wide open: cut now', 'good');
+      tut({ type: 'parry' });
     } else if (verdict === 'block') {
       C.endStrike(b, 'blocked'); f.blockReact(0.6);
       S.stats.blocks++; addFame(C.FAME.block);
@@ -714,7 +604,8 @@
       rumble(0.75, 70, 0); flashLight(at, 0.6);
       S.freezeT = 0.06; S.shake = 0.06; kick(-hisDir.x * 0.02, hisDir.y * 0.015);
       HAND.knock = 0.25; HAND.knockAxis.set(0, 0, 1).cross(new T.Vector3(hisDir.x, hisDir.y, hisDir.z)).normalize();
-      popOnce('block', 0.6, a.heavy ? 'HELD - JUST' : 'BLOCKED', 'mid', 'high');
+      say('BLOCKED', a.heavy ? 'held, just' : 'swing into it next time to parry', 'ok');
+      tut({ type: 'blocked' });
     } else {
       C.endStrike(b, 'beaten');
       beatenThrough(a, at, hisDir);
@@ -726,9 +617,9 @@
     HAND.knock = 1; HAND.knockAxis.set(0, 0, 1).cross(new T.Vector3(hisDir.x, hisDir.y, hisDir.z)).normalize();
     if (HAND.knockAxis.lengthSq() < 1e-6) HAND.knockAxis.set(1, 0, 0);
     const zone = AIM_ZONE[a.aim] || 'torso';
-    pop(a.heavy ? 'BEATEN THROUGH' : 'GUARD BEATEN', 'bad', 'high');
-    popOnce('beaten', 3, a.heavy ? 'meet a heavy blow near your hilt, moving into it' : 'your blade was going the wrong way', 'sub', 'center');
-    hurt(Math.round(a.damage * C.PARRY.beatenShare), zone, a);
+    say('BEATEN THROUGH', a.heavy ? 'meet a heavy blow near your hilt, moving into it' : 'your blade was moving away from it', 'bad');
+    tut({ type: 'beaten' });
+    hurt(Math.round(a.damage * C.PARRY.beatenShare), zone, a, true);
   }
   /** His blow landed on you. */
   function hisBlowOnBody(hit, W0, W1, subDt) {
@@ -741,7 +632,7 @@
     hurt(Math.max(1, Math.round(a.damage * mul)), zone, a);
     if (p.beast) Sfx.play(p.model === 'wolf' ? 'wolf' : 'troll', { vol: 0.7 });
   }
-  function hurt(dmg, zone, a) {
+  function hurt(dmg, zone, a, quiet) {
     if (S.mode === 'practice') dmg = 0;
     S.hp = Math.max(0, S.hp - dmg); S.stats.taken += dmg; addFame(C.FAME.taken * dmg);
     const fxw = C.applyWound(S.wounds, zone, dmg, {});
@@ -757,10 +648,11 @@
     else rumble(1, 200, 0);
     S.excite = Math.min(1.3, S.excite + 0.25);
     rec('hurt', { zone, dmg, hp: S.hp });
-    if (dmg > 0) pop('-' + dmg + '  ' + ZONE_WORD[zone], 'bad', a && C.TRAVEL[a.line] ? (C.TRAVEL[a.line].x > 0 ? 'left' : 'right') : 'center');
-    else if (S.mode === 'practice') pop('HIT: ' + ZONE_WORD[zone], 'bad', 'center');
-    if (fxw.limp) popOnce('limp', 3, 'YOUR LEG: SHORTER LUNGE', 'sub', 'low');
-    if (zone === 'swordArm' && dmg >= 8) popOnce('armw', 3, 'SWORD ARM CUT: WEAKER CUTS', 'sub', 'low');
+    if (!quiet) {
+      const why = fxw.limp ? 'your leg: a shorter lunge now' : zone === 'swordArm' && dmg >= 8 ? 'your sword arm: weaker cuts now' : 'put your blade in its path';
+      say('HIT · ' + ZONE_WORD[zone], (dmg > 0 ? '-' + dmg + '  ' : '') + why, 'bad');
+      tut({ type: 'hurt' });
+    }
     if (S.hp <= 0 && S.mode !== 'practice') defeat();
   }
 
@@ -780,8 +672,7 @@
     if (res.result === 'touch') { if (S.realT - (S.lastTouch || 0) > 0.4) { S.lastTouch = S.realT; Sfx.play('blade', { vol: 0.15, rate: 1.4 }); rumble(0.2, 20, 0); } return; }
     S.swingHit = S.swing.id; S.hitT = S.realT; S.swing.contact = 'body';
     const motion = new T.Vector3(vel.x, vel.y, vel.z).normalize();
-    S.last = { zone, kind: cls.kind, speed, dmg: res.damage, result: res.result, t: S.realT, edge: Math.round(cls.edge01 * 100) };
-    showReadout();
+    tut({ type: 'hit', kind: cls.kind, dmg: res.result === 'hit' ? res.damage : 0, speed });
     rec('hit', { zone, kind: cls.kind, speed: r2(cls.speed), axial: r2(cls.axial), edge: r2(cls.edge01), dmg: res.damage, result: res.result, state: b.state, runOn: !!runOn, fdt: S.cdt, steps: S.csteps });
     f.knock(vel, Math.min(1, cls.speed / 20));
     if (res.result === 'armor') {
@@ -789,7 +680,7 @@
       fx.clash(at, 0.35, motion.clone().negate()); rumble(0.55, 40, 0);
       f.addWound(at, motion, cap && cap.bone, true, 0.6);
       b.balance -= 6 + 10 * res.power; if (res.stagger) { C.stagger(b, p.staggerMs * 0.5); f.setAction('stagger'); }
-      popOnce('armor', 1, 'TURNED BY ARMOUR', 'sub', at);
+      say('ARMOUR', 'turned it: cut harder, or thrust', 'bad');
       S.freezeT = 0.03;
       return;
     }
@@ -816,14 +707,14 @@
     const big = res.damage >= 30 || (zone === 'head' && res.damage >= 20);
     if (big) { Sfx.play('shout', { vol: 0.6, delay: 0.12 }); slowMo(0.35, 0.35); }
     pop(String(res.damage), 'dmg', at);
-    if (res.counter) pop('COUNTER!', 'big', 'high');
-    else if (wfx.disarm) { pop('DISARMED!', 'big', 'high'); f.dropWeapon(); S.stats.disarms++; addFame(C.FAME.disarm); slowMo(0.6, 0.3); Sfx.ring(1, true); }
-    else if (wfx.shieldDrop) { pop('SHIELD DROPPED!', 'big', 'high'); f.dropShield(); addFame(250); slowMo(0.5, 0.3); }
-    else if (wfx.kneel) { pop('DOWN ON ONE KNEE!', 'big', 'high'); f.setAction('kneel'); addFame(C.FAME.kneel); slowMo(0.5, 0.3); }
-    else if (big) pop(zone === 'head' ? 'HEAD!' : 'DEEP CUT!', 'mid', 'high');
-    if (wfx.limp) { f.limp = b.wounds.legLevel; popOnce('limp', 2.5, 'HE LIMPS', 'sub', 'high'); }
-    if (zone === 'swordArm' && b.wounds.armLevel > 0) popOnce('armlv', 2.5, 'HIS SWORD ARM WEAKENS', 'sub', 'high');
-    if (cls.kind === 'flat' && !runOn && res.damage >= 4) popOnce('flat', 8, 'FLAT OF THE BLADE: TURN THE EDGE INTO IT', 'sub', 'low');
+    const what = KIND_WORD[cls.kind] + ' · ' + zoneWord(zone) + ' · ' + speed + ' m/s';
+    if (wfx.disarm) { say('DISARMED!', what, 'good'); f.dropWeapon(); S.stats.disarms++; addFame(C.FAME.disarm); slowMo(0.6, 0.3); Sfx.ring(1, true); }
+    else if (wfx.shieldDrop) { say('SHIELD DROPPED!', what, 'good'); f.dropShield(); addFame(250); slowMo(0.5, 0.3); }
+    else if (wfx.kneel) { say('DOWN ON ONE KNEE!', what, 'good'); f.setAction('kneel'); addFame(C.FAME.kneel); slowMo(0.5, 0.3); }
+    else if (res.counter) say('COUNTER!', what, 'good');
+    else if (cls.kind === 'flat') say('FLAT', 'the flat hit it: turn your wrist so the edge leads', 'ok');
+    else say(big ? (zone === 'head' ? 'HEAD!' : 'DEEP CUT!') : KIND_WORD[cls.kind], zoneWord(zone) + ' · ' + speed + ' m/s' + (wfx.limp ? ' · he limps' : zone === 'swordArm' && b.wounds.armLevel > 0 ? ' · his arm weakens' : ''), 'good');
+    if (wfx.limp) f.limp = b.wounds.legLevel;
     if (S.foe.hp <= 0) foeDown();
   }
   /** Your blade met his blade, dagger or shield. */
@@ -839,31 +730,29 @@
     const verdict = C.judgeCut({ speed, his, strength, into: his === 'parrying' ? 4 : 0 });
     const motion = new T.Vector3(vel.x, vel.y, vel.z).normalize();
     rec('clash', { on: what, verdict, speed: r2(speed), his, strength: r2(strength), fdt: S.cdt, steps: S.csteps });
-    S.last = { zone: what === 'shield' ? 'SHIELD' : what === 'dagger' ? 'DAGGER' : 'BLADE', kind: verdict, speed: Math.round(speed), dmg: 0, result: verdict, t: S.realT };
-    showReadout();
     clashFx(at, verdict === 'beat' ? 1 : 0.6, motion.clone().negate(), what === 'shield');
     if (verdict === 'beat') {
       C.brainBeaten(b); f.setAction('stagger'); if (what === 'blade') f.blockReact(1);
       S.stats.beats++; addFame(C.FAME.beat);
       Sfx.ring(1, true); rumble(1, 140, 3); S.freezeT = 0.08; S.flash = 0.35;
       S.excite = Math.min(1.4, S.excite + 0.4); Sfx.play('shout', { vol: 0.5, delay: 0.08 });
-      pop(what === 'shield' ? 'SHIELD BATTERED ASIDE!' : his === 'windup' ? 'BEAT HIS BLOW!' : 'GUARD BEATEN!', 'big', 'high');
+      say(what === 'shield' ? 'SHIELD BATTERED!' : 'GUARD BEATEN!', 'he is open: cut now', 'good');
     } else if (verdict === 'parried') {
       HAND.knock = 1; HAND.knockAxis.set(0, 0, 1).cross(motion).normalize(); if (HAND.knockAxis.lengthSq() < 1e-6) HAND.knockAxis.set(1, 0, 0);
       S.openT = 0.45; kick(0.025 * Math.sign(motion.x || 1), 0.012);
       Sfx.ring(1, true); rumble(1, 120, 1);
-      pop('PARRIED!', 'bad', 'high'); popOnce('parriedwhy', 2, speed < strength ? 'too soft: cut harder or go round' : 'he met it', 'sub', 'center');
+      say('PARRIED', speed < strength ? 'he beat your cut away: cut harder, or go round his blade' : 'he met it: change your line', 'bad');
       brainStarted(C.brainParriedYou(b));
     } else {
       Sfx.ring(0.6, false); rumble(0.7, 60, 0); S.freezeT = 0.05;
       f.blockReact(0.5);
       const r = C.brainBlocked(b, C.cutPower(speed));
-      if (r === 'broken') { pop('BALANCE BROKEN!', 'big', 'high'); f.setAction('stagger'); addFame(150); }
+      if (r === 'broken') { say('BALANCE BROKEN!', 'he is open: cut now', 'good'); f.setAction('stagger'); addFame(150); }
       else {
-        popOnce('blocked', 0.8, what === 'shield' ? 'ON THE SHIELD' : what === 'dagger' ? 'ON THE DAGGER' : 'ON HIS BLADE', 'sub', at);
+        const readIt = b.read && b.state === 'idle' ? 'he is reading your ' + b.read.replace(/([A-Z])/g, ' $1').toLowerCase() + ' cuts' : null;
+        say(what === 'shield' ? 'ON HIS SHIELD' : what === 'dagger' ? 'ON HIS DAGGER' : 'HE BLOCKED', readIt || (what === 'shield' ? 'go round it, or cut the arm that holds it' : 'cut where his blade is not'), 'ok');
         if (r) brainStarted(r);
       }
-      if (b.read && b.state === 'idle') popOnce('read', 3, 'HE READS YOUR ' + (b.read.replace(/([A-Z])/g, ' $1').toUpperCase()) + ' CUTS', 'sub', 'low');
     }
   }
   function clashFx(at, s, dir, wood) {
@@ -896,10 +785,77 @@
         const side = threatOf(H);
         const notLine = side === 'left' ? 'left' : side === 'right' ? 'right' : side === 'high' ? 'high' : null;
         const a = C.brainOpening(b, notLine);
-        if (a) { brainStarted(a); popOnce('whiff', 1.5, 'OVERCOMMITTED', 'bad', 'center'); }
+        if (a) { brainStarted(a); say('OVERCOMMITTED', 'a full swing at nothing: he comes in', 'bad'); }
         rec('whiff', { peak: r2(sw.peak), punished: !!a });
       }
+      if (!sw.contact && sw.peak > 10 && S.tut) tut({ type: 'whiff' });
     }
+  }
+
+  /* ---------------------------------------------------------- tutorial */
+  // At the training post, five steps, each finished by doing it; the post only swings back once you
+  // are learning to block. Every tip answers what you just did (combat.js tutorialEvent).
+  function startTutorial() {
+    $('title').classList.add('hidden'); $('hud').classList.remove('hidden');
+    Sfx.startCrowd();
+    S.practiceFoe = 'dummy';
+    newRun('practice');
+    S.tut = C.tutorialStart(); S.tutHold = 0; S.tutDoneT = 0;
+    beginFight();
+    hint('');
+    renderTut();
+  }
+  function tut(ev) {
+    if (!S.tut || S.state !== 'fight') return;
+    const r = C.tutorialEvent(S.tut, ev);
+    if (r.advanced) {
+      Sfx.play('cheer', { vol: 0.45 }); rumble(0.6, 90, 2);
+      if (S.tut.done) S.tutDoneT = S.realT;
+      else if (C.TUTORIAL[S.tut.step].id === 'block') { S.brain.timer = 1600; }
+    }
+    renderTut();
+  }
+  function renderTut() {
+    const t = S.tut, el = $('tut');
+    el.classList.toggle('hidden', !t);
+    if (!t) return;
+    const st = C.TUTORIAL[Math.min(t.step, C.TUTORIAL.length - 1)];
+    $('tut-step').textContent = t.done ? 'DONE' : (t.step + 1) + ' / ' + C.TUTORIAL.length + ' · ' + st.title;
+    $('tut-text').innerHTML = t.done ? 'That is the fight: read him, meet his blade, cut where it is not.'
+      : st.text + (st.id === 'align' ? ` <small>Or: <kbd>${word('center')}</kbd></small>` : '');
+    $('tut-tip').textContent = t.tip || '';
+    $('tut-tip').className = t.good ? 'good' : '';
+    $('tut-pips').innerHTML = t.done ? '' : Array.from({ length: st.need }, (_, i) => `<i class="${i < t.count ? 'on' : ''}"></i>`).join('');
+  }
+  function tutFrame(dt) {
+    const t = S.tut, b = S.brain;
+    if (!t || S.state !== 'fight' || !b) return;
+    if (t.done) {
+      if (S.realT - S.tutDoneT > 1.6) {
+        S.tut = null; renderTut(); prefs.tutDone = true; savePrefs(); applyPrefs();
+        showCard('tutDone'); S.state = 'between';
+      }
+      return;
+    }
+    const id = C.TUTORIAL[t.step].id;
+    // the post swings back only while you learn to block and parry: slow, from the left or right
+    if (id === 'block' || id === 'parry') {
+      if (!S.tutAttacks) { S.tutAttacks = true; b.p = Object.assign({}, b.p, { lines: { left: 1, right: 1 }, aims: { torso: 1, head: 0.5 }, gap: [1500, 2100], windup: [1350, 1550] }); }
+    } else if (b.state === 'idle') b.timer = 1e9;
+    if (id === 'align') {
+      if (mc.source !== 'phone') { tut({ type: 'aligned' }); return; }
+      // hold still pointing at the post: that direction becomes straight ahead
+      const f = new T.Vector3(0, 0, -1).applyQuaternion(HAND.q), pitch = Math.asin(Math.max(-1, Math.min(1, f.y)));
+      const still = HAND.angSpeed < 0.8 && pitch > -0.55 && pitch < 0.9;
+      S.tutHold = still ? S.tutHold + dt : Math.max(0, S.tutHold - dt * 2);
+      $('tut-fill').style.width = Math.min(100, 100 * S.tutHold / 1.2) + '%';
+      if (S.tutHold >= 1.2) {
+        HAND.yaw0 = (HAND.yaw0 || 0) + Math.atan2(-f.x, -f.z);
+        HAND.dispQ = null; HAND.blade = null;   // a re-aim, not a swing: no sweep across it
+        S.tutHold = 0; tut({ type: 'aligned' });
+      }
+    }
+    $('tut-hold').classList.toggle('hidden', id !== 'align');
   }
 
   /** The Grey Pack: the second wolf prowls and trades places to pounce. */
@@ -949,16 +905,6 @@
       if (hudCache.prac !== key) { hudCache.prac = key; $('pr-hits').textContent = S.stats.hits; $('pr-best').textContent = S.stats.bestSpeed; $('pr-dmg').textContent = S.stats.bestHit; $('pr-par').textContent = S.stats.parries; }
     }
   }
-  let readoutT = 0;
-  function showReadout() {
-    const l = S.last; if (!l) return;
-    const el = $('readout');
-    const kind = KIND_WORD[l.kind] || l.kind.toUpperCase();
-    const zone = l.zone === l.zone.toUpperCase() ? l.zone : zoneWord(l.zone);
-    el.innerHTML = `<span class="k">${kind}</span><span>${zone}</span><span><b>${l.speed}</b> m/s</span>` + (l.dmg ? `<span class="d"><b>${l.dmg}</b> dmg</span>` : '');
-    el.classList.remove('hidden'); el.classList.toggle('good', l.result === 'hit' || l.result === 'beat'); readoutT = S.mode === 'practice' ? 6 : 2.4;
-  }
-
   /* --------------------------------------------------------- overlay */
   function drawOverlay() {
     og.clearRect(0, 0, W, H);
@@ -971,12 +917,15 @@
     if (S.state !== 'fight' || !S.fighter || S.fighter.dead) return;
     const b = S.brain, f = S.fighter;
     // read assist (off by default): a faint trace of where his blow will travel
-    if (prefs.assist && b.state === 'windup' && b.attack && b.attack.target) {
+    if ((prefs.assist || S.tut) && b.state === 'windup' && b.attack && b.attack.target) {
       const cfg = f.attackCfg(), a = b.attack;
-      og.save(); og.setLineDash([3, 7]); og.lineWidth = 2; og.strokeStyle = a.heavy ? 'rgba(255,120,70,0.55)' : 'rgba(255,225,170,0.45)';
+      og.save();
+      if (S.tut) { og.lineWidth = 4; og.strokeStyle = 'rgba(255,214,102,0.85)'; og.shadowColor = 'rgba(0,0,0,0.7)'; og.shadowBlur = 6; }
+      else { og.setLineDash([3, 7]); og.lineWidth = 2; og.strokeStyle = a.heavy ? 'rgba(255,120,70,0.55)' : 'rgba(255,225,170,0.45)'; }
       og.beginPath(); let started = false;
       for (let i = 0; i <= 16; i++) {
-        const pz = C.attackPose(a, 'strike', i / 16, cfg), seg = cfg.blade[1] * 0.85;
+        // the middle of his blade, up to where it reaches you: the line to put your blade across
+        const pz = C.attackPose(a, 'strike', i / 16 * C.impactAt(a.heavy), cfg), seg = cfg.blade[1] * 0.6;
         const tip = new T.Vector3(pz.hilt.x + pz.dir.x * seg, pz.hilt.y + pz.dir.y * seg, pz.hilt.z + pz.dir.z * seg);
         f.root.localToWorld(tip);
         const px = worldPx(tip); if (!px) continue;
@@ -984,13 +933,13 @@
       }
       og.stroke(); og.restore();
     }
-    if ((b.state === 'stagger' || b.state === 'disarmed' || b.state === 'kneel') && S.realT - (S.lastBigPop || -9) > 0.9) {
+    if ((b.state === 'disarmed' || b.state === 'kneel') && S.realT - (S.lastBigPop || -9) > 0.9) {
       const head = f.capsules().find(c => c.zone === 'head');
       const px = head && worldPx(head.b);
       if (px) {
         og.font = '700 18px Georgia, serif'; og.textAlign = 'center'; og.shadowColor = 'rgba(0,0,0,0.8)'; og.shadowBlur = 6;
         og.fillStyle = 'rgba(255,215,110,0.95)';
-        og.fillText(b.state === 'disarmed' ? 'UNARMED!' : b.state === 'kneel' ? 'KNEELING!' : 'OPEN!', px.x, Math.max(120, px.y - 22));
+        og.fillText(b.state === 'disarmed' ? 'UNARMED' : 'KNEELING', px.x, Math.max(150, px.y - 22));
         og.shadowBlur = 0;
       }
     }
@@ -1021,7 +970,9 @@
         Sfx.startCrowd(); VS.enter(); break;
       case 'vs-mouse': VS.toggleMouse(); break;
       case 'vs-go': VS.go(); break;
+      case 'tutorial': hideCard(); startTutorial(); break;
       case 'ladder': case 'practice':
+        S.tut = null; renderTut(); hideCard();
         $('title').classList.add('hidden'); $('hud').classList.remove('hidden');
         Sfx.startCrowd();
         newRun(a); break;
@@ -1054,7 +1005,7 @@
     ['pause', 'results', 'card', 'lobby'].forEach(id => $(id).classList.add('hidden'));
     $('restart-label').textContent = 'RESTART BOUT';
     $('hud').classList.add('hidden'); $('title').classList.remove('hidden');
-    clearFoe(); S.state = 'title'; focusMenu($('title-menu'));
+    clearFoe(); S.state = 'title'; S.tut = null; renderTut(); focusMenu($('title-menu'));
   }
   document.addEventListener('click', e => {
     const b = e.target.closest('.mi'); if (b) { e.stopPropagation(); act(b.dataset.act); }
@@ -1157,10 +1108,11 @@
     const fighting = S.state === 'fight';
     // body: the lunge carries you in; a missed full swing pulls you after it
     S.swayV += (-S.sway * 40 - S.swayV * 9) * realDt; S.sway += S.swayV * realDt;
-    ME.body.position.set(PLAYER.x + S.sway * 0.06, 0, PLAYER.z - HAND.ext * (1 - ARM_EXT));
+    ME.body.position.set(PLAYER.x + S.sway * 0.06, 0, PLAYER.z - HAND.ext * (1 - LudusArm.ARM_EXT));
     ME.body.updateMatrixWorld(true);
-    updateSwordHand(HAND, realDt, { fight: fighting, freeze: frozen, keyLunge: fighting && takeKeyLunge() });
-    poseRig(R0, camera, HAND.q, HAND.arm, { ext: HAND.ext, edgeRoll: HAND.mouse ? 0 : HAND.edgeRoll, dt: realDt });
+    updateSwordHand(HAND, realDt, { fight: fighting, freeze: frozen, keyLunge: fighting && takeKeyLunge(), onLunge: () => tut({ type: 'lunge' }) });
+    if (mc.pressed('center') && S.tut) tut({ type: 'aligned' });
+    poseRig(R0, camera, HAND.q, HAND.arm, { ext: HAND.ext, dt: realDt });
 
     const inMenu = ['title', 'between', 'results', 'paused'].includes(S.state) || (S.state === 'intro' && !$('card').classList.contains('hidden'));
     inMenuNow = inMenu;
@@ -1172,7 +1124,7 @@
       if (mc.source === 'phone' && mc.isDown('a') && mc.pitch < -1.15) { S.yieldT = (S.yieldT || 0) + realDt; if (S.yieldT > 1.2) pause(); }
       else S.yieldT = 0;
     }
-    if (mc.pressed('center') && S.state !== 'title') pop('ALIGNED', 'sub', 'high');
+    if (mc.pressed('center') && S.state === 'fight') verdict('LINED UP', 'straight ahead is where you point now', 'ok');
 
     const f = S.fighter, b = S.brain;
     if ((S.state === 'intro' || S.state === 'fight') && f && !f.dead) {
@@ -1217,7 +1169,7 @@
       f.root.rotation.y = Math.atan2(ME.body.position.x - f.root.position.x, ME.body.position.z - f.root.position.z);
       if (b) {
         const dist = ME.body.position.z - f.root.position.z;
-        const hand = HAND.blade ? f.root.worldToLocal(bodyCapsules(R0, ME, HAND.arm || MM.armPose(MM.fromEuler(0, 0, 0), 'right'), HAND.ext)[3].b.clone()) : null;
+        const hand = HAND.blade ? f.root.worldToLocal(bodyCapsules(R0, ME, HAND.dispQ, HAND.arm, HAND.ext)[3].b.clone()) : null;
         let target = null;
         if (b.attack) {
           target = C.aimPoint(b.attack.aim, dist);
@@ -1245,7 +1197,8 @@
     // camera: your eyes, a little forward with the lunge, jolted by blows
     const shake = S.shake > 0 ? S.shake : 0; S.shake = Math.max(0, S.shake - realDt * 0.8);
     const limp = S.wounds.legLevel > 0 && HAND.ext > 0.05 ? Math.sin(S.realT * 18) * 0.012 * S.wounds.legLevel : 0;
-    camera.position.set(ME.body.position.x + (Math.random() - 0.5) * shake * 0.3, EYE + limp + (Math.random() - 0.5) * shake * 0.3, ME.body.position.z);
+    LudusArm.cameraAt(ME, camera.position);
+    camera.position.x += (Math.random() - 0.5) * shake * 0.3; camera.position.y += limp + (Math.random() - 0.5) * shake * 0.3;
     if (S.state === 'title' || S.state === 'loading') {
       const a = S.realT * 0.05;
       camera.position.set(Math.sin(a) * 9, 3.2, Math.cos(a) * 9);
@@ -1271,7 +1224,8 @@
     Sfx.crowd(S.excite);
     fx.update(dt);
     LudusWorld.update(world, S.realT, Math.min(1, S.excite));
-    if (readoutT > 0) { readoutT -= realDt; if (readoutT <= 0) $('readout').classList.add('hidden'); }
+    if (verdictT > 0) { verdictT -= realDt; if (verdictT <= 0) $('verdict').className = ''; }
+    if (S.tut) tutFrame(realDt);
 
     if (S.state !== 'title') updateHud();
     renderer.render(scene, camera);

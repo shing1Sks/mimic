@@ -124,7 +124,8 @@
     addEventListener('pointerdown', arm, true); addEventListener('keydown', arm, true);
     // no click within a minute (playing with the phone only): record the game canvas meanwhile,
     // and a later click still upgrades to the whole tab (HUD included)
-    setTimeout(() => { if (gestureArmed && session && !rec) canvasVideo(); }, 60000);
+    // (?demo starts the canvas at once: a phone-only session must never end up with no video)
+    setTimeout(() => { if (gestureArmed && session && !rec) canvasVideo(); }, DEMO ? 1500 : 60000);
     flusher = setInterval(flushLog, 2000);
   }
   let flusher = 0;

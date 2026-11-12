@@ -1,5 +1,5 @@
 // Play recorder: every game loads this. Add ?rec=1 to a game's URL (or press F8) to record (?demo:
-// the same at 60 fps and 20 Mbps with the badge hidden, for promo footage):
+// the same at 60 fps and 20 Mbps with the game's sound and the badge hidden, for promo footage):
 //  - video of the whole tab (HUD included) after one click "Share", or of the game canvas if
 //    tab capture is refused or unavailable;
 //  - every controller sample each frame (Mimic Wand / Pad axes and buttons), mouse moves (also
@@ -62,8 +62,9 @@
   let videoKind = '', autoRec = false;
   function startVideo(s, kind) {
     stream = s; videoKind = kind;
-    const type = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find(t => MediaRecorder.isTypeSupported(t));
-    rec = new MediaRecorder(s, { mimeType: type, videoBitsPerSecond: BITS });
+    const types = s.getAudioTracks().length ? ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus'] : [];
+    const type = types.concat(['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']).find(t => MediaRecorder.isTypeSupported(t));
+    rec = new MediaRecorder(s, { mimeType: type, videoBitsPerSecond: BITS, audioBitsPerSecond: 160e3 });
     // the last chunk arrives after stop(): keep this recording's session name for it
     const file = kind === 'tab' ? 'video.webm' : 'video-canvas.webm', first = { v: true }, sess = session;
     rec.ondataavailable = e => { if (e.data && e.data.size) { post(file, e.data, !first.v, sess); first.v = false; } };
@@ -85,7 +86,7 @@
   async function tabVideo() {
     asking = true;
     try {
-      const s = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: FPS }, audio: false, preferCurrentTab: true, selfBrowserSurface: 'include' });
+      const s = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: FPS }, audio: DEMO ? { suppressLocalAudioPlayback: false } : false, preferCurrentTab: true, selfBrowserSurface: 'include' });
       if (rec && rec.state !== 'inactive') { rec.stop(); if (stream) stream.getTracks().forEach(t => t.stop()); }   // upgrade from canvas
       startVideo(s, 'tab');
     } catch (e) { log({ k: 'video', error: String(e && e.name) }); if (!rec) canvasVideo(); }

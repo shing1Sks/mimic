@@ -2,7 +2,10 @@
 
 Updated just before each approved release, not on every change.
 
-## Unreleased
+## 1.0.0 (2026-11-13)
+
+First public release: the Android app (air mouse, gamepad, Wand/Grip motion controller over Bluetooth) and nine browser games playable at mimic.shing.in, with the app or straight from a phone browser.
+
 
 ### Games and browser controller (2026-11-10)
 - **Browser controller (new):** any phone, iPhone included, can be a controller without the app.

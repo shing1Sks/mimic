@@ -8,7 +8,7 @@ plugins {
 
 // One place to bump for a release (see docs/releasing.md). versionCode is derived from it:
 // MAJOR * 10000 + MINOR * 100 + PATCH, so 0.2.0 -> 200, 1.4.12 -> 10412. MINOR and PATCH stay below 100.
-val mimicVersion = "0.1.0"
+val mimicVersion = "1.0.0"
 val mimicVersionCode = mimicVersion.split('.').map { it.toInt() }.let { (ma, mi, pa) ->
     require(mi < 100 && pa < 100) { "MINOR and PATCH must be below 100" }
     ma * 10000 + mi * 100 + pa

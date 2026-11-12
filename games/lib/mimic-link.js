@@ -337,8 +337,10 @@
     if (cfg.phone) return cfg.phone;
     if (!httpPage) return 'http://localhost:8765/phone/';
     if (info && info.lan_bound && info.lan) return `${location.protocol}//${info.lan}:${location.port || (location.protocol === 'https:' ? 443 : 80)}/phone/`;
+    // the phone page sits beside the game folders: /phone/ on the dev server, /play/phone/ on the site
     const host = location.hostname === '127.0.0.1' ? 'localhost' : location.hostname;
-    return `${location.protocol}//${host}${location.port ? ':' + location.port : ''}/phone/`;
+    const dir = new URL('../phone/', location.href).pathname;
+    return `${location.protocol}//${host}${location.port ? ':' + location.port : ''}${dir}`;
   }
   function url(mode) {
     ensureRoom();

@@ -226,7 +226,7 @@
   function randomId(n) {
     const abc = 'abcdefghijkmnpqrstuvwxyz23456789';   // no 0/o/1/l: readable aloud
     let s = '';
-    const r = (typeof crypto !== 'undefined' && crypto.getRandomValues) ? crypto.getRandomValues(new Uint8Array(n)) : Array.from({ length: n }, () => Math.random() * 256);
+    const r = (typeof crypto !== 'undefined' && crypto.getRandomValues) ? crypto.getRandomValues(new Uint8Array(n)) : Array.from({ length: n }, () => Math.floor(Math.random() * 256));
     for (let i = 0; i < n; i++) s += abc[r[i] % abc.length];
     return s;
   }

@@ -21,6 +21,7 @@ function page(opts) {
     addEventListener() {}, innerWidth: 1000, innerHeight: 1000,
     Math, Promise, Uint8Array, ArrayBuffer, DataView, console, JSON, setTimeout, clearTimeout,
   };
+  if (opts.href) { const u = new URL(opts.href); ctx.location = { href: u.href, protocol: u.protocol, origin: u.origin, hostname: u.hostname, port: u.port, pathname: u.pathname }; ctx.URL = URL; }
   ctx.window = ctx;
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(path.join(LIB, 'mimic.js'), 'utf8'), ctx);
@@ -216,6 +217,16 @@ const tests = {
     const native = [null, null, null, null];
     const ctx = page({ link: true, real: () => native });
     assert.strictEqual(ctx.navigator.getGamepads(), native);
+  },
+
+  // ---------------------------------------------------------------- phone URL
+  phoneUrlSitsBesideTheGamePage() {
+    // the website serves games under /play/, so the phone page is /play/phone/, not /phone/
+    const site = page({ link: true, href: 'https://mimic.shing.in/play/bowling/' });
+    assert(/^https:\/\/mimic\.shing\.in\/play\/phone\/\?room=[^&]+&mode=grip$/.test(site.MimicLink.url('grip')), site.MimicLink.url('grip'));
+    // the dev server: games at the root, 127.0.0.1 shown as localhost (phones over adb reverse)
+    const dev = page({ link: true, href: 'http://127.0.0.1:8765/bowling/index.html' });
+    assert(/^http:\/\/localhost:8765\/phone\/\?room=/.test(dev.MimicLink.url('')), dev.MimicLink.url(''));
   },
 
   // ---------------------------------------------------------------- QR

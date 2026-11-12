@@ -1,4 +1,5 @@
-// Play recorder: every game loads this. Add ?rec=1 to a game's URL (or press F8) to record:
+// Play recorder: every game loads this. Add ?rec=1 to a game's URL (or press F8) to record (?demo:
+// the same at 60 fps and 20 Mbps with the badge hidden, for promo footage):
 //  - video of the whole tab (HUD included) after one click "Share", or of the game canvas if
 //    tab capture is refused or unavailable;
 //  - every controller sample each frame (Mimic Wand / Pad axes and buttons), mouse moves (also
@@ -9,6 +10,8 @@
 (function () {
   'use strict';
   const q = new URLSearchParams(location.search);
+  // ?demo: footage for a video, not analysis: whole tab (HUD included) at 60 fps and 20 Mbps, badge hidden
+  const DEMO = q.has('demo'), FPS = DEMO ? 60 : 30, BITS = DEMO ? 20e6 : 5e6;
   const game = (location.pathname.split('/').filter(Boolean).slice(-1)[0] || 'game').replace(/[^A-Za-z0-9_-]/g, '');
   const pad2 = n => String(n).padStart(2, '0');
   let session = null, t0 = 0, rec = null, stream = null, lines = [], seq = 0, badge = null, rafId = 0, gestureArmed = false;
@@ -60,13 +63,14 @@
   function startVideo(s, kind) {
     stream = s; videoKind = kind;
     const type = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find(t => MediaRecorder.isTypeSupported(t));
-    rec = new MediaRecorder(s, { mimeType: type, videoBitsPerSecond: 5e6 });
+    rec = new MediaRecorder(s, { mimeType: type, videoBitsPerSecond: BITS });
     // the last chunk arrives after stop(): keep this recording's session name for it
     const file = kind === 'tab' ? 'video.webm' : 'video-canvas.webm', first = { v: true }, sess = session;
     rec.ondataavailable = e => { if (e.data && e.data.size) { post(file, e.data, !first.v, sess); first.v = false; } };
     rec.start(3000);
     log({ k: 'video', source: kind, w: s.getVideoTracks()[0] && s.getVideoTracks()[0].getSettings().width });
     showBadge(autoRec ? '● REC' : '● REC ' + (kind === 'tab' ? '' : '(canvas) ') + '· F8 stop');
+    if (DEMO) setTimeout(() => { if (badge) badge.style.display = 'none'; }, 2500);   // keep it out of the footage
     s.getVideoTracks().forEach(t => t.addEventListener('ended', () => stop()));
   }
   function canvasVideo() {
@@ -75,13 +79,13 @@
     const area = c => { const r = c.getBoundingClientRect(); return Math.max(0, Math.min(r.right, innerWidth) - Math.max(r.left, 0)) * Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0)); };
     const c = [...document.querySelectorAll('canvas')].sort((a, b) => area(b) - area(a) || b.width * b.height - a.width * a.height)[0];
     if (!c || !c.captureStream) { showBadge('● REC input only · F8 stop'); return; }
-    startVideo(c.captureStream(30), 'canvas');
+    startVideo(c.captureStream(FPS), 'canvas');
   }
   let asking = false;
   async function tabVideo() {
     asking = true;
     try {
-      const s = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: false, preferCurrentTab: true, selfBrowserSurface: 'include' });
+      const s = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: FPS }, audio: false, preferCurrentTab: true, selfBrowserSurface: 'include' });
       if (rec && rec.state !== 'inactive') { rec.stop(); if (stream) stream.getTracks().forEach(t => t.stop()); }   // upgrade from canvas
       startVideo(s, 'tab');
     } catch (e) { log({ k: 'video', error: String(e && e.name) }); if (!rec) canvasVideo(); }
@@ -95,7 +99,7 @@
     const d = new Date();
     session = `${game}-${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
     t0 = performance.now(); seq = 0; lines = [];
-    post('meta.json', JSON.stringify({ game, url: location.href, started: d.toISOString(), screen: [innerWidth, innerHeight, devicePixelRatio], ua: navigator.userAgent }), false);
+    post('meta.json', JSON.stringify({ game, url: location.href, demo: DEMO, started: d.toISOString(), screen: [innerWidth, innerHeight, devicePixelRatio], ua: navigator.userAgent }), false);
     addEventListener('mousemove', onMove, true); addEventListener('mousedown', onDown, true); addEventListener('mouseup', onUp, true);
     addEventListener('keydown', onKey, true); addEventListener('keyup', onKey, true); addEventListener('wheel', onWheel, { capture: true, passive: true });
     lastPad.clear(); rafId = setInterval(samplePads, 4);
@@ -146,6 +150,6 @@
   // point at a real session; ?rec=1 adds the whole-tab video, ?rec=0 turns it off. Never under
   // automation (headless tests) and never on a deployed site.
   const local = /^(127\.0\.0\.1|localhost|\[::1\])$/.test(location.hostname) && location.port === '8765';
-  const go = q.get('rec') === '1' ? () => start() : local && q.get('rec') !== '0' && !navigator.webdriver ? () => start(true) : null;
+  const go = q.get('rec') === '1' || DEMO ? () => start() : local && q.get('rec') !== '0' && !navigator.webdriver ? () => start(true) : null;
   if (go) { if (document.readyState === 'loading') addEventListener('DOMContentLoaded', go); else go(); }
 })();

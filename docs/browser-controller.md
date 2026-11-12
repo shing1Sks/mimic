@@ -101,10 +101,10 @@ Message `data`:
 The phone makes the offer and opens both channels. The host ignores a repeated offer with the same `sid`.
 
 Dev server: `tools/serve.py` serves this at `/signal/<room>`, plus `GET /signal-info` →
-`{lan, port, lan_bound}` so the PC page can put its Wi-Fi address in the QR. Production (planned):
-the same contract as a Vercel function on mimic.shing.in. A serverless function keeps no memory
-between calls, so it needs a small store (for example Vercel KV / Upstash Redis) holding each room's
-messages with the TTLs above. Long-poll is optional there.
+`{lan, port, lan_bound}` so the PC page can put its Wi-Fi address in the QR. Production: the website (mimic.shing.in) runs the same contract as a Vercel function
+(mimic-site `api/signal.js`, rewritten from `/signal/<room>`), storing messages in Upstash Redis with
+the same TTLs. Its `/signal-info` answers `{lan: null, lan_bound: true, hosted: true}`, or 404 when no
+store is configured, which hides the QR.
 
 The phone page finds signaling at `<its own origin>/signal` unless the URL has `&sig=<url>`. The
 PC page adds `sig` to the QR only when the two differ.

@@ -21,6 +21,7 @@ function page(opts) {
     addEventListener() {}, innerWidth: 1000, innerHeight: 1000,
     Math, Promise, Uint8Array, ArrayBuffer, DataView, console, JSON, setTimeout, clearTimeout,
   };
+  if (opts.libSrc) ctx.document = { currentScript: { src: opts.libSrc, getAttribute: () => null }, readyState: 'loading', addEventListener() {} };
   if (opts.href) { const u = new URL(opts.href); ctx.location = { href: u.href, protocol: u.protocol, origin: u.origin, hostname: u.hostname, port: u.port, pathname: u.pathname }; ctx.URL = URL; }
   ctx.window = ctx;
   vm.createContext(ctx);
@@ -227,6 +228,9 @@ const tests = {
     // the dev server: games at the root, 127.0.0.1 shown as localhost (phones over adb reverse)
     const dev = page({ link: true, href: 'http://127.0.0.1:8765/bowling/index.html' });
     assert(/^http:\/\/localhost:8765\/phone\/\?room=/.test(dev.MimicLink.url('')), dev.MimicLink.url(''));
+    // a page beside the game folders (the site's /play/controller-test.html loads lib/mimic-link.js)
+    const top = page({ link: true, href: 'https://mimic.shing.in/play/controller-test.html', libSrc: 'https://mimic.shing.in/play/lib/mimic-link.js' });
+    assert(/^https:\/\/mimic\.shing\.in\/play\/phone\/\?room=/.test(top.MimicLink.url('')), top.MimicLink.url(''));
   },
 
   // ---------------------------------------------------------------- QR

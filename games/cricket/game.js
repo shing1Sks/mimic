@@ -30,6 +30,8 @@
     power: { label: 'BAT POWER', vals: ['SOFT', 'NORMAL', 'BIG'], def: 1 },
     // phone -> browser (Bluetooth) plus screen -> eyes: a swing timed to what you see arrives this late
     lag: { label: 'SWING DELAY FIX', vals: [0, 30, 60, 90, 120], def: 2 },
+    team0: { label: 'P1 TEAM', vals: CK.Teams.TEAMS.map(t => t.id), def: 0 },
+    team1: { label: 'P2 TEAM', vals: CK.Teams.TEAMS.map(t => t.id), def: 1 },
     hand0: { label: 'P1 PLAYS', vals: ['RIGHT-HANDED', 'LEFT-HANDED'], def: 0 },
     hand1: { label: 'P2 PLAYS', vals: ['RIGHT-HANDED', 'LEFT-HANDED'], def: 0 },
     cpu: { label: 'COMPUTER', vals: ['CLUB', 'PRO'], def: 0 },
@@ -68,7 +70,10 @@
     { body: 'm', shirt: 0x149b8f, pants: 0x16233a, skin: 0xd9a273, hair: 0x1e140c, helmet: 0x16233a, gloves: 0xf2f2f2, pads: true },
     { body: 'm', shirt: 0xc23b4e, pants: 0x2a1622, skin: 0x8d5524, hair: 0x111111, helmet: 0x6e1f2c, gloves: 0xf2f2f2, pads: true },
   ];
-  const TEAM_COL = ['#2fd3c3', '#ff6b7e'];
+  // the sides (CK.Teams): kit colours on the athletes, team colours in the HUD, names on the board
+  const teamOf = i => CK.Teams.byId(opt('team' + i));
+  const tcol = i => teamOf(i).css;
+  const kitOf = i => { const t = teamOf(i); return Object.assign({}, KITS[i], { shirt: t.shirt, pants: t.pants, helmet: t.pants }); };
   /** seats[i]: { idx, name, kind: 'phone' | 'mouse' | 'cpu', mc, input }. */
   const seats = [{ idx: 0, name: 'P1', kind: 'mouse', mc, input: null }, { idx: 1, name: 'P2', kind: 'cpu', mc: null, input: null }];
   const sideOf = i => (settings['hand' + i] === 1 ? -1 : 1);       // batting: +1 right-handed
@@ -168,7 +173,7 @@
     people.nonStriker = CK.makeAthlete(Object.assign({}, KITS[0]));
     people.bowler = CK.makeAthlete(Object.assign({}, KITS[1], { pads: false, helmet: null, gloves: null }));
     people.umpire = CK.makeAthlete({ body: 'm', shirt: 0xf0f0ea, pants: 0x1c1c22, skin: 0xc68642, hair: 0x2a2a2a });
-    for (let i = 0; i < 10; i++) people.fielders.push(CK.makeAthlete(Object.assign({}, KITS[1], { body: i % 3 === 2 ? 'f' : 'm', pads: i === 0, gloves: i === 0 ? 0xf2f2f2 : null, helmet: null, skin: [0xd9a273, 0x8d5524, 0xc68642, 0xf1c8a0][i % 4] })));
+    for (let i = 0; i < 10; i++) people.fielders.push(CK.makeAthlete(Object.assign({}, KITS[1], { body: 'm', pads: i === 0, gloves: i === 0 ? 0xf2f2f2 : null, helmet: null, skin: [0xd9a273, 0x8d5524, 0xc68642, 0xf1c8a0][i % 4] })));
     [people.batter, people.nonStriker, people.bowler, people.umpire, ...people.fielders].forEach(a => scene.add(a.root));
     people.ready = true;
     try { CK.crowdImpostors(scene, world.crowd, CK.bakeCrowdAtlas(renderer)); } catch (e) { console.warn('crowd atlas', e); }
@@ -176,7 +181,7 @@
   });
   function paintTeams() {
     if (!people.ready || !G.match) return;
-    const inn = MA.current(G.match), bk = KITS[inn.bat], fk = KITS[inn.bowl];
+    const inn = MA.current(G.match), bk = kitOf(inn.bat), fk = kitOf(inn.bowl);
     [people.batter, people.nonStriker].forEach(a => a.paint(bk));
     people.bowler.paint(fk);
     people.fielders.forEach(a => a.paint({ shirt: fk.shirt, pants: fk.pants }));
@@ -209,7 +214,8 @@
     const overs = kind === 'nets-bat' || kind === 'nets-bowl' ? 2 : opt('overs');
     const wk = kind === 'nets-bat' || kind === 'nets-bowl' ? 10 : opt('wkts');
     const firstBat = kind === 'versus' ? lobby.st.firstBat : kind === 'nets-bowl' ? 1 : 0;
-    G.match = MA.create({ overs, wickets: wk, names: seats.map(s => s.name), firstBat });
+    G.match = MA.create({ overs, wickets: wk, names: [0, 1].map(i => teamOf(i).name), firstBat });
+    G.batRuns = [[], []];   // each innings: runs per batter (by wickets down)
     G.inGame = true; G.paused = false; G.result = null;
     showScreen(null);
     $('hud').classList.remove('hidden');
@@ -651,6 +657,8 @@
     recordBall(e.rec);
   }
   function recordBall(rec) {
+    const ib = G.match.i, bw = inn().wkts;
+    if (rec.runs && rec.extra !== 'wd' && G.batRuns) G.batRuns[ib][bw] = (G.batRuns[ib][bw] || 0) + rec.runs;
     const ev = MA.record(G.match, rec);
     logEvent('ball', { rec, label: ev.label, score: [inn().runs, inn().wkts, inn().balls] });
     hud.ballDot(ev.label);
@@ -681,7 +689,7 @@
     $('end-kicker').textContent = r.winner < 0 ? 'WHAT A FINISH' : 'MATCH RESULT';
     $('end-title').textContent = r.winner < 0 ? 'TIED!' : (G.kind === 'versus' ? m.names[r.winner] + ' WINS' : (r.winner === 0 ? 'YOU WIN' : 'CPU WINS'));
     $('end-sub').textContent = r.text;
-    $('end-card').innerHTML = [a, b].map(x => `<div class="ec-row" style="--tc:${TEAM_COL[x.bat]}"><b>${m.names[x.bat]}</b><span>${x.runs}/${x.wkts}</span><small>${MA.oversText(x.balls)} ov · 4s ${x.fours} · 6s ${x.sixes}</small></div>`).join('');
+    $('end-card').innerHTML = [a, b].map(x => `<div class="ec-row" style="--tc:${tcol(x.bat)}"><b>${m.names[x.bat]}</b><span>${x.runs}/${x.wkts}</span><small>${MA.oversText(x.balls)} ov · 4s ${x.fours} · 6s ${x.sixes}</small></div>`).join('');
     showScreen('end');
     if (r.winner >= 0) SFX.fanfare(true);
     crowdReact('cheer', 0.8);
@@ -692,7 +700,7 @@
     $('end-kicker').textContent = you ? 'BATTING NETS' : 'BOWLING NETS';
     $('end-title').textContent = you ? `${a.runs} RUNS` : `${a.wkts} WICKET${a.wkts === 1 ? '' : 'S'}`;
     $('end-sub').textContent = you ? `${a.wkts} out · ${a.fours} fours · ${a.sixes} sixes · ${a.dots} dots` : `${a.runs} runs conceded · ${a.dots} dot balls · ${a.extras} extras`;
-    $('end-card').innerHTML = a.overs.map((o, i) => `<div class="ec-row" style="--tc:${TEAM_COL[a.bat]}"><b>OVER ${i + 1}</b><span>${o.filter(l => /^\d/.test(l)).reduce((s, l) => s + (+l), 0) + o.filter(l => /wd|nb/.test(l)).length}</span><small>${o.join('  ')}</small></div>`).join('');
+    $('end-card').innerHTML = a.overs.map((o, i) => `<div class="ec-row" style="--tc:${tcol(a.bat)}"><b>OVER ${i + 1}</b><span>${o.filter(l => /^\d/.test(l)).reduce((s, l) => s + (+l), 0) + o.filter(l => /wd|nb/.test(l)).length}</span><small>${o.join('  ')}</small></div>`).join('');
     showScreen('end');
     SFX.fanfare(false);
   }
@@ -1098,7 +1106,7 @@
     G.camMode = plan.length > 1 ? 'split' : plan[0];
     $('hud').classList.toggle('split', plan.length > 1);
     if (plan.length > 1) {
-      [0, 1].forEach(i => { const t = $('half' + i); t.querySelector('b').textContent = seats[i].name; t.querySelector('span').textContent = plan[i] === 'bowl' ? 'BOWLING' : 'BATTING'; t.style.setProperty('--tc', TEAM_COL[i]); });
+      [0, 1].forEach(i => { const t = $('half' + i); t.querySelector('b').textContent = seats[i].name; t.querySelector('span').textContent = plan[i] === 'bowl' ? 'BOWLING' : 'BATTING'; t.style.setProperty('--tc', tcol(i)); });
     }
     fadeOccluders(plan, F);
   }
@@ -1288,12 +1296,13 @@
     if (!G.match) return;
     const m = G.match, i = inn();
     $('sb-team').textContent = m.names[i.bat];
-    $('sb-team').style.setProperty('--tc', TEAM_COL[i.bat]);
+    $('sb-team').style.setProperty('--tc', tcol(i.bat));
     $('sb-score').textContent = `${i.runs}-${i.wkts}`;
     $('sb-overs').textContent = `${MA.oversText(i.balls)}/${m.overs}`;
     const nd = MA.need(m);
     $('sb-info').textContent = nd ? nd.text : `RUN RATE ${MA.runRate(i).toFixed(2)}`;
-    $('sb-bowler').innerHTML = `<b style="color:${TEAM_COL[i.bowl]}">${m.names[i.bowl]}</b> BOWLING`;
+    const bl = CK.Teams.lineup(teamOf(i.bat)), wl = CK.Teams.lineup(teamOf(i.bowl)), br = (G.batRuns && G.batRuns[m.i][i.wkts]) || 0;
+    $('sb-bowler').innerHTML = `<b style="color:${tcol(i.bat)}">${bl.batter(i.wkts)}</b> ${br}* · <b style="color:${tcol(i.bowl)}">${wl.bowler(Math.floor(i.balls / 6))}</b> BOWLING`;
     world.screen({ score: `${m.names[i.bat]}  ${i.runs}-${i.wkts}`, sub: `${MA.oversText(i.balls)} OVERS · ` + (nd ? nd.text : 'RUN RATE ' + MA.runRate(i).toFixed(2)) });
     renderOver();
   }
@@ -1321,8 +1330,8 @@
     } else bp = G.cpuStyle === 'spin' ? 'Computer: spin' : 'Computer: pace';
     if (ts.kind !== 'cpu') tp = G.phase === 'ready' || G.phase === 'runup' ? `Phone down like a bat · <b>${keyC(ts.mc)}</b> to align · swing as it arrives` : 'Swing through it · keep still to leave';
     else tp = 'Computer batting';
-    $('prompt-bowl').innerHTML = `<em style="background:${TEAM_COL[inn().bowl]}">${seats[inn().bowl].name}</em> ${bp}`;
-    $('prompt-bat').innerHTML = `<em style="background:${TEAM_COL[inn().bat]}">${seats[inn().bat].name}</em> ${tp}`;
+    $('prompt-bowl').innerHTML = `<em style="background:${tcol(inn().bowl)}">${seats[inn().bowl].name}</em> ${bp}`;
+    $('prompt-bat').innerHTML = `<em style="background:${tcol(inn().bat)}">${seats[inn().bat].name}</em> ${tp}`;
   }
 
   // ---------------------------------------------------------------------------------
@@ -1360,6 +1369,7 @@
   function optLabel(k) {
     const o = OPTS[k], v = o.vals[settings[k]];
     if (k === 'overs') return o.names[settings[k]];
+    if (k === 'team0' || k === 'team1') return CK.Teams.byId(v).name.toUpperCase();
     if (k === 'vol') return Math.round(v * 100) + '%';
     if (k === 'lag') return v + ' ms';
     if (k === 'gfx') return v + (v === 'AUTO' && !dyn.shadows ? ' · LIGHT' : '');
@@ -1373,6 +1383,8 @@
   function changeOpt(k, d) {
     const n = OPTS[k].vals.length;
     settings[k] = (settings[k] + d + n) % n;
+    // the two seats never share a team: skip over the other seat's
+    if ((k === 'team0' || k === 'team1') && settings.team0 === settings.team1) settings[k] = (settings[k] + d + n) % n;
     if (k === 'gfx') { setShadows(opt('gfx') !== 'LOW'); dyn.t = dyn.n = dyn.sum = 0; }
     saveSettings(); refreshOpts(); SFX.ui('move');
   }
@@ -1462,7 +1474,8 @@
       const el = $('slot' + i), s = sl[i];
       el.classList.toggle('joined', !!s);
       const inp = s && inputs.find(p => p.id === s.id);
-      el.querySelector('.s-role').textContent = lobby.st.firstBat === i ? 'BATS FIRST' : 'BOWLS FIRST';
+      el.querySelector('.s-role').textContent = teamOf(i).name.toUpperCase() + ' · ' + (lobby.st.firstBat === i ? 'BATS FIRST' : 'BOWLS FIRST');
+      el.style.setProperty('--tc', tcol(i));
       el.querySelector('.s-role').className = 's-role ' + (lobby.st.firstBat === i ? 'bat' : 'bowl');
       if (s) {
         const c = inp && inp.ctrl;

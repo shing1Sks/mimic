@@ -47,3 +47,7 @@ games/dino/BUILD-NOTES.md
 cloudflare-keys*
 *-keys.txt
 *.secret
+
+# commentary renders: scratch and the Pro takes kept for a later upgrade
+tools/commentary/.work/
+tools/commentary/.pro-clips/

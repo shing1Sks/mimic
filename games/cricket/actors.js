@@ -224,6 +224,7 @@
   function pose(A, st, dt) {
     A.root.position.set(st.x, st.y || 0, st.z);
     A.root.rotation.y = st.facing || 0;
+    A.root.rotation.z = st.roll || 0;   // a dive: rolled about his own forward axis (+ = to his right)
     const run = Math.min(1, st.run || 0);
     if (A.run && A.idle) { A.run.setEffectiveWeight(run); A.idle.setEffectiveWeight(1 - run); A.run.timeScale = 0.75 + run * 0.6; }
     A.rest.forEach(([b, q]) => b.quaternion.copy(q));
@@ -241,6 +242,12 @@
       A.root.updateMatrixWorld(true);
       B.legs.forEach(([, l]) => turnBone(l, _side, -bend * 1.9));
       A.root.position.y = (st.y || 0) - (0.47 * (1 - Math.cos(bend)) + 0.45 * (1 - Math.cos(bend * 0.9)));
+    }
+    if (st.roll) {
+      // roll about the hips, not the feet: put the hips back where they were (the drop comes from st.y)
+      const sn = Math.sin(st.roll), f = st.facing || 0, H = 0.9;
+      A.root.position.x += Math.cos(f) * H * sn; A.root.position.z -= Math.sin(f) * H * sn;
+      A.root.position.y += H * (1 - Math.cos(st.roll));
     }
     A.root.updateMatrixWorld(true);
     if (st.arms) for (const s of ['left', 'right']) {

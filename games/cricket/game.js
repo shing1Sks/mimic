@@ -693,6 +693,11 @@
   function planFielding(o) {
     const plans = G.field.map(f => ({ x: f.x, z: f.z, tx: f.x, tz: f.z, sp: 0, start: FI.F.REACT }));
     const ballDir = o.flight && o.flight.length > 4 ? o.flight[Math.min(o.flight.length - 1, 30)] : null;
+    if (o.type === 'caught' && o.at && o.by >= 0 && G.field[o.by]) {
+      // leap, dive or a plain take (CK.Anim), judged from where he stood, facing the batter
+      const f = G.field[o.by], face = Math.atan2(-f.x, -0.5 - f.z);
+      o.action = Object.assign(CK.Anim.fieldAction({ x: f.x, z: f.z, face }, o.at, FI.F.RUN * Math.max(0, o.t - FI.F.REACT)), { face });
+    }
     plans.forEach((p, i) => {
       if (i === o.by && o.at) { const d = Math.hypot(o.at.x - p.x, o.at.z - p.z); p.tx = o.at.x; p.tz = o.at.z; p.sp = d / Math.max(0.25, o.t - FI.F.REACT); }
       else if (ballDir && i !== 0) {
@@ -861,11 +866,16 @@
       const st = { x: f.cur.x, z: f.cur.z, facing: f.keeper && G.phase !== 'hit' ? Math.PI : face, run: f.run || 0, crouch: f.keeper ? (G.phase === 'hit' ? 0.2 : 0.85) : (G.phase === 'flight' ? 0.3 : 0.1) };
       if (ballP && G.phase === 'hit' && G.outcome && G.outcome.by === i) {
         const d = Math.hypot(ballP.x - f.cur.x, ballP.z - f.cur.z);
-        const held = G.ballHeldBy === i;
+        const held = G.ballHeldBy === i, act = G.outcome.action;
+        if (act) {
+          const ap = CK.Anim.actionPose(act, G.t - G.outcome.t);
+          st.y = (st.y || 0) + ap.y; st.roll = ap.roll;
+          if (ap.roll) { st.facing = act.face; st.run = 0; }
+        }
         if (d < 3 || held) {
-          if (!held && d > 0.2) st.facing = Math.atan2(ballP.x - f.cur.x, ballP.z - f.cur.z);   // turn to the ball
+          if (!held && d > 0.2 && !st.roll) st.facing = Math.atan2(ballP.x - f.cur.x, ballP.z - f.cur.z);   // turn to the ball (not mid-dive)
           const fw = CK.Anim.forwardOf(st.facing);
-          const at = held ? { x: f.cur.x + fw.x * 0.28, y: 1.1, z: f.cur.z + fw.z * 0.28 } : { x: ballP.x, y: clamp(ballP.y, 0.3, 2.2), z: ballP.z };
+          const at = held ? { x: f.cur.x + fw.x * 0.28, y: 1.1, z: f.cur.z + fw.z * 0.28 } : { x: ballP.x, y: clamp(ballP.y, 0.2, 2.9), z: ballP.z };
           const pr = CK.Anim.handPair(at, st.facing, 0.07);   // his left hand on his left, whichever way he faces
           st.arms = { left: { hand: pr.left }, right: { hand: pr.right } };
         }

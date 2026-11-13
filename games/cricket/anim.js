@@ -47,7 +47,35 @@
     return { left: sub(c, r), right: add(c, r) };
   }
 
-  const api = { solveElbow, elbowPole, handPair, forwardOf, rightOf };
+  /**
+   * How a fielder takes a catch. from: { x, z, face (rad, toward the batter) }; at: the catch point;
+   * runCap: how far he could run before it arrived (m). Returns { kind, side (-1 left, 0, +1 right in
+   * his frame), lift (m, a leap) }. Only a ball he could not run under needs a dive.
+   */
+  function fieldAction(from, at, runCap) {
+    const dx = at.x - from.x, dz = at.z - from.z, gap = Math.max(0, Math.hypot(dx, dz) - (runCap || 0));
+    const r = rightOf(from.face || 0), lat = dx * r.x + dz * r.z;
+    const side = Math.abs(lat) < 0.25 ? 0 : Math.sign(lat);
+    if (at.y > 2.2) return { kind: 'leap', side, lift: Math.min(0.6, at.y - 2.0) };
+    if (gap > 1.0) return { kind: 'dive', side: side || 1, lift: 0 };
+    if (at.y > 1.6) return { kind: 'high', side, lift: 0 };
+    if (at.y < 0.5) return { kind: 'low', side, lift: 0 };
+    return { kind: 'take', side, lift: 0 };
+  }
+
+  /** The body for an action, dt s from the catch (negative before): { y (m), roll (rad, + = to his right) }. */
+  function actionPose(act, dt) {
+    const k01 = x => Math.max(0, Math.min(1, x));
+    if (act.kind === 'leap') return { y: act.lift * Math.sin(Math.PI * k01((dt + 0.3) / 0.6)), roll: 0 };
+    if (act.kind === 'dive') {
+      // launch over 0.35 s, land at the catch, stay down 0.6 s, back up over 0.4 s
+      const k = dt < 0 ? k01((dt + 0.35) / 0.35) : dt < 0.6 ? 1 : 1 - k01((dt - 0.6) / 0.4);
+      return k > 0 ? { y: -0.45 * k, roll: act.side * 1.25 * k } : { y: 0, roll: 0 };
+    }
+    return { y: 0, roll: 0 };
+  }
+
+  const api = { solveElbow, elbowPole, handPair, forwardOf, rightOf, fieldAction, actionPose };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (root) { root.CK = root.CK || {}; root.CK.Anim = api; }
 })(typeof window !== 'undefined' ? window : null);

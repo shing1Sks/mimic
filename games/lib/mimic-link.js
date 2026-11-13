@@ -619,7 +619,16 @@
       if (sget('mimic.link.active')) startHost();
       // leaving the page (next game, reload): close every phone link now, so phones see it at
       // once and offer again to the next page in this tab (same room) instead of waiting ~30 s
-      if (global.addEventListener) global.addEventListener('pagehide', () => { for (const p of peers.values()) { try { if (p.ctl && p.ctl.readyState === 'open') p.ctl.send(JSON.stringify({ t: 'bye' })); } catch (e) { /* gone */ } closePc(p); } });
+      // the page is going: tell each phone so it offers to the next page at once. The channel message
+      // rarely leaves before the connection closes (over TURN, almost never), so it also goes as a
+      // beacon through the mailbox; without either the phone sat ~30 s on a dead link
+      if (global.addEventListener) global.addEventListener('pagehide', () => {
+        for (const p of peers.values()) {
+          try { if (p.ctl && p.ctl.readyState === 'open') p.ctl.send(JSON.stringify({ t: 'bye' })); } catch (e) { /* gone */ }
+          try { if (nav.sendBeacon && room) nav.sendBeacon(`${String(cfg.signal).replace(/\/+$/, '')}/${room}`, new Blob([JSON.stringify({ from: 'host', to: p.id, type: 'bye', data: { sid: p.sid } })], { type: 'text/plain' })); } catch (e) { /* best effort */ }
+          closePc(p);
+        }
+      });
       watchJoins();
       tickUi();
     }).catch(e => console.warn('[mimic-link]', e));

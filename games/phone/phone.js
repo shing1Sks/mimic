@@ -94,6 +94,11 @@
     C.ctl.onmessage = e => { if (C.sid === sid && typeof e.data === 'string') onCtl(e.data); };
     pc.onicecandidate = e => { if (e.candidate && C.sid === sid) C.signal.send('host', 'ice', { sid, c: e.candidate.toJSON() }).catch(() => {}); };
     pc.onconnectionstatechange = () => { if (C.sid === sid && (pc.connectionState === 'failed')) lost(); };
+    // 'disconnected' that lasts is a closed game page (Chrome waits ~30 s more before 'failed')
+    pc.oniceconnectionstatechange = () => {
+      if (C.sid !== sid || pc.iceConnectionState !== 'disconnected') return;
+      setTimeout(() => { if (C.sid === sid && pc.iceConnectionState === 'disconnected') { C.retry = 0; lost(); } }, 2500);
+    };
     try {
       await pc.setLocalDescription(await pc.createOffer());
       await C.signal.send('host', 'offer', { sid, sdp: pc.localDescription.sdp, mode: S.mode || hint || 'wand', name: deviceName });
@@ -138,6 +143,7 @@
   function onSignal(m) {
     const d = m.data || {};
     if (m.from !== 'host' || d.sid !== C.sid || !C.pc) return;
+    if (m.type === 'bye') { C.retry = 0; lost(); return; }   // the game page closed: offer to the next one now
     if (m.type === 'answer' && !C.pc.remoteDescription) {
       C.pc.setRemoteDescription({ type: 'answer', sdp: d.sdp }).then(() => {
         for (const c of C.iceQ.splice(0)) C.pc.addIceCandidate(c).catch(() => {});

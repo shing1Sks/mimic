@@ -442,7 +442,10 @@
     if (j.status === 'pending') return;
     G.hold = false;
     if (j.status === 'none') { beaten('leave'); return; }
-    const st = BA.stateAt(G.tracker, tA), blade = BA.swingBlade(j.swing);
+    // a phone's blade turns part of the way towards what the ball's height needs (the phone is small
+    // and held every which way); timing and the swing's path stay the player's own
+    const raw = BA.swingBlade(j.swing), st = BA.stateAt(G.tracker, tA);
+    const blade = batSeat().kind === 'phone' ? BA.assistBlade(raw, G.contact.p.y) : raw;
     const push = j.swing.peak < BA.BAT.V_SWING;
     const q = BA.quality(j.e, timingK(), BA.fit(blade, G.contact.p.y), push);
     G.lastTiming = j.e;
@@ -520,7 +523,8 @@
   // The stroke
   function strike(sw) {
     const c = G.contact, side = batSide();
-    const sh = BA.shot({ u: sw.u, b: sw.b, ballV: c.v, ballP: c.p, q: sw.q, e: sw.e, side, push: sw.push, power: BA.BAT.POWER[opt('power')], rng });
+    const sh = BA.shot({ u: sw.u, b: sw.b, ballV: c.v, ballP: c.p, q: sw.q, e: sw.e, side, push: sw.push, power: BA.BAT.POWER[opt('power')], rng,
+      phone: batSeat().kind === 'phone' });
     G.stroke = sh;
     c.state = 'hit';
     const from = G.ball.p.z < -0.3 ? G.ball.p : c.p;

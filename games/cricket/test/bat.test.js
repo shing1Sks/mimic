@@ -128,5 +128,21 @@ function play(swing, tArr, o) {
   check('...pulls a short one to the leg side with a cross bat', sh.az < -55 && /PULL|HOOK/.test(sh.kind), [sh.az, sh.kind]);
 }
 
+{
+  // the phone is small: how the hand holds it should not decide straight or cross bat on its own
+  const deg = 180 / Math.PI, elOf = b => Math.asin(-b.y) * deg;
+  const level = { x: 0, y: -Math.sin(rad(12)), z: -Math.cos(rad(12)) };          // 12 deg below level
+  const full = T.assistBlade(level, 0.3), high = T.assistBlade({ x: 0, y: -1, z: 0 }, 1.5);
+  check('a near-level phone on a full ball becomes a straight bat (>= 50 deg)', elOf(full) >= 50, elOf(full));
+  check('...and meets it cleanly, not off the bottom edge', T.fit(full, 0.3) >= 0.9, T.fit(full, 0.3));
+  check('a hanging bat on a bouncer turns towards a cross bat (< 35 deg)', elOf(high) < 35, elOf(high));
+  check('the heading of the blade is kept', Math.abs(Math.atan2(full.x, -full.z)) < 1e-9);
+  // the loft: a phone swing that finishes steeply rising is a lofted hit, not a skier
+  const upU = { x: 0, y: Math.sin(rad(75)) * 20, z: -Math.cos(rad(75)) * 20 };
+  const up = T.shot({ u: upU, b: { x: 0, y: -1, z: 0 }, ballV: BALL_V, ballP: { x: 0, y: 0.5, z: 0 }, q: 'middle', e: 0, side: 1, power: 1.75, phone: true, rng: seeded() });
+  check('a steeply rising phone swing (+75 deg) lofts at most 45 deg', up.loft <= 45 && up.loft > 30, up.loft);
+  const drive = T.shot({ u: { x: 0, y: Math.sin(rad(20)) * 20, z: -Math.cos(rad(20)) * 20 }, b: { x: 0, y: -1, z: 0 }, ballV: BALL_V, ballP: { x: 0, y: 0.5, z: 0 }, q: 'middle', e: 0, side: 1, power: 1.75, phone: true, rng: seeded() });
+  check('...while a +20 deg path still lofts as before (about 22 deg)', Math.abs(drive.loft - 22) < 1, drive.loft);
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

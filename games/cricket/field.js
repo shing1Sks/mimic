@@ -40,8 +40,9 @@
 
   const reach = t => F.REACH + F.RUN * Math.max(0, t - F.REACT) + (t > 0.6 ? F.DIVE : 0);
   /** Chance to hold a catch: m = how far the fielder had to go (0..1 of his reach), t = time he had. */
-  function catchChance(m, t, keeper) {
+  function catchChance(m, t, keeper, run) {
     let p = (keeper ? 0.95 : 0.9) - 0.5 * m * m;
+    if (run > 8) p -= 0.25 * Math.min(1, (run - 8) / 20);   // a long sprint is harder to finish
     if (t < 0.45) p -= 0.3 * (0.45 - t) / 0.45 * (keeper ? 0.4 : 1);
     return Math.max(0.15, Math.min(0.98, p));
   }
@@ -61,13 +62,14 @@
     // 1. catches, earliest first
     for (const s of samples) {
       if (!s.air) break;
+      if (Phys.fromCentre(s) > Phys.FIELD.R) break;   // over the rope: in the stands, nobody fields it
       if (s.t < 0.06 || s.y < F.CATCH_LO || s.y > F.CATCH_HI) continue;
       for (const f of all) {
         if (tried.has(f.i)) continue;
         const d = Math.hypot(s.x - f.x, s.z - f.z), R = reach(s.t);
         if (d > R) continue;
         tried.add(f.i);
-        if (rng() < catchChance(d / R, s.t, f.keeper)) return { type: 'caught', runs: 0, by: f.i, name: f.name, t: s.t, at: { x: s.x, y: s.y, z: s.z }, dropped };
+        if (rng() < catchChance(d / R, s.t, f.keeper, d)) return { type: 'caught', runs: 0, by: f.i, name: f.name, t: s.t, at: { x: s.x, y: s.y, z: s.z }, dropped };
         dropped.push(f.name);
         // put down: the ball dies at his feet, he picks it up
         return runsFrom({ t: s.t + 0.9, x: s.x, z: s.z }, f, dropped);

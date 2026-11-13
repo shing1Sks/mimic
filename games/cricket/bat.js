@@ -32,6 +32,12 @@
     PUSH_WIN: 1.5,      // a slow prod has a wider window (its peak is broad)
     Q: 0.2,             // collision efficiency off the middle: v_out = Q v_in + (1 + Q) v_bat
     V_MAX: 42,
+    // recorded phone swings (2026-11-13, 108 shots, replayed through these rules): the "blade" of a
+    // phone in a fist rarely hangs past 45 deg, so full balls were bottom-edged even when well timed,
+    // and a phone swing often finishes rising steeply, so clean hits were skied at the 55 deg cap.
+    // (Shifting all loft down kept catches the same and halved the sixes: not done.)
+    LOFT_MAX: 45,       // deg: the steepest clean hit off a phone
+    ASSIST: 0.7,        // how far a phone's blade turns towards the angle the ball's height needs
   };
 
   function tracker() { return { hist: [], cur: null, swings: [] }; }
@@ -65,6 +71,20 @@
 
   /** The blade's direction at a swing's fastest moment: what kind of swing it is (straight / cross). */
   function swingBlade(sw) { return B.rotate(sw.qPeak, { x: 0, y: 0, z: -1 }); }
+
+  /**
+   * The blade turned part of the way (BAT.ASSIST) towards what the ball's height h (m) needs: a
+   * straight bat (70 deg down) to the waist, a cross bat (10 deg) from the chest up. The phone is
+   * small and held every which way; the swing's timing and path stay the player's own.
+   */
+  function assistBlade(b, h, k) {
+    k = k === undefined ? BAT.ASSIST : k;
+    const el = Math.asin(Math.max(-1, Math.min(1, -b.y))) / deg;
+    const t = Math.max(0, Math.min(1, (h - 0.95) / 0.4));
+    const want = 70 + (10 - 70) * t, e = (el + k * (want - el)) * deg;
+    const hz = Math.hypot(b.x, b.z), hx = hz > 1e-6 ? b.x / hz : 0, hzz = hz > 1e-6 ? b.z / hz : -1;
+    return { x: Math.cos(e) * hx, y: -Math.sin(e), z: Math.cos(e) * hzz };
+  }
 
   /** The bat at time t (ms): blade direction b (unit) and sweet-spot velocity u (m/s). */
   function stateAt(tr, t) {
@@ -140,7 +160,7 @@
     if (o.q === 'middle' || o.q === 'good') {
       speed = o.push ? 0.12 * vi + vb : BAT.Q * vi + (1 + BAT.Q) * vb * (o.q === 'middle' ? 1 : 0.85);
       if (o.q === 'good') az += r(-4, 4);
-      loft = Math.max(-12, Math.min(55, loft * 0.9 + 4));
+      loft = Math.max(-12, Math.min(o.phone ? BAT.LOFT_MAX : 55, loft * 0.9 + 4));
       if (o.push) loft = Math.min(loft, 8);
       kind = shotName(az, crossBat, loft, o.push, speed);
     } else {
@@ -205,7 +225,7 @@
     return B.norm(B.mul(B.mul(B.axisAngle(0, 1, 0, -(dir || 0)), B.axisAngle(1, 0, 0, lift || 0)), tilt));
   }
 
-  const api = { BAT, batQuat, tracker, step, swingBlade, stateAt, judge, fit, quality, shot, shotName, cpuShot };
+  const api = { BAT, batQuat, tracker, step, swingBlade, assistBlade, stateAt, judge, fit, quality, shot, shotName, cpuShot };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (root) { root.CK = root.CK || {}; root.CK.Bat = api; }
 })(typeof window !== 'undefined' ? window : null);

@@ -49,5 +49,25 @@ check('left-handed batter: the field is mirrored (slip on the other side)', F.se
   check('picked up at the bat\'s feet: no run', F.runsFrom({ t: 0.6, x: 0.5, z: -2 }, field[5]).runs === 0);
 }
 
+{
+  // from a recorded session: hooks and pulls that cleared the rope on the full were "caught" (and
+  // "dropped" for runs) by a fielder standing in the stands, 81 and 91 m from the middle
+  let n = 0;
+  for (const [speed, az, loft] of [[31, -100, 47], [33, -98, 55], [30, -60, 45], [28, -150, 50], [34, -95, 40]]) {
+    const fl = hit(speed, az, loft);
+    const cross = fl.find(x => P.fromCentre(x) > P.FIELD.R);
+    if (!cross || !cross.air) continue;
+    n++;
+    const held = F.resolve(fl, field, { rng: always }), put = F.resolve(fl, field, { rng: never });
+    check(`over the rope on the full (${speed} m/s, az ${az}, loft ${loft}): six, or caught inside the rope`, held.type === 'six' || (held.type === 'caught' && P.fromCentre(held.at) <= P.FIELD.R), held.type === 'caught' ? P.fromCentre(held.at) : held.type);
+    check('...and never dropped beyond it for runs', put.type === 'six' || (put.type === 'runs' && P.fromCentre(put.at) <= P.FIELD.R + 0.5), [put.type, put.at && P.fromCentre(put.at)]);
+  }
+  check('the rope cases above were exercised', n >= 3, n);
+}
+{
+  // a long sprint is harder to finish than a step to the side at the same stretch of his reach
+  check('a 28 m running catch is harder than a 4 m one (same stretch, same time)', F.catchChance(0.6, 3, false, 28) < F.catchChance(0.6, 3, false, 4) - 0.15, [F.catchChance(0.6, 3, false, 28), F.catchChance(0.6, 3, false, 4)]);
+  check('...but still a real chance', F.catchChance(0.6, 3, false, 28) >= 0.3);
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

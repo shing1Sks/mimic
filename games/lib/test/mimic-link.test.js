@@ -56,6 +56,25 @@ function decodeWith(samples, mode) {
 }
 
 const tests = {
+  // ---------------------------------------------------------------- a paired app phone left frozen by Windows
+  frozenPadHiddenEvenWithoutABrowserPhone() {
+    const frozen = { index: 0, id: 'Mimic (Vendor: 038f Product: 1200)', connected: true, timestamp: 1, axes: [0.12, 0.78, -0.03, -0.1, 0, -0.04], buttons: new Array(12).fill({ pressed: false, value: 0 }) };
+    const ctx = page({ link: true, real: () => [frozen, null, null, null] });
+    ctx.clock.t = 60000;
+    assert.strictEqual(ctx.navigator.getGamepads().filter(Boolean).length, 0, 'no live pad: the mouse fallback can take over');
+  },
+  frozenBluetoothPadIsDropped() {
+    const now = 100000;
+    const pad = (i, id, axes, ts) => ({ index: i, id, connected: true, timestamp: ts, axes, buttons: new Array(12).fill({ pressed: false, value: 0 }) });
+    const frozen = pad(0, 'Mimic (Vendor: 038f Product: 1200)', [0.12, 0.78, -0.03, -0.1, 0, -0.04], now - 39000);
+    const live = pad(1, 'Mimic (Vendor: 038f Product: 1200)', [0.1, 0.2, 0.3, 0, 0, 0.5], now - 8);
+    const silent = pad(2, 'Mimic (Vendor: 038f Product: 1200)', [0, 0, 0, 0, 0, 0], now - 39000);
+    const web = { index: undefined, pad: pad(0, 'Mimic Web (Vendor: 038f Product: 1200)', [0.2, 0.1, 0.4, 0, 0, 0.3], now - 5) };
+    const out = P.mergeGamepads([frozen, live, silent], [web], now);
+    assert(!out.some(g => g && g === frozen), 'frozen app pad (non-zero axes, no update for 39 s) is gone');
+    assert(out.includes(live) && out.includes(silent), 'a live pad and a silent (all-zero) pad stay');
+    assert(out.some(g => g && /Mimic Web/.test(g.id)), 'the browser phone is listed');
+  },
   // ---------------------------------------------------------------- ICE servers (TURN for phones on another network)
   async iceServersComeFromTheSiteWhenItHasThem() {
     const turn = [{ urls: ['turn:turn.example:3478?transport=udp'], username: 'u', credential: 'c' }];

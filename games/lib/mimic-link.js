@@ -102,10 +102,13 @@
   }
   function getGamepads() {
     const real = nativeGet();
-    if (!peers.size || !global.MimicProto) return real;
-    const list = virtualList();
-    if (!list.length) return real;
-    const out = P().mergeGamepads(real, list);
+    if (!global.MimicProto) return real;
+    // even with no browser phone: a frozen Bluetooth pad must not pass for a live phone
+    const list = peers.size ? virtualList() : [];
+    const now = performance.now();
+    if (!list.length && !Array.from(real || []).some(p => P().isFrozen(p, now))) return real;   // untouched, no copy per frame
+    const out = P().mergeGamepads(real, list, now);
+    if (!list.length) return out;
     for (const v of list) { const p = peers.get(v.key); if (p) p.index = v.index; }
     return out;
   }

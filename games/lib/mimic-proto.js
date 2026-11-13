@@ -201,8 +201,14 @@
    * virtual one moves to the lowest free index. The array is indexed by gamepad index (like
    * Chrome's: nulls in the gaps), so list[pad.index] === pad.
    */
-  function mergeGamepads(real, virtuals) {
-    const out = Array.from(real || []);
+  // A phone paired over Bluetooth whose app has closed stays listed by Windows, frozen on its last
+  // (non-zero) report: games took it for a live phone and ignored a browser phone that joined
+  // later. With `now` given, such a pad (no new report for FROZEN_MS) is left out.
+  const FROZEN_MS = 3000;
+  const frozen = (p, now) => !!p && /mimic/i.test(p.id || '') && !/mimic web/i.test(p.id || '') &&
+    p.timestamp > 0 && now - p.timestamp > FROZEN_MS && Array.from(p.axes || []).some(v => v !== 0);
+  function mergeGamepads(real, virtuals, now) {
+    const out = Array.from(real || []).map(p => (now !== undefined && frozen(p, now) ? null : p));
     const used = new Set();
     out.forEach((p, i) => { if (p) used.add(p.index !== undefined ? p.index : i); });
     // first those that can keep their index, then the rest into the lowest free ones
@@ -313,7 +319,7 @@
     mul, conj, rotate, normalize, fromDeviceOrientation, yawReference, relative, gravityInPhone,
     sign, readSig, motionAxes, hatIndex, hatAxis, padGamepadState,
     encodeMotion, encodePad, decode, motionGamepad, padGamepad, mergeGamepads,
-    Signal, randomId, SAFE_ID, iceServers, STUN,
+    Signal, randomId, SAFE_ID, iceServers, STUN, isFrozen: frozen,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (root) root.MimicProto = api;

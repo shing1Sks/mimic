@@ -207,8 +207,12 @@
   const FROZEN_MS = 3000;
   const frozen = (p, now) => !!p && /mimic/i.test(p.id || '') && !/mimic web/i.test(p.id || '') &&
     now - (p.timestamp || 0) > FROZEN_MS && Array.from(p.axes || []).some(v => v !== 0);
+  // with a browser phone joined, a paired app phone that has sent nothing for FROZEN_MS (a silent
+  // all-zero Pad entry too) is left out as well: games that read the first pad took it and ignored the phone
+  const stale = (p, now) => !!p && /mimic/i.test(p.id || '') && !/mimic web/i.test(p.id || '') && now - (p.timestamp || 0) > FROZEN_MS;
   function mergeGamepads(real, virtuals, now) {
-    const out = Array.from(real || []).map(p => (now !== undefined && frozen(p, now) ? null : p));
+    const gone = virtuals && virtuals.length ? stale : frozen;
+    const out = Array.from(real || []).map(p => (now !== undefined && gone(p, now) ? null : p));
     const used = new Set();
     out.forEach((p, i) => { if (p) used.add(p.index !== undefined ? p.index : i); });
     // first those that can keep their index, then the rest into the lowest free ones

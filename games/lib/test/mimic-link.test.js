@@ -93,7 +93,9 @@ const tests = {
     const web = { index: undefined, pad: pad(0, 'Mimic Web (Vendor: 038f Product: 1200)', [0.2, 0.1, 0.4, 0, 0, 0.3], now - 5) };
     const out = P.mergeGamepads([frozen, live, silent], [web], now);
     assert(!out.some(g => g && g === frozen), 'frozen app pad (non-zero axes, no update for 39 s) is gone');
-    assert(out.includes(live) && out.includes(silent), 'a live pad and a silent (all-zero) pad stay');
+    assert(out.includes(live), 'a live pad stays');
+    assert(!out.includes(silent), 'with a browser phone joined, a silent stale app pad is left out too');
+    assert(P.mergeGamepads([silent], [], now).includes(silent), 'without browser phones a silent (idle) app pad stays');
     assert(out.some(g => g && /Mimic Web/.test(g.id)), 'the browser phone is listed');
     // on a freshly loaded page Chrome reports such a pad with timestamp 0 (nothing since the load)
     const fresh = pad(0, 'Mimic (Vendor: 038f Product: 1200)', [0.12, 0.78, -0.03, -0.1, 0, -0.04], 0);

@@ -23,6 +23,13 @@
     GATHER: 0.8,     // s to pick up, set and release
     RUN1: 2.7, RUNN: 2.4, SAFE: 0.1,    // batters: first run (calling + start), each further run
   };
+  // Fielding mishaps, now and then (about one visible per two-over innings), decided here so the
+  // animation only shows them. Shares: juggle of held catches (still out), fumble of ground stops
+  // (+1 run), misfield4 of stops out beyond MISFIELD_R (through for four), leaveIt of catches two
+  // fielders could reach (both leave it: put down). Rolled on the top of the rng's range, so a
+  // forced rng of 0 (tests: "always held") never triggers one.
+  const MISHAP = { juggle: 0.25, fumble: 0.16, misfield4: 0.15, leaveIt: 0.3 };   // tuned: ~1 visible per 12 hits, runs +4%
+  const MISFIELD_R = 45;
   // [name, az (deg, right-handed frame: 0 = straight at the bowler, + = off side), r (m from the stumps)]
   const SETS = {
     pace: [['Keeper', 180, 13], ['Slip', 163, 15], ['Gully', 128, 17], ['Point', 92, 23], ['Cover', 52, 27], ['Mid-off', 14, 28],
@@ -41,7 +48,7 @@
   const reach = t => F.REACH + F.RUN * Math.max(0, t - F.REACT) + (t > 0.6 ? F.DIVE : 0);
   /** Chance to hold a catch: m = how far the fielder had to go (0..1 of his reach), t = time he had. */
   function catchChance(m, t, keeper, run) {
-    let p = (keeper ? 0.95 : 0.9) - 0.5 * m * m;
+    let p = (keeper ? 0.95 : 0.92) - 0.5 * m * m;
     if (run > 8) p -= 0.25 * Math.min(1, (run - 8) / 20);   // a long sprint is harder to finish
     if (t < 0.45) p -= 0.3 * (0.45 - t) / 0.45 * (keeper ? 0.4 : 1);
     return Math.max(0.15, Math.min(0.98, p));
@@ -56,6 +63,7 @@
   function resolve(samples, fielders, o) {
     o = o || {};
     const rng = o.rng || Math.random;
+    const mishap = k => MISHAP[k] > 0 && rng() > 1 - MISHAP[k];
     const all = fielders.slice();
     if (o.bowler) all.push({ i: -1, name: 'Bowler', x: o.bowler.x, z: o.bowler.z });
     const dropped = [], tried = new Set();
@@ -69,7 +77,13 @@
         const d = Math.hypot(s.x - f.x, s.z - f.z), R = reach(s.t);
         if (d > R) continue;
         tried.add(f.i);
-        if (rng() < catchChance(d / R, s.t, f.keeper, d)) return { type: 'caught', runs: 0, by: f.i, name: f.name, t: s.t, at: { x: s.x, y: s.y, z: s.z }, dropped };
+        const other = all.find(g => g !== f && !g.keeper && !f.keeper && Math.hypot(s.x - g.x, s.z - g.z) <= R);
+        if (other && mishap('leaveIt')) {
+          // both go for it, both pull out: it drops between them
+          dropped.push(f.name);
+          return Object.assign(runsFrom({ t: s.t + 0.9, x: s.x, z: s.z }, f, dropped), { mishap: { kind: 'leaveIt', by: f.i, with: other.i } });
+        }
+        if (rng() < catchChance(d / R, s.t, f.keeper, d)) return { type: 'caught', runs: 0, by: f.i, name: f.name, t: s.t, at: { x: s.x, y: s.y, z: s.z }, dropped, mishap: mishap('juggle') ? { kind: 'juggle', by: f.i } : null };
         dropped.push(f.name);
         // put down: the ball dies at his feet, he picks it up
         return runsFrom({ t: s.t + 0.9, x: s.x, z: s.z }, f, dropped);
@@ -98,7 +112,13 @@
       for (const f of all) { const d = Math.hypot(last.x - f.x, last.z - f.z); if (d < d0) { d0 = d; f0 = f; } }
       best = { t: Math.max(last.t, F.REACT + Math.max(0, d0 - F.REACH) / F.RUN), x: last.x, z: last.z, f: f0 };
     }
-    return runsFrom(best, best.f, dropped);
+    if (tB < Infinity && Phys.fromCentre(best) > MISFIELD_R && mishap('misfield4')) {
+      // out near the rope it goes under his hand (missT) and on to the boundary (t)
+      return { type: 'four', runs: 4, by: best.f.i, name: best.f.name, t: tB, at: { x: best.x, z: best.z }, dropped, mishap: { kind: 'misfield4', by: best.f.i, missT: best.t } };
+    }
+    const r = runsFrom(best, best.f, dropped);
+    if (mishap('fumble')) { r.runs = Math.min(4, r.runs + 1); r.mishap = { kind: 'fumble', by: best.f.i }; }
+    return r;
   }
 
   /** Runs the batters can safely take before the throw from `at` (picked up at at.t) arrives. */
@@ -107,10 +127,10 @@
     const back = at.t + F.GATHER + toEnd / F.THROW;
     let runs = 0;
     while (runs < 3 && F.RUN1 + runs * F.RUNN + F.SAFE <= back) runs++;
-    return { type: 'runs', runs, by: f.i, name: f.name, t: at.t, at: { x: at.x, z: at.z }, back, dropped: dropped || [] };
+    return { type: 'runs', runs, by: f.i, name: f.name, t: at.t, at: { x: at.x, z: at.z }, back, dropped: dropped || [], mishap: null };
   }
 
-  const api = { F, SETS, setField, reach, catchChance, resolve, runsFrom };
+  const api = { F, SETS, MISHAP, MISFIELD_R, setField, reach, catchChance, resolve, runsFrom };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (root) { root.CK = root.CK || {}; root.CK.Field = api; }
 })(typeof window !== 'undefined' ? window : null);

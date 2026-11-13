@@ -578,11 +578,16 @@
     if (o.done) return;
     if (o.type === 'caught' && G.t >= o.t) {
       o.done = true; G.ballOn = false; holdBall(o.by);
+      if (o.mishap && o.mishap.kind === 'juggle') { G.juggleT = G.t; crowdReact('ooh'); }
       if (noBall()) { banner('NO BALL', 'CAUGHT, BUT IT WAS A NO BALL', 'neutral', 1.8); endBallSoon(1.8, { runs: 0, extra: 'nb' }); return; }
       const bc = bowlSeat().mc; if (bc && bowlSeat().kind === 'phone') bc.rumble(0.8, 140, 3);
       const btc = batSeat().mc; if (btc && batSeat().kind === 'phone') btc.rumble(0.35, 60, 1);
       wicket('CAUGHT', o.name);
       return;
+    }
+    if (o.mishap && o.mishap.kind === 'misfield4' && !o.missCalled && G.t >= o.mishap.missT) {
+      o.missCalled = true; crowdReact('ooh');
+      banner('MISFIELD!', 'THROUGH ' + (o.name || '').toUpperCase() + "'S HANDS", 'neutral', 1.4);
     }
     if ((o.type === 'four' || o.type === 'six') && G.t >= o.t) {
       o.done = true;
@@ -594,9 +599,12 @@
     }
     if (o.type === 'runs' && G.t >= o.t && !o.picked) {
       o.picked = true; holdBall(o.by);
-      if (o.dropped && o.dropped.length) { banner('DROPPED!', o.dropped[0].toUpperCase() + ' PUTS IT DOWN', 'neutral', 1.6); crowdReact('ooh'); say(pick(['Put down! That should have been taken.', 'Dropped! A let-off.']), 2); }
-      const throwT = Math.max(0.5, o.back - o.t - FI.F.GATHER);
-      G.throwBall = { t0: G.t + FI.F.GATHER, dur: throwT, from: null, to: nearerEnd(o.at) };
+      const mk = o.mishap && o.mishap.kind;
+      if (mk === 'leaveIt') { banner('LEFT IT!', 'TWO FIELDERS, NOBODY TAKES IT', 'neutral', 1.6); crowdReact('ooh'); }
+      else if (mk === 'fumble') { banner('FUMBLE!', (o.name || '').toUpperCase() + ' · EXTRA RUN', 'neutral', 1.4); crowdReact('ooh'); }
+      else if (o.dropped && o.dropped.length) { banner('DROPPED!', o.dropped[0].toUpperCase() + ' PUTS IT DOWN', 'neutral', 1.6); crowdReact('ooh'); say(pick(['Put down! That should have been taken.', 'Dropped! A let-off.']), 2); }
+      const throwT = Math.max(0.5, o.back - o.t - FI.F.GATHER), fumbleT = mk === 'fumble' ? 0.9 : 0;   // a fumble: he gathers it again
+      G.throwBall = { t0: G.t + FI.F.GATHER + fumbleT, dur: throwT, from: null, to: nearerEnd(o.at) };
     }
     if (o.type === 'runs' && o.picked && !o.endQueued) {
       const runsDone = o.runs ? FI.F.RUN1 + (o.runs - 1) * FI.F.RUNN : 0;
@@ -698,7 +706,13 @@
       const f = G.field[o.by], face = Math.atan2(-f.x, -0.5 - f.z);
       o.action = Object.assign(CK.Anim.fieldAction({ x: f.x, z: f.z, face }, o.at, FI.F.RUN * Math.max(0, o.t - FI.F.REACT)), { face });
     }
+    const mis = o.mishap;
+    if (mis && mis.kind === 'leaveIt' && o.at && plans[mis.with]) {
+      const p2 = plans[mis.with], d2 = Math.hypot(o.at.x - p2.x, o.at.z - p2.z);
+      p2.tx = o.at.x + 0.9; p2.tz = o.at.z + 0.4; p2.sp = d2 / Math.max(0.25, o.t - FI.F.REACT);
+    }
     plans.forEach((p, i) => {
+      if (i === mis?.with && mis.kind === 'leaveIt') return;
       if (i === o.by && o.at) { const d = Math.hypot(o.at.x - p.x, o.at.z - p.z); p.tx = o.at.x; p.tz = o.at.z; p.sp = d / Math.max(0.25, o.t - FI.F.REACT); }
       else if (ballDir && i !== 0) {
         const d = Math.hypot(ballDir.x - p.x, ballDir.z - p.z);
@@ -896,6 +910,7 @@
     if (G.ballHeldBy !== undefined && G.ballHeldBy !== null && G.field[G.ballHeldBy]) {
       const f = G.field[G.ballHeldBy].cur || G.field[G.ballHeldBy], fw = CK.Anim.forwardOf(G.field[G.ballHeldBy].face || 0);
       ballP = { x: f.x + fw.x * 0.28, y: 1.12, z: f.z + fw.z * 0.28 };   // in his hands, in front of him
+      if (G.juggleT !== undefined && G.juggleT !== null && G.t - G.juggleT < 0.75) ballP.y += 0.55 * Math.sin(Math.PI * (G.t - G.juggleT) / 0.75);   // juggled, then held
       const th = G.throwBall;
       if (th && G.t >= th.t0) {
         const k = clamp((G.t - th.t0) / th.dur, 0, 1);
@@ -1584,7 +1599,7 @@
     stumpsFrame(dt);
     if (G.umpireOut) G.umpireOut += dt;
     if (pitchMark.material.opacity > 0 && G.phase !== 'flight') pitchMark.material.opacity = Math.max(0, pitchMark.material.opacity - dt * 0.4);
-    if (G.phase === 'ready' && G.phaseT < dt * 1.5) { G.umpireOut = 0; G.ballHeldBy = null; G.throwBall = null; G.stroke = null; }
+    if (G.phase === 'ready' && G.phaseT < dt * 1.5) { G.umpireOut = 0; G.ballHeldBy = null; G.throwBall = null; G.stroke = null; G.juggleT = null; }
   }
   function frame(now) {
     requestAnimationFrame(frame);

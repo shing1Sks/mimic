@@ -69,5 +69,30 @@ check('left-handed batter: the field is mirrored (slip on the other side)', F.se
   check('a 28 m running catch is harder than a 4 m one (same stretch, same time)', F.catchChance(0.6, 3, false, 28) < F.catchChance(0.6, 3, false, 4) - 0.15, [F.catchChance(0.6, 3, false, 28), F.catchChance(0.6, 3, false, 4)]);
   check('...but still a real chance', F.catchChance(0.6, 3, false, 28) >= 0.3);
 }
+{
+  // fielding mishaps: rare enough to be special, decided by the rules, scoring kept level
+  const seed = n => { let s = n; return () => (s = (s * 16807) % 2147483647) / 2147483647; };
+  const pick = seed(99), hits = [];
+  for (let i = 0; i < 3000; i++) hits.push(hit(8 + pick() * 32, -180 + pick() * 360, -10 + pick() * 55));
+  const run = (mishap) => {
+    const keep = Object.assign({}, F.MISHAP); if (mishap === 0) for (const k in F.MISHAP) F.MISHAP[k] = 0;
+    const rng = seed(7), out = hits.map(fl => F.resolve(fl, field, { rng }));
+    Object.assign(F.MISHAP, keep); return out;
+  };
+  const on = run(), off = run(0);
+  const visible = on.filter(r => r.mishap && r.mishap.kind !== 'juggle');
+  const per12 = visible.length / on.length * 12;
+  check('about one visible mishap per 12-ball innings (0.65..1.35)', per12 >= 0.65 && per12 <= 1.35, per12);
+  const runs = rs => rs.reduce((a, r) => a + (r.runs || 0), 0);
+  check('total runs within 10% of the same hits without mishaps', Math.abs(runs(on) / runs(off) - 1) <= 0.10, [runs(on), runs(off)]);
+  const kinds = new Set(on.filter(r => r.mishap).map(r => r.mishap.kind));
+  check('every kind shows up: juggle, fumble, misfield4, leaveIt', ['juggle', 'fumble', 'misfield4', 'leaveIt'].every(k => kinds.has(k)), [...kinds]);
+  check('a misfield goes for four only out near the rope (> 45 m)', on.filter(r => r.mishap && r.mishap.kind === 'misfield4').every(r => r.type === 'four' && P.fromCentre(r.at) > 45));
+  check('a misfield-four only on a ball that reaches the rope, called when it gets there', on.filter(r => r.mishap && r.mishap.kind === 'misfield4').every(r => r.mishap.missT < r.t && r.t > 0));
+  check('a juggled catch is still out', on.filter(r => r.mishap && r.mishap.kind === 'juggle').every(r => r.type === 'caught'));
+  check('"leave it" only when two fielders could reach, and the ball goes down', on.filter(r => r.mishap && r.mishap.kind === 'leaveIt').every(r => r.type === 'runs' && r.mishap.with !== undefined && r.mishap.with !== r.mishap.by));
+  check('a fumble costs exactly one extra run (max 4)', on.filter(r => r.mishap && r.mishap.kind === 'fumble').every(r => r.type === 'runs' && r.runs >= 1 && r.runs <= 4));
+  check('same seed, same result (replays stay deterministic)', JSON.stringify(run().map(r => [r.type, r.runs])) === JSON.stringify(on.map(r => [r.type, r.runs])));
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

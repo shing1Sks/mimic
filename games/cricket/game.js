@@ -407,9 +407,6 @@
     G.lastSpin = del.spinDir !== 0;
     G.cutAt = 0;
     deliveryCard(del, rel, pr);
-    if (del.speed * 3.6 > 140) say(pick(LINES.pace).replace('KMH', Math.round(del.speed * 3.6) + ' km/h'), 1.8);
-    else if (G.lastTags[0] === 'YORKER' && Math.random() < 0.6) say(pick(LINES.yorker), 1.6);
-    else if (G.delCard && G.delCard.moved > 30) say(pick(del.spinDir ? LINES.turn : LINES.swing), 1.6);
     logEvent('delivery', { bowler: inn().bowl, kind: bowlSeat().kind, kmh: del.speed * 3.6, aim: del.aim, target: { x: del.target.x, len: -del.target.z }, pitch: pr.pitch && { x: pr.pitch.x, len: -pr.pitch.z },
       atStumps: { x: atS.x, y: atS.y }, swing: del.swing, spinDir: del.spinDir, spin: rel.spin, tags: G.lastTags });
     G.phase = 'flight'; G.phaseT = 0; G.ballOn = true; G.t = 0;
@@ -642,8 +639,6 @@
     if (G.outcome.type === 'runs' && G.outcome.runs > 0) G.runs = { n: G.outcome.runs, t0: 0 };
     if (sh.sweet && power > 0.7) crowdReact('cheer', 0.4);
     logShot(sw, sh);
-    if (G.outcome.type === 'caught') say(pick(['Up in the air...', 'In the air!', 'Skied it!']), 1.2);
-    else if (G.outcome.type === 'six' || (G.outcome.type === 'four' && sh.loft > 12)) say(pick(['That is struck beautifully...', 'Big hit!', 'He has gone for it!']), 1.2);
   }
   function logShot(sw, sh) {
     logEvent('shot', { batter: inn().bat, kind: batSeat().kind, e: sw.e, q: sw.q, push: !!sw.push, u: sw.u, shot: sh.kind, speed: sh.speed, az: sh.az, loft: sh.loft, sweet: sh.sweet, edge: sh.edge,
@@ -1304,20 +1299,6 @@
   // ---------------------------------------------------------------------------------
   // The broadcast: crowd, horns and drums, fireworks, celebrations, commentary
   const pick = a => a[(Math.random() * a.length) | 0];
-  const LINES = {
-    six: ['That\'s MASSIVE!', 'Into the stands!', 'Out of the ground!', 'Gone all the way!', 'Sweetly struck, way back!'],
-    four: ['Cracking shot!', 'Races away to the rope!', 'Pierced the gap!', 'One bounce and over!', 'Timed to perfection!'],
-    bowled: ['Through the gate!', 'Timber!', 'Knocked him over!', 'Cleaned him up!'],
-    playedon: ['Dragged on! What a way to go.', 'Off the inside edge and onto the stumps!'],
-    caught: ['Taken! Safe hands.', 'Straight down his throat!', 'Caught! Great take.'],
-    lbw: ['Plumb! Up goes the finger.', 'Trapped in front!'],
-    beaten: ['Beaten all ends up!', 'Past the outside edge!', 'Lovely delivery, that.'],
-    yorker: ['Toe-crusher!', 'Right in the blockhole!'],
-    pace: ['Serious pace, KMH on the gun!', 'That\'s quick! KMH!'],
-    turn: ['That spun a mile!', 'Big turn there!'],
-    swing: ['Late swing, beautiful!', 'Hooping around!'],
-    wide: ['Too wide, the umpire stretches his arms.'],
-  };
   let captionT = 0;
   function say(text, hold) {
     const el = $('caption');

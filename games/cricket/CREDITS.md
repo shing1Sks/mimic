@@ -11,7 +11,7 @@ required, credited anyway).
 | assets/models/athlete_f.glb | Woman in Tank Top (rigged, animated) | Quaternius | CC0 1.0 | https://poly.pizza/m/XqzeZGB7iU |
 
 Copied from Sunvolley (games/tennis/assets/models). Used for the batters, the bowler, the
-fielders, the umpire and the crowd (rendered once at start into an atlas of seated and cheering
+fielders, the umpire, the cheerleaders and the crowd (rendered once at start into an atlas of seated and cheering
 spectators).
 
 Everything else is made in code for this game: the ground, the strip and creases, stumps and

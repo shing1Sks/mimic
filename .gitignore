@@ -42,3 +42,8 @@ recordings/
 docs/superpowers/
 docs/design.md
 games/dino/BUILD-NOTES.md
+
+# Local credentials: never commit
+cloudflare-keys*
+*-keys.txt
+*.secret

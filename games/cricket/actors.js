@@ -248,10 +248,11 @@
       if (!t || !arm.upper) continue;
       let elbow = t.elbow;
       if (!elbow) {
+        // two-bone IK: the elbow bends out and down (CK.Anim), never through the body
         arm.upper.getWorldPosition(_sh);
-        _el.addVectors(_sh, t.hand).multiplyScalar(0.5);
-        _t2.copy(_side).multiplyScalar(s === 'right' ? -0.07 : 0.07); _el.add(_t2); _el.y -= 0.08;
-        elbow = _el;
+        if (!arm.len) { arm.lower.getWorldPosition(_el); arm.palm.getWorldPosition(_t2); arm.len = [_sh.distanceTo(_el), _el.distanceTo(_t2)]; }
+        const e = CK.Anim.solveElbow(_sh, t.hand, arm.len[0], arm.len[1], CK.Anim.elbowPole(st.facing || 0, s === 'right' ? 1 : -1));
+        elbow = _el.set(e.x, e.y, e.z);
       }
       aimBone(arm.upper, arm.lower, elbow);
       aimBone(arm.lower, arm.palm, t.hand);

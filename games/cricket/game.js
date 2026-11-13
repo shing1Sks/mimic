@@ -861,12 +861,18 @@
       const st = { x: f.cur.x, z: f.cur.z, facing: f.keeper && G.phase !== 'hit' ? Math.PI : face, run: f.run || 0, crouch: f.keeper ? (G.phase === 'hit' ? 0.2 : 0.85) : (G.phase === 'flight' ? 0.3 : 0.1) };
       if (ballP && G.phase === 'hit' && G.outcome && G.outcome.by === i) {
         const d = Math.hypot(ballP.x - f.cur.x, ballP.z - f.cur.z);
-        if (d < 3 || G.ballHeldBy === i) st.arms = { left: { hand: handsAt(f, ballP, -1) }, right: { hand: handsAt(f, ballP, 1) } };
+        const held = G.ballHeldBy === i;
+        if (d < 3 || held) {
+          if (!held && d > 0.2) st.facing = Math.atan2(ballP.x - f.cur.x, ballP.z - f.cur.z);   // turn to the ball
+          const fw = CK.Anim.forwardOf(st.facing);
+          const at = held ? { x: f.cur.x + fw.x * 0.28, y: 1.1, z: f.cur.z + fw.z * 0.28 } : { x: ballP.x, y: clamp(ballP.y, 0.3, 2.2), z: ballP.z };
+          const pr = CK.Anim.handPair(at, st.facing, 0.07);   // his left hand on his left, whichever way he faces
+          st.arms = { left: { hand: pr.left }, right: { hand: pr.right } };
+        }
       }
       return st;
     });
   }
-  function handsAt(f, p, s) { return { x: (G.ballHeldBy !== undefined && G.ballHeldBy !== null ? f.cur.x : p.x) + s * 0.08, y: G.ballHeldBy !== undefined && G.ballHeldBy !== null ? 1.1 : clamp(p.y, 0.3, 2.2), z: (G.ballHeldBy !== undefined && G.ballHeldBy !== null ? f.cur.z + 0.25 : p.z) }; }
 
   /** Everything the renderer needs this frame. */
   function liveFrame(dt) {
@@ -878,8 +884,8 @@
     if (rp) { ns.z = -2 - (PH.PITCH.L - 1.2) - rp.z; ns.run = rp.dir ? 1 : 0; ns.facing = rp.dir > 0 ? Math.PI : 0; ns.x = -0.9 * side; }
     let ballP = G.ball && (G.ballOn || G.phase === 'hit') ? { x: G.ball.p.x, y: G.ball.p.y, z: G.ball.p.z } : null;
     if (G.ballHeldBy !== undefined && G.ballHeldBy !== null && G.field[G.ballHeldBy]) {
-      const f = G.field[G.ballHeldBy].cur || G.field[G.ballHeldBy];
-      ballP = { x: f.x, y: 1.15, z: f.z + 0.25 };
+      const f = G.field[G.ballHeldBy].cur || G.field[G.ballHeldBy], fw = CK.Anim.forwardOf(G.field[G.ballHeldBy].face || 0);
+      ballP = { x: f.x + fw.x * 0.28, y: 1.12, z: f.z + fw.z * 0.28 };   // in his hands, in front of him
       const th = G.throwBall;
       if (th && G.t >= th.t0) {
         const k = clamp((G.t - th.t0) / th.dur, 0, 1);

@@ -184,15 +184,25 @@
     signal.start();
   }
 
+  // candidates of an attempt accept() is still setting up (it awaits the ICE servers): a phone whose
+  // game page changed has its offer and all its candidates waiting, and they arrive in one batch.
+  // Dropping them left the game with none of the phone's addresses: no link behind 4G NAT.
+  const early = new Map();          // `${phone}:${sid}` -> [candidate]
   function onSignal(m) {
     const d = m.data || {};
     if (!P().SAFE_ID.test(m.from || '')) return;
     if (m.type === 'offer') accept(m.from, d);
     else if (m.type === 'ice') {
       const p = peers.get(m.from);
-      if (p && p.sid === d.sid && d.c) {
+      if (!d.c) return;
+      if (p && p.sid === d.sid) {
         if (p.pc.remoteDescription) p.pc.addIceCandidate(d.c).catch(() => {});
         else p.iceQ.push(d.c);
+      } else if (typeof d.sid === 'string') {
+        const k = m.from + ':' + d.sid, q = early.get(k) || [];
+        if (!q.length) setTimeout(() => early.delete(k), 30000);
+        if (q.length < 64) q.push(d.c);
+        early.set(k, q);
       }
     } else if (m.type === 'bye') {
       const p = peers.get(m.from);
@@ -215,6 +225,8 @@
       rttMs: null, offset: null, bestRtt: Infinity, latencyMs: null, hz: 0, _cnt: 0, _cntT: now(), t0: now(),
     });
     p.label = '';
+    const k = id + ':' + d.sid;
+    if (early.has(k)) { p.iceQ.push(...early.get(k)); early.delete(k); }
     peers.set(id, p);
     const pc = p.pc, sid = p.sid;
     pc.onicecandidate = e => { if (e.candidate && p.sid === sid) signal.send(id, 'ice', { sid, c: e.candidate.toJSON() }).catch(() => {}); };
@@ -622,7 +634,7 @@
     on(ev, fn) { (listeners[ev] = listeners[ev] || []).push(fn); },
     config(o) { Object.assign(cfg, o || {}); qrCache.clear(); renderAll(); },
     start() { return ready.then(startHost); },
-    _peers: peers,
+    _peers: peers, _onSignal: m => onSignal(m),
   };
   function ensureRoomSafe() { return global.MimicProto ? ensureRoom() : room; }
 })(typeof window !== 'undefined' ? window : this);

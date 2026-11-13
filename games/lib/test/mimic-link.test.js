@@ -56,6 +56,27 @@ function decodeWith(samples, mode) {
 }
 
 const tests = {
+  // ---------------------------------------------------------------- candidates that arrive with the offer
+  async candidatesSentWithTheOfferAreKept() {
+    // a phone whose game page just changed has its offer and every candidate waiting in the mailbox:
+    // they arrive in one batch, while accept() is still getting the ICE servers
+    const added = [];
+    const ctx = page({ link: true });
+    ctx.RTCPeerConnection = class {
+      constructor() { this.remoteDescription = null; this.localDescription = null; }
+      async setRemoteDescription(d) { this.remoteDescription = d; }
+      async addIceCandidate(c) { added.push(c.candidate); }
+      async createAnswer() { return { type: 'answer', sdp: 'v=0' }; }
+      async setLocalDescription(d) { this.localDescription = d; }
+      close() {}
+    };
+    const L = ctx.MimicLink;
+    L._onSignal({ from: 'phone12345', type: 'offer', data: { sid: 's1', sdp: 'v=0', mode: 'grip' } });
+    for (const n of [1, 2, 3]) L._onSignal({ from: 'phone12345', type: 'ice', data: { sid: 's1', c: { candidate: 'c' + n } } });
+    L._onSignal({ from: 'phone12345', type: 'ice', data: { sid: 'old', c: { candidate: 'stale' } } });
+    await new Promise(r => setTimeout(r, 50));
+    assert.deepStrictEqual(added, ['c1', 'c2', 'c3'], 'every candidate of this attempt reaches the connection, none of an old one');
+  },
   // ---------------------------------------------------------------- a paired app phone left frozen by Windows
   frozenPadHiddenEvenWithoutABrowserPhone() {
     const frozen = { index: 0, id: 'Mimic (Vendor: 038f Product: 1200)', connected: true, timestamp: 1, axes: [0.12, 0.78, -0.03, -0.1, 0, -0.04], buttons: new Array(12).fill({ pressed: false, value: 0 }) };

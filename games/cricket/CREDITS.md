@@ -17,3 +17,10 @@ spectators).
 Everything else is made in code for this game: the ground, the strip and creases, stumps and
 bails, the rope and LED boards, stands, floodlights, sight screens, sky, bat, ball, pads, helmet,
 gloves, and all sound (synthesised with WebAudio).
+
+## Commentary voice
+
+Paaji, the commentator, is an original character: his lines were written for Willowlight (tools/commentary/build_script.py)
+and voiced with Google Gemini text-to-speech (prebuilt voice "Fenrir", Gemini 2.5 Flash TTS; the last 44 lines with
+Gemini 3.1 Flash TTS) from a performance direction. No real commentator's voice or lines are used.
+Clips: games/cricket/assets/commentary/ (Ogg Opus), rendered by tools/commentary/make.py.

@@ -1,0 +1,1017 @@
+{
+"appeal_01": {
+"file": "appeal_01.ogg",
+"moment": "appeal",
+"ms": 4607,
+"prio": 2,
+"text": "Zor ki appeal! Poori team chilla rahi hai!"
+},
+"appeal_02": {
+"file": "appeal_02.ogg",
+"moment": "appeal",
+"ms": 4506,
+"prio": 2,
+"text": "How's that?! Umpire soch rahe hain..."
+},
+"appeal_03": {
+"file": "appeal_03.ogg",
+"moment": "appeal",
+"ms": 3206,
+"prio": 2,
+"text": "Pad pe laga! Kya yeh out hai?!"
+},
+"appeal_04": {
+"file": "appeal_04.ogg",
+"moment": "appeal",
+"ms": 4506,
+"prio": 2,
+"text": "Saari duniya ki nazar umpire ki ungli pe!"
+},
+"appeal_05": {
+"file": "appeal_05.ogg",
+"moment": "appeal",
+"ms": 4407,
+"prio": 2,
+"text": "Appeal itni zor ki, ki pados ke gaon tak awaaz gayi!"
+},
+"beaten_01": {
+"file": "beaten_01.ogg",
+"moment": "beaten",
+"ms": 5806,
+"prio": 1,
+"text": "Oye! Beaten! Gend aur bat mein do kilometre ka faasla!"
+},
+"beaten_02": {
+"file": "beaten_02.ogg",
+"moment": "beaten",
+"ms": 6907,
+"prio": 1,
+"text": "Chhoo ke nikal gayi, jaise pehla pyaar!"
+},
+"beaten_03": {
+"file": "beaten_03.ogg",
+"moment": "beaten",
+"ms": 4306,
+"prio": 1,
+"text": "Kya gend hai! Batsman ko pata hi nahi chala."
+},
+"beaten_04": {
+"file": "beaten_04.ogg",
+"moment": "beaten",
+"ms": 4307,
+"prio": 1,
+"text": "Outside edge ko salaam karke nikal gayi!"
+},
+"beaten_05": {
+"file": "beaten_05.ogg",
+"moment": "beaten",
+"ms": 4106,
+"prio": 1,
+"text": "Bat ghuma diya, gend ne haath hila diya!"
+},
+"beaten_06": {
+"file": "beaten_06.ogg",
+"moment": "beaten",
+"ms": 5606,
+"prio": 1,
+"text": "Itni swing, jaise mele ka jhoola!"
+},
+"beaten_07": {
+"file": "beaten_07.ogg",
+"moment": "beaten",
+"ms": 3906,
+"prio": 1,
+"text": "Bach gaya! Aaj kismat saath hai."
+},
+"betweenOvers_01": {
+"file": "betweenOvers_01.ogg",
+"moment": "betweenOvers",
+"ms": 5306,
+"prio": 1,
+"text": "Cricket ek kavita hai, doston... har gend ek nayi pankti."
+},
+"betweenOvers_02": {
+"file": "betweenOvers_02.ogg",
+"moment": "betweenOvers",
+"ms": 6106,
+"prio": 1,
+"text": "Jaise chai bina adrak ke adhoori, waise match bina chhakke ke!"
+},
+"betweenOvers_03": {
+"file": "betweenOvers_03.ogg",
+"moment": "betweenOvers",
+"ms": 5907,
+"prio": 1,
+"text": "Pitch pe ghaas kam, khiladiyon mein josh zyaada!"
+},
+"betweenOvers_04": {
+"file": "betweenOvers_04.ogg",
+"moment": "betweenOvers",
+"ms": 6706,
+"prio": 1,
+"text": "Bowler ki mehnat, batsman ki himmat... yahi toh cricket hai!"
+},
+"betweenOvers_05": {
+"file": "betweenOvers_05.ogg",
+"moment": "betweenOvers",
+"ms": 4406,
+"prio": 1,
+"text": "Khel mein jo darr gaya, samjho woh haar gaya!"
+},
+"betweenOvers_06": {
+"file": "betweenOvers_06.ogg",
+"moment": "betweenOvers",
+"ms": 3906,
+"prio": 1,
+"text": "Over khatam, kahaani jaari hai!"
+},
+"betweenOvers_07": {
+"file": "betweenOvers_07.ogg",
+"moment": "betweenOvers",
+"ms": 8306,
+"prio": 1,
+"text": "Aasmaan saaf, maidaan hara, aur dil mein toofan!"
+},
+"betweenOvers_08": {
+"file": "betweenOvers_08.ogg",
+"moment": "betweenOvers",
+"ms": 7807,
+"prio": 1,
+"text": "Ek over mein zindagi badal jaati hai, guru!"
+},
+"bowled_01": {
+"file": "bowled_01.ogg",
+"moment": "bowled",
+"ms": 3707,
+"prio": 3,
+"text": "Bowled! Danda ukhaad diya!"
+},
+"bowled_02": {
+"file": "bowled_02.ogg",
+"moment": "bowled",
+"ms": 3806,
+"prio": 3,
+"text": "Gilli udd gayi, jaise shaadi mein pataakha!"
+},
+"bowled_03": {
+"file": "bowled_03.ogg",
+"moment": "bowled",
+"ms": 5207,
+"prio": 3,
+"text": "Stumps bikhar gaye! Ghar wapas jao, bhaiya!"
+},
+"bowled_04": {
+"file": "bowled_04.ogg",
+"moment": "bowled",
+"ms": 10106,
+"prio": 3,
+"text": "Darwaza khula chhoda, aur chor andar aa gaya! Bowled!"
+},
+"bowled_05": {
+"file": "bowled_05.ogg",
+"moment": "bowled",
+"ms": 4006,
+"prio": 3,
+"text": "Oye hoye! Middle stump ne cartwheel maar diya!"
+},
+"bowled_06": {
+"file": "bowled_06.ogg",
+"moment": "bowled",
+"ms": 7906,
+"prio": 3,
+"text": "Bat aur pad ke beech se, seedha stumps! Kya gend hai!"
+},
+"bowled_07": {
+"file": "bowled_07.ogg",
+"moment": "bowled",
+"ms": 4807,
+"prio": 3,
+"text": "Clean bowled! Jaise sabzi kaat di ho!"
+},
+"bowled_08": {
+"file": "bowled_08.ogg",
+"moment": "bowled",
+"ms": 4106,
+"prio": 3,
+"text": "Timber! Lakdi ka dher laga diya!"
+},
+"caught_01": {
+"file": "caught_01.ogg",
+"moment": "caught",
+"ms": 4306,
+"prio": 3,
+"text": "Pakad liya! Haath mein gend, aur gale mein maala!"
+},
+"caught_02": {
+"file": "caught_02.ogg",
+"moment": "caught",
+"ms": 7406,
+"prio": 3,
+"text": "Upar gayi, neeche aayi, aur seedha jholi mein! Out!"
+},
+"caught_03": {
+"file": "caught_03.ogg",
+"moment": "caught",
+"ms": 5606,
+"prio": 3,
+"text": "Catch! Jaise maa ne garam roti thaali mein rakh di!"
+},
+"caught_04": {
+"file": "caught_04.ogg",
+"moment": "caught",
+"ms": 5806,
+"prio": 3,
+"text": "Shot toh bada tha, par fielder usse bhi bada nikla!"
+},
+"caught_05": {
+"file": "caught_05.ogg",
+"moment": "caught",
+"ms": 9206,
+"prio": 3,
+"text": "Hawa mein gend... aur pakdi gayi! Bas, khel khatam!"
+},
+"caught_06": {
+"file": "caught_06.ogg",
+"moment": "caught",
+"ms": 3507,
+"prio": 3,
+"text": "Chhakka maarne chala tha, catch de baitha!"
+},
+"caught_07": {
+"file": "caught_07.ogg",
+"moment": "caught",
+"ms": 4006,
+"prio": 3,
+"text": "Safe hands! Jaise bank ka locker!"
+},
+"caught_08": {
+"file": "caught_08.ogg",
+"moment": "caught",
+"ms": 5907,
+"prio": 3,
+"text": "Oye! Kya catch hai! Yeh fielder nahi, magnet hai!"
+},
+"caught_09": {
+"file": "caught_09.ogg",
+"moment": "caught",
+"ms": 7406,
+"prio": 3,
+"text": "Seedha fielder ke haath mein, jaise address likh ke bheja ho!"
+},
+"caught_10": {
+"file": "caught_10.ogg",
+"moment": "caught",
+"ms": 2867,
+"prio": 3,
+"text": "Lalach buri bala hai! Caught!"
+},
+"dot_01": {
+"file": "dot_01.ogg",
+"moment": "dot",
+"ms": 4707,
+"prio": 1,
+"text": "Koi run nahi. Bowler ne taala laga diya."
+},
+"dot_02": {
+"file": "dot_02.ogg",
+"moment": "dot",
+"ms": 7707,
+"prio": 1,
+"text": "Dot ball. Shaanti, shaanti."
+},
+"dot_03": {
+"file": "dot_03.ogg",
+"moment": "dot",
+"ms": 3706,
+"prio": 1,
+"text": "Rok diya. Deewar ki tarah khada hai."
+},
+"dot_04": {
+"file": "dot_04.ogg",
+"moment": "dot",
+"ms": 4106,
+"prio": 1,
+"text": "Kuch nahi hua... toofan se pehle ki khamoshi."
+},
+"dot_05": {
+"file": "dot_05.ogg",
+"moment": "dot",
+"ms": 5506,
+"prio": 1,
+"text": "Achhi gend, achha defence. Barabar ki takkar."
+},
+"dot_06": {
+"file": "dot_06.ogg",
+"moment": "dot",
+"ms": 4306,
+"prio": 1,
+"text": "Dot! Bowler muskura raha hai."
+},
+"dot_07": {
+"file": "dot_07.ogg",
+"moment": "dot",
+"ms": 5306,
+"prio": 1,
+"text": "Bat neeche, gend wahin. Koi run nahi."
+},
+"dot_08": {
+"file": "dot_08.ogg",
+"moment": "dot",
+"ms": 6006,
+"prio": 1,
+"text": "Ek aur khaali gend. Pressure badh raha hai, guru."
+},
+"dropped_01": {
+"file": "dropped_01.ogg",
+"moment": "dropped",
+"ms": 5407,
+"prio": 2,
+"text": "Arre arre arre! Chhod diya! Haath mein aayi aur nikal gayi!"
+},
+"dropped_02": {
+"file": "dropped_02.ogg",
+"moment": "dropped",
+"ms": 3706,
+"prio": 2,
+"text": "Gend makkhan thi kya? Phisal gayi!"
+},
+"dropped_03": {
+"file": "dropped_03.ogg",
+"moment": "dropped",
+"ms": 4606,
+"prio": 2,
+"text": "Drop! Yeh catch nahi, yeh toh dil tootna tha!"
+},
+"dropped_04": {
+"file": "dropped_04.ogg",
+"moment": "dropped",
+"ms": 5107,
+"prio": 2,
+"text": "Jeevan daan mil gaya! Ab dekhte hain kya karta hai."
+},
+"dropped_05": {
+"file": "dropped_05.ogg",
+"moment": "dropped",
+"ms": 2564,
+"prio": 2,
+"text": "Haathon mein chhed hai kya, bhai?"
+},
+"dropped_06": {
+"file": "dropped_06.ogg",
+"moment": "dropped",
+"ms": 7207,
+"prio": 2,
+"text": "Itna aasaan catch, aur zameen pe! Haaye rabba!"
+},
+"dropped_07": {
+"file": "dropped_07.ogg",
+"moment": "dropped",
+"ms": 5307,
+"prio": 2,
+"text": "Gend ne haath se shake-hand kiya aur chali gayi!"
+},
+"dropped_08": {
+"file": "dropped_08.ogg",
+"moment": "dropped",
+"ms": 4606,
+"prio": 2,
+"text": "Catches jitwaate hain match, aur yeh toh gira diya!"
+},
+"edgeFour_01": {
+"file": "edgeFour_01.ogg",
+"moment": "edgeFour",
+"ms": 7706,
+"prio": 2,
+"text": "Haha! Kismat ka chauka! Edge laga aur gend nikal gayi!"
+},
+"edgeFour_02": {
+"file": "edgeFour_02.ogg",
+"moment": "edgeFour",
+"ms": 9006,
+"prio": 2,
+"text": "Bat ka kona, aur chaar run! Upar waala meherbaan!"
+},
+"edgeFour_03": {
+"file": "edgeFour_03.ogg",
+"moment": "edgeFour",
+"ms": 5106,
+"prio": 2,
+"text": "Thick edge, thick luck! Four!"
+},
+"edgeFour_04": {
+"file": "edgeFour_04.ogg",
+"moment": "edgeFour",
+"ms": 4406,
+"prio": 2,
+"text": "Isko kehte hain jugaad ka chauka!"
+},
+"edgeFour_05": {
+"file": "edgeFour_05.ogg",
+"moment": "edgeFour",
+"ms": 5306,
+"prio": 2,
+"text": "Gend ne bat ko chhua, aur bhaag gayi slips ke beech se!"
+},
+"four_01": {
+"file": "four_01.ogg",
+"moment": "four",
+"ms": 5507,
+"prio": 2,
+"text": "Chaar run! Gend aise bhaagi jaise ghar pe biryani bani ho!"
+},
+"four_02": {
+"file": "four_02.ogg",
+"moment": "four",
+"ms": 6506,
+"prio": 2,
+"text": "Gap dhoondha, aur gap mein ghus gaya! Four!"
+},
+"four_03": {
+"file": "four_03.ogg",
+"moment": "four",
+"ms": 4807,
+"prio": 2,
+"text": "Fielder dekhta reh gaya, gend boundary chhoo gayi!"
+},
+"four_04": {
+"file": "four_04.ogg",
+"moment": "four",
+"ms": 4006,
+"prio": 2,
+"text": "Kya timing hai guru! Makhan mein chhuri!"
+},
+"four_05": {
+"file": "four_05.ogg",
+"moment": "four",
+"ms": 5207,
+"prio": 2,
+"text": "Saanp ki tarah sarakti hui, seedha rope tak!"
+},
+"four_06": {
+"file": "four_06.ogg",
+"moment": "four",
+"ms": 3206,
+"prio": 2,
+"text": "Chauka! Aur fielder ki saans phool gayi!"
+},
+"four_07": {
+"file": "four_07.ogg",
+"moment": "four",
+"ms": 5606,
+"prio": 2,
+"text": "Oye! Yeh toh express train thi, koi station nahi ruki!"
+},
+"four_08": {
+"file": "four_08.ogg",
+"moment": "four",
+"ms": 4606,
+"prio": 2,
+"text": "Boundary pe dastak di, darwaza khul gaya! Four!"
+},
+"four_09": {
+"file": "four_09.ogg",
+"moment": "four",
+"ms": 6306,
+"prio": 2,
+"text": "Shot mein itni class, jaise suit pehen ke khel raha ho!"
+},
+"four_10": {
+"file": "four_10.ogg",
+"moment": "four",
+"ms": 4806,
+"prio": 2,
+"text": "Chaar run, aur bowler ke chehre pe baarah baj gaye!"
+},
+"four_11": {
+"file": "four_11.ogg",
+"moment": "four",
+"ms": 4807,
+"prio": 2,
+"text": "Dhaage ki tarah seedha! Chauka!"
+},
+"four_12": {
+"file": "four_12.ogg",
+"moment": "four",
+"ms": 6607,
+"prio": 2,
+"text": "Gend ko GPS laga ke bheja hai, seedha gap mein!"
+},
+"hatTrick_01": {
+"file": "hatTrick_01.ogg",
+"moment": "hatTrick",
+"ms": 6306,
+"prio": 3,
+"text": "Hat-trick! Teen gend, teen wicket! Itihaas ban gaya!"
+},
+"hatTrick_02": {
+"file": "hatTrick_02.ogg",
+"moment": "hatTrick",
+"ms": 5006,
+"prio": 3,
+"text": "Oye hoye! Hat-trick! Yeh bowler nahi, jaadugar hai!"
+},
+"hatTrick_03": {
+"file": "hatTrick_03.ogg",
+"moment": "hatTrick",
+"ms": 8306,
+"prio": 3,
+"text": "Ek, do, teen! Hat-trick! Stadium paagal ho gaya!"
+},
+"hatTrick_04": {
+"file": "hatTrick_04.ogg",
+"moment": "hatTrick",
+"ms": 6107,
+"prio": 3,
+"text": "Hat-trick! Aaj toh bowler ke ghar Diwali hai!"
+},
+"lastOver_01": {
+"file": "lastOver_01.ogg",
+"moment": "lastOver",
+"ms": 5407,
+"prio": 2,
+"text": "Aakhri over! Dil ki dhadkan stadium mein sunai de rahi hai!"
+},
+"lastOver_02": {
+"file": "lastOver_02.ogg",
+"moment": "lastOver",
+"ms": 3706,
+"prio": 2,
+"text": "Chhe gend, aur saari kahaani baaki!"
+},
+"lastOver_03": {
+"file": "lastOver_03.ogg",
+"moment": "lastOver",
+"ms": 5006,
+"prio": 2,
+"text": "Yahi woh pal hai jahan hero bante hain!"
+},
+"lastOver_04": {
+"file": "lastOver_04.ogg",
+"moment": "lastOver",
+"ms": 2884,
+"prio": 2,
+"text": "Nakhoon chabaane ka time aa gaya, doston!"
+},
+"lastOver_05": {
+"file": "lastOver_05.ogg",
+"moment": "lastOver",
+"ms": 4306,
+"prio": 2,
+"text": "Aakhri over, aur saans rok ke baitho!"
+},
+"lbw_01": {
+"file": "lbw_01.ogg",
+"moment": "lbw",
+"ms": 6307,
+"prio": 3,
+"text": "Ungli upar! LBW! Seedha saamne fasa!"
+},
+"lbw_02": {
+"file": "lbw_02.ogg",
+"moment": "lbw",
+"ms": 5907,
+"prio": 3,
+"text": "Pad pe laga, aur umpire ne faisla suna diya! Out!"
+},
+"lbw_03": {
+"file": "lbw_03.ogg",
+"moment": "lbw",
+"ms": 6006,
+"prio": 3,
+"text": "Plumb! Jaise taraazu ka kaanta, ekdum seedha!"
+},
+"lbw_04": {
+"file": "lbw_04.ogg",
+"moment": "lbw",
+"ms": 6106,
+"prio": 3,
+"text": "LBW! Pair aage kiya, aur fas gaya!"
+},
+"lbw_05": {
+"file": "lbw_05.ogg",
+"moment": "lbw",
+"ms": 4006,
+"prio": 3,
+"text": "Wicket ke saamne khade the, aur wicket le gayi!"
+},
+"lost_01": {
+"file": "lost_01.ogg",
+"moment": "lost",
+"ms": 4106,
+"prio": 3,
+"text": "Haar gaye... par sher ki tarah lade!"
+},
+"lost_02": {
+"file": "lost_02.ogg",
+"moment": "lost",
+"ms": 5906,
+"prio": 3,
+"text": "Aaj din unka tha. Kal hamara hoga, guru!"
+},
+"lost_03": {
+"file": "lost_03.ogg",
+"moment": "lost",
+"ms": 5806,
+"prio": 3,
+"text": "Haar jeet toh chalti rehti hai, khel dil se khela!"
+},
+"lost_04": {
+"file": "lost_04.ogg",
+"moment": "lost",
+"ms": 5107,
+"prio": 3,
+"text": "Thoda sa chooke, bas! Agli baar dho daalenge!"
+},
+"lost_05": {
+"file": "lost_05.ogg",
+"moment": "lost",
+"ms": 4106,
+"prio": 3,
+"text": "Maidaan mein haare, dil mein nahi!"
+},
+"misfield_01": {
+"file": "misfield_01.ogg",
+"moment": "misfield",
+"ms": 4606,
+"prio": 2,
+"text": "Fumble! Gend ne fielder ko chakma de diya!"
+},
+"misfield_02": {
+"file": "misfield_02.ogg",
+"moment": "misfield",
+"ms": 5506,
+"prio": 2,
+"text": "Taangon ke beech se! Oye hoye, misfield!"
+},
+"misfield_03": {
+"file": "misfield_03.ogg",
+"moment": "misfield",
+"ms": 6406,
+"prio": 2,
+"text": "Fielder jhuka, gend nikal gayi, jaise machhli haath se!"
+},
+"misfield_04": {
+"file": "misfield_04.ogg",
+"moment": "misfield",
+"ms": 5406,
+"prio": 2,
+"text": "Do fielder, ek gend, aur dono ne ek doosre ko dekha!"
+},
+"misfield_05": {
+"file": "misfield_05.ogg",
+"moment": "misfield",
+"ms": 5606,
+"prio": 2,
+"text": "Extra run ka tohfa! Shukriya, fielder saab!"
+},
+"misfield_06": {
+"file": "misfield_06.ogg",
+"moment": "misfield",
+"ms": 4606,
+"prio": 2,
+"text": "Gend pakadne gaye the, gend ne unhe pakad liya!"
+},
+"noBall_01": {
+"file": "noBall_01.ogg",
+"moment": "noBall",
+"ms": 6406,
+"prio": 2,
+"text": "No ball! Free hit aa raha hai!"
+},
+"noBall_02": {
+"file": "noBall_02.ogg",
+"moment": "noBall",
+"ms": 3206,
+"prio": 2,
+"text": "Pair line ke paar! No ball!"
+},
+"noBall_03": {
+"file": "noBall_03.ogg",
+"moment": "noBall",
+"ms": 6406,
+"prio": 2,
+"text": "No ball! Bowler ne galti ki, batsman ki chaandi!"
+},
+"noBall_04": {
+"file": "noBall_04.ogg",
+"moment": "noBall",
+"ms": 6006,
+"prio": 2,
+"text": "Oye! Kamar se upar! No ball!"
+},
+"playedOn_01": {
+"file": "playedOn_01.ogg",
+"moment": "playedOn",
+"ms": 2964,
+"prio": 3,
+"text": "Arre! Khud hi stumps pe kheench li!"
+},
+"playedOn_02": {
+"file": "playedOn_02.ogg",
+"moment": "playedOn",
+"ms": 4307,
+"prio": 3,
+"text": "Andar ka edge, aur apne hi ghar mein aag!"
+},
+"playedOn_03": {
+"file": "playedOn_03.ogg",
+"moment": "playedOn",
+"ms": 5606,
+"prio": 3,
+"text": "Kismat kharaab! Gend bat se lagi aur stumps ko chhoo gayi."
+},
+"playedOn_04": {
+"file": "playedOn_04.ogg",
+"moment": "playedOn",
+"ms": 3706,
+"prio": 3,
+"text": "Apne hi pair pe kulhaadi maar li, guru!"
+},
+"quick20_01": {
+"file": "quick20_01.ogg",
+"moment": "quick20",
+"ms": 6906,
+"prio": 2,
+"text": "Kya tez innings hai! Run aise aa rahe hain jaise baarish!"
+},
+"quick20_02": {
+"file": "quick20_02.ogg",
+"moment": "quick20",
+"ms": 4607,
+"prio": 2,
+"text": "Yeh batsman aaj rukne waala nahi!"
+},
+"quick20_03": {
+"file": "quick20_03.ogg",
+"moment": "quick20",
+"ms": 4706,
+"prio": 2,
+"text": "Scoreboard bhaag raha hai, guru!"
+},
+"quick20_04": {
+"file": "quick20_04.ogg",
+"moment": "quick20",
+"ms": 3106,
+"prio": 2,
+"text": "Bowlers ki shaamat aa gayi aaj!"
+},
+"six_01": {
+"file": "six_01.ogg",
+"moment": "six",
+"ms": 7206,
+"prio": 3,
+"text": "Oye hoye! Yeh gend nahi, guided missile thi, seedha stands mein!"
+},
+"six_02": {
+"file": "six_02.ogg",
+"moment": "six",
+"ms": 8806,
+"prio": 3,
+"text": "Batsman ne aise maara, jaise dhobi kapde dhota hai... dho daala!"
+},
+"six_03": {
+"file": "six_03.ogg",
+"moment": "six",
+"ms": 6706,
+"prio": 3,
+"text": "Balle balle! Chhakka! Gend gayi chaand ki sair pe!"
+},
+"six_04": {
+"file": "six_04.ogg",
+"moment": "six",
+"ms": 5606,
+"prio": 3,
+"text": "Uda diya! Jaise patang kat ke aasmaan mein chali jaaye!"
+},
+"six_05": {
+"file": "six_05.ogg",
+"moment": "six",
+"ms": 7706,
+"prio": 3,
+"text": "Yeh shot nahi tha guru, yeh toh shaadi ka band baaja tha! Chhakka!"
+},
+"six_06": {
+"file": "six_06.ogg",
+"moment": "six",
+"ms": 4706,
+"prio": 3,
+"text": "Gend ne ticket kaata, aur seedha crowd ke beech jaa baithi!"
+},
+"six_07": {
+"file": "six_07.ogg",
+"moment": "six",
+"ms": 5007,
+"prio": 3,
+"text": "Oye mere sher! Kya maara hai, kya maara hai!"
+},
+"six_08": {
+"file": "six_08.ogg",
+"moment": "six",
+"ms": 6806,
+"prio": 3,
+"text": "Bowler soch raha tha yorker daalunga, batsman ne usse lassi bana ke pee liya!"
+},
+"six_09": {
+"file": "six_09.ogg",
+"moment": "six",
+"ms": 5107,
+"prio": 3,
+"text": "Chak de phatte! Chhe run, aur stadium hil gaya!"
+},
+"six_10": {
+"file": "six_10.ogg",
+"moment": "six",
+"ms": 7606,
+"prio": 3,
+"text": "Gend ko passport chahiye tha, itni door gayi hai!"
+},
+"six_11": {
+"file": "six_11.ogg",
+"moment": "six",
+"ms": 7006,
+"prio": 3,
+"text": "Aisa maara jaise tandoor se garam roti nikli ho... seedha boundary paar!"
+},
+"six_12": {
+"file": "six_12.ogg",
+"moment": "six",
+"ms": 6306,
+"prio": 3,
+"text": "Bowler ki line, batsman ki mehfil! Chhakka!"
+},
+"six_13": {
+"file": "six_13.ogg",
+"moment": "six",
+"ms": 6606,
+"prio": 3,
+"text": "Upar, upar, aur upar... gayi! Bye bye gend!"
+},
+"six_14": {
+"file": "six_14.ogg",
+"moment": "six",
+"ms": 9206,
+"prio": 3,
+"text": "Oye hoye! Isko kehte hain bat se kavita likhna!"
+},
+"sledge_01": {
+"file": "sledge_01.ogg",
+"moment": "sledge",
+"ms": 4407,
+"prio": 1,
+"text": "Oho! Aankhon aankhon mein baatein ho rahi hain!"
+},
+"sledge_02": {
+"file": "sledge_02.ogg",
+"moment": "sledge",
+"ms": 5006,
+"prio": 1,
+"text": "Garmaa garmi! Yeh match ab personal ho gaya!"
+},
+"sledge_03": {
+"file": "sledge_03.ogg",
+"moment": "sledge",
+"ms": 5306,
+"prio": 1,
+"text": "Bowler ne kuch kaha... batsman ne bat se jawaab diya!"
+},
+"sledge_04": {
+"file": "sledge_04.ogg",
+"moment": "sledge",
+"ms": 4407,
+"prio": 1,
+"text": "Chai mein shakkar kam, maidaan mein mirchi zyaada!"
+},
+"sledge_05": {
+"file": "sledge_05.ogg",
+"moment": "sledge",
+"ms": 5007,
+"prio": 1,
+"text": "Hehe! Thoda masala bhi zaroori hai, guru!"
+},
+"start_01": {
+"file": "start_01.ogg",
+"moment": "start",
+"ms": 7906,
+"prio": 2,
+"text": "Namaskar, sat sri akal, aur swagat hai! Aaj ka match dhamaakedaar hoga!"
+},
+"start_02": {
+"file": "start_02.ogg",
+"moment": "start",
+"ms": 6306,
+"prio": 2,
+"text": "Stadium bhara hua, josh bhara hua! Shuru karte hain!"
+},
+"start_03": {
+"file": "start_03.ogg",
+"moment": "start",
+"ms": 5506,
+"prio": 2,
+"text": "Oye hoye! Kya maahaul hai! Aaj toh chhakke barsenge!"
+},
+"start_04": {
+"file": "start_04.ogg",
+"moment": "start",
+"ms": 4906,
+"prio": 2,
+"text": "Pads pehno, bat uthao, aur ho jao shuru!"
+},
+"threeWickets_01": {
+"file": "threeWickets_01.ogg",
+"moment": "threeWickets",
+"ms": 6006,
+"prio": 2,
+"text": "Teesra wicket! Yeh bowler aaj aag ugal raha hai!"
+},
+"threeWickets_02": {
+"file": "threeWickets_02.ogg",
+"moment": "threeWickets",
+"ms": 5406,
+"prio": 2,
+"text": "Teen wicket! Batting line-up mein bhookamp!"
+},
+"threeWickets_03": {
+"file": "threeWickets_03.ogg",
+"moment": "threeWickets",
+"ms": 5407,
+"prio": 2,
+"text": "Ek ke baad ek! Jaise domino gir rahe hain!"
+},
+"threeWickets_04": {
+"file": "threeWickets_04.ogg",
+"moment": "threeWickets",
+"ms": 4107,
+"prio": 2,
+"text": "Teen shikaar! Sher aaj bhookha hai!"
+},
+"wide_01": {
+"file": "wide_01.ogg",
+"moment": "wide",
+"ms": 7306,
+"prio": 1,
+"text": "Wide! Itni door ki gend, ki pados waale stadium mein jaati."
+},
+"wide_02": {
+"file": "wide_02.ogg",
+"moment": "wide",
+"ms": 3906,
+"prio": 1,
+"text": "Wide ball. Muft ka run, shukriya!"
+},
+"wide_03": {
+"file": "wide_03.ogg",
+"moment": "wide",
+"ms": 4606,
+"prio": 1,
+"text": "Line bhatak gayi bowler ki! Wide!"
+},
+"wide_04": {
+"file": "wide_04.ogg",
+"moment": "wide",
+"ms": 3906,
+"prio": 1,
+"text": "Arre, nishaana chook gaya! Wide!"
+},
+"won_01": {
+"file": "won_01.ogg",
+"moment": "won",
+"ms": 5806,
+"prio": 3,
+"text": "Jeet gaye! Balle balle! Aaj raat bhangra hoga!"
+},
+"won_02": {
+"file": "won_02.ogg",
+"moment": "won",
+"ms": 6006,
+"prio": 3,
+"text": "Match khatam, jeet hamari! Chak de phatte!"
+},
+"won_03": {
+"file": "won_03.ogg",
+"moment": "won",
+"ms": 5606,
+"prio": 3,
+"text": "Oye hoye! Kya jeet hai! Dil garden garden ho gaya!"
+},
+"won_04": {
+"file": "won_04.ogg",
+"moment": "won",
+"ms": 6306,
+"prio": 3,
+"text": "Jeet ka swaad, jaise sarson ka saag aur makki di roti!"
+},
+"won_05": {
+"file": "won_05.ogg",
+"moment": "won",
+"ms": 6307,
+"prio": 3,
+"text": "Champion! Champion! Poora stadium naach raha hai!"
+},
+"won_06": {
+"file": "won_06.ogg",
+"moment": "won",
+"ms": 3907,
+"prio": 3,
+"text": "Yeh jeet yaad rakhi jaayegi, doston!"
+}
+}

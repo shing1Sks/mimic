@@ -1098,10 +1098,22 @@
       const h = web ? k.dataset.web : k.dataset.app; if (k.innerHTML !== h) k.innerHTML = h;
     });
     // a phone that is here but sends mouse: say so, do not bowl with the stand-in
-    const pp = $('phonepanel'), show = (st === 'phone-mouse' || window.__embUI.forcePhonePanel) && G.mode !== 'loading';
+    // (strictly boolean: `false || undefined` once left the panel up for good after motion arrived)
+    // a phone that has just connected sits on its mode screen for a moment: wait before nagging
+    const nowMs = performance.now();
+    if (st !== 'phone-mouse') G.ppSince = 0; else if (!G.ppSince) G.ppSince = nowMs;
+    const pp = $('phonepanel');
+    const show = !!((st === 'phone-mouse' && nowMs - G.ppSince > 2500) || window.__embUI.forcePhonePanel) && G.mode !== 'loading';
     if (pp.classList.contains('hidden') === show) {
       pp.classList.toggle('hidden', !show);
-      if (show) { $('pp-why').textContent = HINT_WHY[IN.S.phoneHint] || ''; if (G.mode === 'held') { G.mode = 'ready'; K.bodyStop(IN.body); } }
+      if (show) {
+        $('pp-why').textContent = HINT_WHY[IN.S.phoneHint] || '';
+        // a phone in a browser (QR) picks its mode on the page; the app has its own Grip screen
+        const web = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).some(g => g && /mimic web/i.test(g.id));
+        $('pp-step').innerHTML = web ? 'On your phone, tap <b>Grip</b> (or <b>Wand</b>) on the Mimic page. <em>Pad sends no motion.</em>'
+          : 'In the <b>Mimic app</b>, open <b>Grip</b> (or <b>Wand</b>). <em>Point and Pad send no motion.</em>';
+        if (G.mode === 'held') { G.mode = 'ready'; K.bodyStop(IN.body); }
+      }
     }
     // with the phone in hand there is no cursor (it comes back if the real mouse moves)
     const noCursor = on && performance.now() - IN.mouse.movedT > 1500;

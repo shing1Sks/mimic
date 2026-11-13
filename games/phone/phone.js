@@ -21,8 +21,16 @@
   let room = qs.get('room');
   if (room && !P.SAFE_ID.test(room)) room = null;
   const hint = MODES.includes(qs.get('mode')) ? qs.get('mode') : '';
-  const me = sget('mimic.phone.id') || P.randomId(10);
+  // one phone = one player: the id lives in localStorage, so a refresh or a second scan (often a
+  // new tab) rejoins as the same player instead of adding one; the game swaps the old link out
+  const lstore = (() => { try { return localStorage; } catch (e) { return null; } })();
+  const lget = k => { try { return lstore && lstore.getItem(k); } catch (e) { return null; } };
+  const me = lget('mimic.phone.id') || sget('mimic.phone.id') || P.randomId(10);
+  try { if (lstore) lstore.setItem('mimic.phone.id', me); } catch (e) { /* private mode */ }
   sset('mimic.phone.id', me);
+  // two tabs of this phone would keep taking the player from each other: the newest one wins
+  const tabs = (() => { try { return new BroadcastChannel('mimic-phone'); } catch (e) { return null; } })();
+  let retired = false;
 
   // ------------------------------------------------------------------ state
   const S = {
@@ -58,6 +66,7 @@
   }
 
   async function connect() {
+    if (retired) return;
     clearTimeout(C.timer);
     if (C.pc) { try { C.pc.close(); } catch (e) { /* gone */ } }
     const sid = C.sid = P.randomId(6);
@@ -75,6 +84,7 @@
     C.ctl.onopen = () => {
       if (C.sid !== sid) return;
       C.retry = 0;
+      if (tabs) try { tabs.postMessage({ t: 'active', room, sid }); } catch (e) { /* closed */ }
       setConn('ok', 'Connected');
       routeOf(pc).then(r => { if (C.sid === sid) { C.route = r; statusText(); } });
       sendCtl({ t: 'hello', mode: S.mode || hint || 'wand', name: deviceName });
@@ -108,7 +118,16 @@
       return pair && loc[pair.localCandidateId] ? loc[pair.localCandidateId].candidateType : '';
     } catch (e) { return ''; }
   }
+  function retire() {
+    retired = true; C.sid = null; clearTimeout(C.timer);
+    try { if (C.pc) C.pc.close(); } catch (e) { /* gone */ }
+    if (C.signal && C.signal.stop) C.signal.stop();
+    S.player = null;
+    setConn('bad', 'Playing in another tab. Reload here to play from this one.');
+  }
+  if (tabs) tabs.onmessage = e => { const m = e.data || {}; if (m.t === 'active' && m.room === room && m.sid !== C.sid && !retired) retire(); };
   function lost() {
+    if (retired) return;
     C.sid = null;
     clearTimeout(C.timer);
     C.retry++;
@@ -341,7 +360,7 @@
   function layoutGrip(W, H) {
     const g = 12, cH = 60, bH = Math.min(96, Math.max(70, H * 0.14));
     addCtl('center', 'CENTRE', 'aim straight from here', 'centre', { x: 0, y: 0, w: W, h: cH });
-    addCtl('a', 'HOLD', 'fire · grip · swing', 'hold', { x: 0, y: cH + g, w: W, h: H - cH - bH - 2 * g });
+    addCtl('a', 'HOLD', 'press here to fire · grip · swing (volume keys work only in the app)', 'hold', { x: 0, y: cH + g, w: W, h: H - cH - bH - 2 * g });
     const half = (W - g) / 2;
     addCtl('b', 'B', 'pause · back', 'mid', { x: 0, y: H - bH, w: half, h: bH });
     addCtl('one', 'SWITCH', 'next weapon · mode', 'sm', { x: half + g, y: H - bH, w: half, h: bH });

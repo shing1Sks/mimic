@@ -71,7 +71,7 @@
   const peers = new Map();          // phone id -> peer
   const listeners = { join: [], leave: [], change: [] };
   const emit = (ev, x) => (listeners[ev] || []).forEach(f => { try { f(x); } catch (e) { console.warn(e); } });
-  let signal = null, info = null, infoP = null, joinN = 0, infoKnown = false;
+  let signal = null, info = null, infoP = null, infoKnown = false;
 
   function ensureRoom() {
     if (!room) { room = P().randomId(8); sset('mimic.link.room', room); }
@@ -207,7 +207,7 @@
     const old = peers.get(id);
     if (old && old.sid === d.sid) return;
     if (old) closePc(old);
-    const p = old || { id, n: ++joinN, index: undefined, joined: false };
+    const p = old || { id, n: 0, index: undefined, joined: false };
     Object.assign(p, {
       sid: d.sid, mode: d.mode === 'pad' || d.mode === 'grip' ? d.mode : 'wand', name: String(d.name || 'Phone').slice(0, 24),
       pc: new RTCPeerConnection({ iceServers: ice }), iceQ: [], ctl: null, motion: null, open: false,
@@ -256,7 +256,8 @@
         if (changed) padEvent('gamepaddisconnected', p);
         p.mode = mode;
         if (m.name) p.name = String(m.name).slice(0, 24);
-        if (!p.joined) { p.joined = true; getGamepads(); padEvent('gamepadconnected', p); emit('join', publicPeer(p)); if (phones().length >= panelPlayers) closeSoon(1800); }
+        // the lowest player number no joined phone holds: failed attempts and phones that left don't count
+        if (!p.joined) { p.n = freePlayerNumber(p); p.joined = true; getGamepads(); padEvent('gamepadconnected', p); emit('join', publicPeer(p)); if (phones().length >= panelPlayers) closeSoon(1800); }
         else if (changed) { getGamepads(); padEvent('gamepadconnected', p); }
         ch.send(JSON.stringify({ t: 'welcome', player: p.n, index: p.index }));
         emit('change', phones());
@@ -311,6 +312,11 @@
     if (t - p._cntT >= 1000) { p.hz = Math.round(p._cnt * 1000 / (t - p._cntT)); p._cnt = 0; p._cntT = t; }
   }
 
+  function freePlayerNumber(self) {
+    const taken = new Set(Array.from(peers.values()).filter(q => q !== self && q.joined && q.n).map(q => q.n));
+    let n = 1; while (taken.has(n)) n++;
+    return n;
+  }
   function closePc(p) {
     clearTimeout(p.pingT);
     try { if (p.ctl) p.ctl.onclose = null; p.pc.close(); } catch (e) { /* already gone */ }

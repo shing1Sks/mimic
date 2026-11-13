@@ -206,7 +206,7 @@
   // later. With `now` given, such a pad (no new report for FROZEN_MS) is left out.
   const FROZEN_MS = 3000;
   const frozen = (p, now) => !!p && /mimic/i.test(p.id || '') && !/mimic web/i.test(p.id || '') &&
-    p.timestamp > 0 && now - p.timestamp > FROZEN_MS && Array.from(p.axes || []).some(v => v !== 0);
+    now - (p.timestamp || 0) > FROZEN_MS && Array.from(p.axes || []).some(v => v !== 0);
   function mergeGamepads(real, virtuals, now) {
     const out = Array.from(real || []).map(p => (now !== undefined && frozen(p, now) ? null : p));
     const used = new Set();

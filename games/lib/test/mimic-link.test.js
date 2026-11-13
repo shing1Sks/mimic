@@ -95,6 +95,9 @@ const tests = {
     assert(!out.some(g => g && g === frozen), 'frozen app pad (non-zero axes, no update for 39 s) is gone');
     assert(out.includes(live) && out.includes(silent), 'a live pad and a silent (all-zero) pad stay');
     assert(out.some(g => g && /Mimic Web/.test(g.id)), 'the browser phone is listed');
+    // on a freshly loaded page Chrome reports such a pad with timestamp 0 (nothing since the load)
+    const fresh = pad(0, 'Mimic (Vendor: 038f Product: 1200)', [0.12, 0.78, -0.03, -0.1, 0, -0.04], 0);
+    assert(!P.mergeGamepads([fresh], [web], 67000).includes(fresh), 'a frozen pad with timestamp 0 is gone too');
   },
   // ---------------------------------------------------------------- ICE servers (TURN for phones on another network)
   async iceServersComeFromTheSiteWhenItHasThem() {

@@ -13,7 +13,7 @@ const seed = n => { let s = n; return () => (s = (s * 16807) % 2147483647) / 214
 const clock = () => { const c = { t: 100000 }; c.now = () => c.t; return c; };
 
 check('the bundled lines cover every moment the game calls', ['six', 'four', 'edgeFour', 'dot', 'beaten', 'appeal', 'bowled', 'caught', 'lbw', 'playedOn', 'dropped', 'misfield', 'sledge', 'lastOver', 'quick20', 'hatTrick', 'threeWickets', 'wide', 'noBall', 'won', 'lost', 'betweenOvers', 'start'].every(m => LINES.some(l => l.moment === m)));
-check('every line has an id, a moment, a priority 1-3 and subtitle text', LINES.every(l => l.id && l.moment && [1, 2, 3].includes(l.prio) && l.text.length > 3));
+check('every line has an id, a moment, a priority 1-4 and subtitle text', LINES.every(l => l.id && l.moment && [1, 2, 3, 4].includes(l.prio) && l.text.length > 3));
 {
   const c = clock(), s = C.createScheduler({ lines: LINES, now: c.now, rng: seed(1) });
   const d = s.moment('dot', c.t);
@@ -48,5 +48,20 @@ check('every line has an id, a moment, a priority 1-3 and subtitle text', LINES.
   check('without any audio clips, lines still come (subtitles only)', s2.moment('six', c.t) !== null);
 }
 
+{
+  // review: the result call must never be lost behind a long six or wicket clip
+  const c = clock(), s = C.createScheduler({ lines: LINES, now: c.now, rng: seed(5) });
+  s.moment('six', c.t); c.t += 300;
+  const won = s.moment('won', c.t);
+  check('the match-winning call interrupts the six that won it', won && won.moment === 'won');
+  c.t += 300;
+  check('...and nothing interrupts the result call', s.moment('caught', c.t) === null);
+  const c2 = clock(), s2 = C.createScheduler({ lines: LINES, now: c2.now, rng: seed(6) });
+  s2.moment('bowled', c2.t); c2.t += 800;
+  check('a wicket on the very next moment, inside 1.5 s of the last big call: waits', s2.moment('caught', c2.t) === null);
+  c2.t += 1000;
+  check('a new big moment interrupts an older big call after 1.5 s', s2.moment('caught', c2.t) !== null);
+  check('milestones (quick 20, three wickets) and results outrank a wicket call', ['quick20', 'threeWickets'].every(m => LINES.find(l => l.moment === m).prio >= 3) && ['won', 'lost', 'hatTrick'].every(m => LINES.find(l => l.moment === m).prio === 4));
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

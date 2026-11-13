@@ -818,7 +818,7 @@
  {
   "id": "quick20_01",
   "moment": "quick20",
-  "prio": 2,
+  "prio": 3,
   "note": "proud, impressed",
   "text": "Kya tez innings hai! Run aise aa rahe hain jaise baarish!",
   "say": "क्या तेज़ innings है! Run ऐसे आ रहे हैं जैसे बारिश!"
@@ -826,7 +826,7 @@
  {
   "id": "quick20_02",
   "moment": "quick20",
-  "prio": 2,
+  "prio": 3,
   "note": "proud, impressed",
   "text": "Yeh batsman aaj rukne waala nahi!",
   "say": "ये बल्लेबाज़ आज रुकने वाला नहीं!"
@@ -834,7 +834,7 @@
  {
   "id": "quick20_03",
   "moment": "quick20",
-  "prio": 2,
+  "prio": 3,
   "note": "proud, impressed",
   "text": "Scoreboard bhaag raha hai, guru!",
   "say": "Scoreboard भाग रहा है, गुरु!"
@@ -842,7 +842,7 @@
  {
   "id": "quick20_04",
   "moment": "quick20",
-  "prio": 2,
+  "prio": 3,
   "note": "proud, impressed",
   "text": "Bowlers ki shaamat aa gayi aaj!",
   "say": "Bowlers की शामत आ गई आज!"
@@ -850,7 +850,7 @@
  {
   "id": "hatTrick_01",
   "moment": "hatTrick",
-  "prio": 3,
+  "prio": 4,
   "note": "screaming with joy, beside himself",
   "text": "Hat-trick! Teen gend, teen wicket! Itihaas ban gaya!",
   "say": "Hat-trick! तीन गेंद, तीन wicket! इतिहास बन गया!"
@@ -858,7 +858,7 @@
  {
   "id": "hatTrick_02",
   "moment": "hatTrick",
-  "prio": 3,
+  "prio": 4,
   "note": "screaming with joy, beside himself",
   "text": "Oye hoye! Hat-trick! Yeh bowler nahi, jaadugar hai!",
   "say": "ओए होए! Hat-trick! ये bowler नहीं, जादूगर है!"
@@ -866,7 +866,7 @@
  {
   "id": "hatTrick_03",
   "moment": "hatTrick",
-  "prio": 3,
+  "prio": 4,
   "note": "screaming with joy, beside himself",
   "text": "Ek, do, teen! Hat-trick! Stadium paagal ho gaya!",
   "say": "एक, दो, तीन! Hat-trick! Stadium पागल हो गया!"
@@ -874,7 +874,7 @@
  {
   "id": "hatTrick_04",
   "moment": "hatTrick",
-  "prio": 3,
+  "prio": 4,
   "note": "screaming with joy, beside himself",
   "text": "Hat-trick! Aaj toh bowler ke ghar Diwali hai!",
   "say": "Hat-trick! आज तो bowler के घर दिवाली है!"
@@ -882,7 +882,7 @@
  {
   "id": "threeWickets_01",
   "moment": "threeWickets",
-  "prio": 2,
+  "prio": 3,
   "note": "admiring, a little awed",
   "text": "Teesra wicket! Yeh bowler aaj aag ugal raha hai!",
   "say": "तीसरा wicket! ये bowler आज आग उगल रहा है!"
@@ -890,7 +890,7 @@
  {
   "id": "threeWickets_02",
   "moment": "threeWickets",
-  "prio": 2,
+  "prio": 3,
   "note": "admiring, a little awed",
   "text": "Teen wicket! Batting line-up mein bhookamp!",
   "say": "तीन wicket! Batting line-up में भूकंप!"
@@ -898,7 +898,7 @@
  {
   "id": "threeWickets_03",
   "moment": "threeWickets",
-  "prio": 2,
+  "prio": 3,
   "note": "admiring, a little awed",
   "text": "Ek ke baad ek! Jaise domino gir rahe hain!",
   "say": "एक के बाद एक! जैसे domino गिर रहे हैं!"
@@ -906,7 +906,7 @@
  {
   "id": "threeWickets_04",
   "moment": "threeWickets",
-  "prio": 2,
+  "prio": 3,
   "note": "admiring, a little awed",
   "text": "Teen shikaar! Sher aaj bhookha hai!",
   "say": "तीन शिकार! शेर आज भूखा है!"
@@ -978,7 +978,7 @@
  {
   "id": "won_01",
   "moment": "won",
-  "prio": 3,
+  "prio": 4,
   "note": "an ecstatic victory roar",
   "text": "Jeet gaye! Balle balle! Aaj raat bhangra hoga!",
   "say": "जीत गए! बल्ले बल्ले! आज रात भंगड़ा होगा!"
@@ -986,7 +986,7 @@
  {
   "id": "won_02",
   "moment": "won",
-  "prio": 3,
+  "prio": 4,
   "note": "an ecstatic victory roar",
   "text": "Match khatam, jeet hamari! Chak de phatte!",
   "say": "Match ख़त्म, जीत हमारी! चक दे फट्टे!"
@@ -994,7 +994,7 @@
  {
   "id": "won_03",
   "moment": "won",
-  "prio": 3,
+  "prio": 4,
   "note": "an ecstatic victory roar",
   "text": "Oye hoye! Kya jeet hai! Dil garden garden ho gaya!",
   "say": "ओए होए! क्या जीत है! दिल garden garden हो गया!"
@@ -1002,7 +1002,7 @@
  {
   "id": "won_04",
   "moment": "won",
-  "prio": 3,
+  "prio": 4,
   "note": "an ecstatic victory roar",
   "text": "Jeet ka swaad, jaise sarson ka saag aur makki di roti!",
   "say": "जीत का स्वाद, जैसे सरसों का साग और मक्की दी रोटी!"
@@ -1010,7 +1010,7 @@
  {
   "id": "won_05",
   "moment": "won",
-  "prio": 3,
+  "prio": 4,
   "note": "an ecstatic victory roar",
   "text": "Champion! Champion! Poora stadium naach raha hai!",
   "say": "Champion! Champion! पूरा stadium नाच रहा है!"
@@ -1018,7 +1018,7 @@
  {
   "id": "won_06",
   "moment": "won",
-  "prio": 3,
+  "prio": 4,
   "note": "an ecstatic victory roar",
   "text": "Yeh jeet yaad rakhi jaayegi, doston!",
   "say": "ये जीत याद रखी जाएगी, दोस्तों!"
@@ -1026,7 +1026,7 @@
  {
   "id": "lost_01",
   "moment": "lost",
-  "prio": 3,
+  "prio": 4,
   "note": "warm and sympathetic, then rousing",
   "text": "Haar gaye... par sher ki tarah lade!",
   "say": "हार गए... पर शेर की तरह लड़े!"
@@ -1034,7 +1034,7 @@
  {
   "id": "lost_02",
   "moment": "lost",
-  "prio": 3,
+  "prio": 4,
   "note": "warm and sympathetic, then rousing",
   "text": "Aaj din unka tha. Kal hamara hoga, guru!",
   "say": "आज दिन उनका था। कल हमारा होगा, गुरु!"
@@ -1042,7 +1042,7 @@
  {
   "id": "lost_03",
   "moment": "lost",
-  "prio": 3,
+  "prio": 4,
   "note": "warm and sympathetic, then rousing",
   "text": "Haar jeet toh chalti rehti hai, khel dil se khela!",
   "say": "हार जीत तो चलती रहती है, खेल दिल से खेला!"
@@ -1050,7 +1050,7 @@
  {
   "id": "lost_04",
   "moment": "lost",
-  "prio": 3,
+  "prio": 4,
   "note": "warm and sympathetic, then rousing",
   "text": "Thoda sa chooke, bas! Agli baar dho daalenge!",
   "say": "थोड़ा सा चूके, बस! अगली बार धो डालेंगे!"
@@ -1058,7 +1058,7 @@
  {
   "id": "lost_05",
   "moment": "lost",
-  "prio": 3,
+  "prio": 4,
   "note": "warm and sympathetic, then rousing",
   "text": "Maidaan mein haare, dil mein nahi!",
   "say": "मैदान में हारे, दिल में नहीं!"

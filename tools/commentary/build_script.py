@@ -140,19 +140,19 @@ Yahi woh pal hai jahan hero bante hain! | यही वो पल है जह�
 Nakhoon chabaane ka time aa gaya, doston! | नाख़ून चबाने का time आ गया, दोस्तों!
 Aakhri over, aur saans rok ke baitho! | आख़िरी over, और साँस रोक के बैठो!
 ''')
-m('quick20', 2, 'proud, impressed', '''
+m('quick20', 3, 'proud, impressed', '''
 Kya tez innings hai! Run aise aa rahe hain jaise baarish! | क्या तेज़ innings है! Run ऐसे आ रहे हैं जैसे बारिश!
 Yeh batsman aaj rukne waala nahi! | ये बल्लेबाज़ आज रुकने वाला नहीं!
 Scoreboard bhaag raha hai, guru! | Scoreboard भाग रहा है, गुरु!
 Bowlers ki shaamat aa gayi aaj! | Bowlers की शामत आ गई आज!
 ''')
-m('hatTrick', 3, 'screaming with joy, beside himself', '''
+m('hatTrick', 4, 'screaming with joy, beside himself', '''
 Hat-trick! Teen gend, teen wicket! Itihaas ban gaya! | Hat-trick! तीन गेंद, तीन wicket! इतिहास बन गया!
 Oye hoye! Hat-trick! Yeh bowler nahi, jaadugar hai! | ओए होए! Hat-trick! ये bowler नहीं, जादूगर है!
 Ek, do, teen! Hat-trick! Stadium paagal ho gaya! | एक, दो, तीन! Hat-trick! Stadium पागल हो गया!
 Hat-trick! Aaj toh bowler ke ghar Diwali hai! | Hat-trick! आज तो bowler के घर दिवाली है!
 ''')
-m('threeWickets', 2, 'admiring, a little awed', '''
+m('threeWickets', 3, 'admiring, a little awed', '''
 Teesra wicket! Yeh bowler aaj aag ugal raha hai! | तीसरा wicket! ये bowler आज आग उगल रहा है!
 Teen wicket! Batting line-up mein bhookamp! | तीन wicket! Batting line-up में भूकंप!
 Ek ke baad ek! Jaise domino gir rahe hain! | एक के बाद एक! जैसे domino गिर रहे हैं!
@@ -170,7 +170,7 @@ Pair line ke paar! No ball! | पैर line के पार! No ball!
 No ball! Bowler ne galti ki, batsman ki chaandi! | No ball! Bowler ने ग़लती की, बल्लेबाज़ की चाँदी!
 Oye! Kamar se upar! No ball! | ओए! कमर से ऊपर! No ball!
 ''')
-m('won', 3, 'an ecstatic victory roar', '''
+m('won', 4, 'an ecstatic victory roar', '''
 Jeet gaye! Balle balle! Aaj raat bhangra hoga! | जीत गए! बल्ले बल्ले! आज रात भंगड़ा होगा!
 Match khatam, jeet hamari! Chak de phatte! | Match ख़त्म, जीत हमारी! चक दे फट्टे!
 Oye hoye! Kya jeet hai! Dil garden garden ho gaya! | ओए होए! क्या जीत है! दिल garden garden हो गया!
@@ -178,7 +178,7 @@ Jeet ka swaad, jaise sarson ka saag aur makki di roti! | जीत का स्
 Champion! Champion! Poora stadium naach raha hai! | Champion! Champion! पूरा stadium नाच रहा है!
 Yeh jeet yaad rakhi jaayegi, doston! | ये जीत याद रखी जाएगी, दोस्तों!
 ''')
-m('lost', 3, 'warm and sympathetic, then rousing', '''
+m('lost', 4, 'warm and sympathetic, then rousing', '''
 Haar gaye... par sher ki tarah lade! | हार गए... पर शेर की तरह लड़े!
 Aaj din unka tha. Kal hamara hoga, guru! | आज दिन उनका था। कल हमारा होगा, गुरु!
 Haar jeet toh chalti rehti hai, khel dil se khela! | हार जीत तो चलती रहती है, खेल दिल से खेला!

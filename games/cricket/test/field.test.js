@@ -94,5 +94,17 @@ check('left-handed batter: the field is mirrored (slip on the other side)', F.se
   check('a fumble costs exactly one extra run (max 4)', on.filter(r => r.mishap && r.mishap.kind === 'fumble').every(r => r.type === 'runs' && r.runs >= 1 && r.runs <= 4));
   check('same seed, same result (replays stay deterministic)', JSON.stringify(run().map(r => [r.type, r.runs])) === JSON.stringify(on.map(r => [r.type, r.runs])));
 }
+{
+  // review: "two fielders" leave it to each other: the partner is a fielder, never the bowler
+  const keep = F.MISHAP.leaveIt; F.MISHAP.leaveIt = 1;
+  const seed = n => { let s = n; return () => (s = (s * 16807) % 2147483647) / 2147483647; };
+  const pick = seed(31); let bad = 0, n = 0;
+  for (let i = 0; i < 2000; i++) {
+    const r = F.resolve(hit(6 + pick() * 14, -60 + pick() * 120, 10 + pick() * 50), field, { rng: seed(i + 1), bowler: { x: 0, z: -19 } });
+    if (r.mishap && r.mishap.kind === 'leaveIt') { n++; if (r.mishap.with < 0 || r.mishap.by < 0) bad++; }
+  }
+  F.MISHAP.leaveIt = keep;
+  check('leave-it pairs are two fielders (never the bowler)', n > 0 && bad === 0, [n, bad]);
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

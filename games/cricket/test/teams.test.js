@@ -28,5 +28,17 @@ check('lineup: batters in order, wrapping', L.batter(0) === t0.players[0] && L.b
 check('lineup: bowlers are the last five, in rotation', [0, 1, 2, 3, 4, 5].map(L.bowler).join() === [10, 9, 8, 7, 6, 10].map(i => t0.players[i]).join());
 check('byId finds a team; an unknown id falls back to the first', T.byId('ind').name === 'India' && T.byId('nope') === T.TEAMS[0]);
 
+{
+  // review: distinct teams must also look distinct (kits on the field, the crowd halves, the HUD)
+  const rgb = n => [(n >> 16) & 255, (n >> 8) & 255, n & 255], hex = s => rgb(parseInt(s.slice(1), 16));
+  const d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  const close = [];
+  for (let i = 0; i < T.TEAMS.length; i++) for (let j = i + 1; j < T.TEAMS.length; j++) {
+    const a = T.TEAMS[i], b = T.TEAMS[j];
+    if (d(rgb(a.shirt), rgb(b.shirt)) < 45) close.push(a.short + '/' + b.short + ' shirt');
+    if (d(hex(a.css), hex(b.css)) < 45) close.push(a.short + '/' + b.short + ' css');
+  }
+  check('every pair of teams is told apart by shirt and HUD colour (RGB distance >= 45)', close.length === 0, close);
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

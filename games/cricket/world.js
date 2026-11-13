@@ -238,7 +238,8 @@
     };
     for (let i = 0; i < 36; i++) {
       const s = new T.Sprite(new T.SpriteMaterial({ map: null, depthWrite: false }));
-      s.scale.set(3.6, 1.8, 1);   // readable from the far end s.visible = false; scene.add(s); pool.push({ s, t: 0, y: 0, ph: Math.random() * 6 });
+      s.scale.set(3.6, 1.8, 1);   // readable from the far end
+      s.visible = false; scene.add(s); pool.push({ s, t: 0, y: 0, ph: Math.random() * 6 });
     }
     return {
       show(texts, side, css, secs) {

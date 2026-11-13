@@ -195,6 +195,7 @@
       }
     });
     people.ready = true;
+    cheerN = -1; cheerFrame(0);   // the cheerleaders on their platforms from the start (the title shows the ground)
     try { CK.crowdImpostors(scene, world.crowd, CK.bakeCrowdAtlas(renderer)); } catch (e) { console.warn('crowd atlas', e); }
     paintTeams();
   });
@@ -251,7 +252,7 @@
   // Paaji (CK.Commentary): the voice through the game's audio, his line as the subtitle
   const paajiPlayer = CK.Commentary.createPlayer({
     lines: CK.CommentaryLines, base: 'assets/commentary/',
-    audio: () => (AU.state.ctx && !AU.muted ? { ctx: AU.state.ctx, out: AU.state.master } : null),
+    audio: () => (AU.state.ctx ? { ctx: AU.state.ctx, out: AU.state.master } : null),   // muted = master gain 0
     enabled: () => opt('comm') === 'ON', volume: () => opt('commVol'),
     onLine: l => say(l.text, Math.max(2.2, l.text.length * 0.06)),
   });
@@ -778,7 +779,7 @@
     $('end-card').innerHTML = [a, b].map(x => `<div class="ec-row" style="--tc:${tcol(x.bat)}"><b>${m.names[x.bat]}</b><span>${x.runs}/${x.wkts}</span><small>${MA.oversText(x.balls)} ov · 4s ${x.fours} · 6s ${x.sixes}</small></div>`).join('');
     showScreen('end');
     if (r.winner >= 0) SFX.fanfare(true);
-    paaji(G.kind !== 'versus' && r.winner === 1 ? 'lost' : 'won');
+    if (r.winner >= 0) paaji(G.kind !== 'versus' && r.winner === 1 ? 'lost' : 'won');
     crowdReact('cheer', 0.8);
   }
 
@@ -809,7 +810,7 @@
     }
     plans.forEach((p, i) => {
       if (i === mis?.with && mis.kind === 'leaveIt') return;
-      if (i === o.by && o.at) { const d = Math.hypot(o.at.x - p.x, o.at.z - p.z); p.tx = o.at.x; p.tz = o.at.z; p.sp = d / Math.max(0.25, o.t - FI.F.REACT); }
+      if (i === o.by && o.at) { const d = Math.hypot(o.at.x - p.x, o.at.z - p.z), tAt = mis && mis.kind === 'misfield4' ? mis.missT : o.t; p.tx = o.at.x; p.tz = o.at.z; p.sp = d / Math.max(0.25, tAt - FI.F.REACT); }
       else if (ballDir && i !== 0) {
         const d = Math.hypot(ballDir.x - p.x, ballDir.z - p.z);
         if (d < 30) { p.tx = p.x + (ballDir.x - p.x) * 0.35; p.tz = p.z + (ballDir.z - p.z) * 0.35; p.sp = 4; }
@@ -819,7 +820,7 @@
       // the nearest outfielder chases it to the rope
       const end = o.flight.find(s => PH.fromCentre(s) > PH.FIELD.R) || o.flight[o.flight.length - 1];
       let bi = 1, bd = 1e9;
-      plans.forEach((p, i) => { if (!i) return; const d = Math.hypot(end.x - p.x, end.z - p.z); if (d < bd) { bd = d; bi = i; } });
+      plans.forEach((p, i) => { if (!i || (mis && mis.kind === 'misfield4' && i === o.by)) return; const d = Math.hypot(end.x - p.x, end.z - p.z); if (d < bd) { bd = d; bi = i; } });
       plans[bi].tx = end.x * 0.95; plans[bi].tz = PH.FIELD.CZ + (end.z - PH.FIELD.CZ) * 0.95; plans[bi].sp = 7;
     }
     G.fielderPlan = plans;
@@ -1442,6 +1443,7 @@
   // Screens, menus, options
   function showScreen(name) {
     G.screen = name || 'game';
+    $('bubble').classList.remove('on');
     ['title', 'lobby', 'pause', 'break', 'end', 'solo'].forEach(n => $(n).classList.toggle('hidden', n !== name));
     if (name === 'title' || name === 'lobby' || name === 'solo') $('hud').classList.add('hidden');
     refreshFocus();
@@ -1455,6 +1457,7 @@
   function setPaused(v, why) {
     if (!G.inGame || G.phase === 'over') return;
     G.paused = v;
+    if (v) $('bubble').classList.remove('on');
     $('pause-hint').innerHTML = why || 'Phone drifted? Point it at the screen and press <b>CENTRE</b> (or hold Vol Up).';
     showScreen(v ? 'pause' : null);
   }
@@ -1767,6 +1770,7 @@
   /** Title screen: the players warm up in the middle. */
   function idleScene(dt) {
     batMesh.visible = true;
+    cheerFrame(dt);
     const t = performance.now() / 1000;
     const q = BA.batQuat(-0.4 + Math.sin(t * 1.3) * 0.25, 0, 'vertical');
     const hands = { x: -0.26, y: 0.82, z: -1.06 };

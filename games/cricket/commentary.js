@@ -2,7 +2,8 @@
  * Willowlight - Paaji, the commentator. The scheduler is pure (node games/cricket/test/commentary.test.js);
  * the player decodes the clips once and plays them through the game's WebAudio.
  *
- * One line at a time. A bigger moment (prio 3: six, wicket, result) interrupts a smaller one; a
+ * One line at a time. A bigger moment (4: the result, a hat-trick; 3: six, wicket, milestone)
+ * interrupts a smaller one, and a new prio-3 moment cuts off an older one after 1.5 s; a
  * small one (prio 1: dot, between overs) waits out a cool-down so quiet balls stay quiet. No line
  * repeats within the last NO_REPEAT played, and a call for a moment more than a second old is
  * dropped (a hidden tab coming back does not unload a backlog). Lines come from commentary-lines.js
@@ -27,13 +28,15 @@
         const pool = byMoment[kind];
         if (!pool || !pool.length) return null;
         const prio = pool[0].prio;
-        if (playing && t < playing.until && prio <= playing.prio) return null;
+        // a bigger moment interrupts; an equal big one (prio 3) does once the last has had 1.5 s;
+        // results (prio 4) are never cut off
+        if (playing && t < playing.until && !(prio > playing.prio || (prio === 3 && playing.prio === 3 && t - playing.at >= 1500))) return null;
         if (prio === 1 && t - lastQuiet < cool) return null;
         const fresh = pool.filter(l => !recent.includes(l.id));
         const line = fresh.length ? fresh[Math.min(fresh.length - 1, Math.floor(rng() * fresh.length))]
           : pool.slice().sort((a, b) => recent.indexOf(a.id) - recent.indexOf(b.id))[0];
         recent.push(line.id); while (recent.length > noRepeat) recent.shift();
-        playing = { id: line.id, prio, until: t + lengthOf(line) };
+        playing = { id: line.id, prio, at: t, until: t + lengthOf(line) };
         if (prio === 1) lastQuiet = t;
         return line;
       },

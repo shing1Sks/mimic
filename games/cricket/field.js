@@ -77,7 +77,7 @@
         const d = Math.hypot(s.x - f.x, s.z - f.z), R = reach(s.t);
         if (d > R) continue;
         tried.add(f.i);
-        const other = all.find(g => g !== f && !g.keeper && !f.keeper && Math.hypot(s.x - g.x, s.z - g.z) <= R);
+        const other = f.i >= 0 && all.find(g => g !== f && g.i >= 0 && !g.keeper && !f.keeper && Math.hypot(s.x - g.x, s.z - g.z) <= R);   // two fielders, never the bowler
         if (other && mishap('leaveIt')) {
           // both go for it, both pull out: it drops between them
           dropped.push(f.name);

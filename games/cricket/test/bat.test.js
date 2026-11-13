@@ -144,5 +144,18 @@ function play(swing, tArr, o) {
   const drive = T.shot({ u: { x: 0, y: Math.sin(rad(20)) * 20, z: -Math.cos(rad(20)) * 20 }, b: { x: 0, y: -1, z: 0 }, ballV: BALL_V, ballP: { x: 0, y: 0.5, z: 0 }, q: 'middle', e: 0, side: 1, power: 1.75, phone: true, rng: seeded() });
   check('...while a +20 deg path still lofts as before (about 22 deg)', Math.abs(drive.loft - 22) < 1, drive.loft);
 }
+{
+  // a well-timed swing hits with its real power, even when the ball meets the bat past its peak
+  const L = v => Math.hypot(v.x, v.y, v.z);
+  const u = { x: 0, y: 1.2, z: -5.88 };                                   // 6 m/s at the moment of contact
+  const mid = T.contactVelocity(u, 12, 'middle');
+  check('middle: a 6 m/s contact from a 12 m/s peak hits at PEAK_SHARE x 12', Math.abs(L(mid) - 12 * T.BAT.PEAK_SHARE) < 1e-6 && T.BAT.PEAK_SHARE >= 0.9, L(mid));
+  check('...in the same direction', Math.abs(mid.y / L(mid) - u.y / L(u)) < 1e-9 && Math.abs(mid.z / L(mid) - u.z / L(u)) < 1e-9);
+  check('good timing gets it too', Math.abs(L(T.contactVelocity(u, 12, 'good')) - 12 * T.BAT.PEAK_SHARE) < 1e-6);
+  check('an edge keeps the contact speed (6 m/s)', Math.abs(L(T.contactVelocity(u, 12, 'edge')) - L(u)) < 1e-9);
+  const fast = { x: 0, y: 0, z: -13 };
+  check('never lowered: 13 m/s from a 12 m/s peak stays 13', Math.abs(L(T.contactVelocity(fast, 12, 'middle')) - 13) < 1e-9);
+  check('a still bat stays still', L(T.contactVelocity({ x: 0, y: 0, z: 0 }, 12, 'middle')) === 0);
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

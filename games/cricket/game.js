@@ -450,7 +450,8 @@
     const q = BA.quality(j.e, timingK(), BA.fit(blade, G.contact.p.y), push);
     G.lastTiming = j.e;
     if (q === 'miss') { beaten('miss', j.e); return; }
-    strike({ u: st.u, b: blade, e: j.e, q, push });
+    const u = batSeat().kind === 'phone' ? BA.contactVelocity(st.u, j.swing.peak, q) : st.u;   // a timed hit keeps its power
+    strike({ u, b: blade, e: j.e, q, push });
   }
   function feedTracker() {
     const inp = batSeat().input; if (!inp) return;

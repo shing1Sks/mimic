@@ -38,6 +38,10 @@
     // (Shifting all loft down kept catches the same and halved the sixes: not done.)
     LOFT_MAX: 45,       // deg: the steepest clean hit off a phone
     ASSIST: 0.7,        // how far a phone's blade turns towards the angle the ball's height needs
+    // recorded (95 clean shots): against 80-90 km/h spin the bat was 24% slower at contact than
+    // against pace (an early swing meets the ball past its fastest point); a timed hit keeps all of it.
+    // Replayed sessions: spin boundary rate 18% -> 50% of pace's (players also swing ~17% softer at spin)
+    PEAK_SHARE: 1.0,
   };
 
   function tracker() { return { hist: [], cur: null, swings: [] }; }
@@ -84,6 +88,17 @@
     const want = 70 + (10 - 70) * t, e = (el + k * (want - el)) * deg;
     const hz = Math.hypot(b.x, b.z), hx = hz > 1e-6 ? b.x / hz : 0, hzz = hz > 1e-6 ? b.z / hz : -1;
     return { x: Math.cos(e) * hx, y: -Math.sin(e), z: Math.cos(e) * hzz };
+  }
+
+  /**
+   * The bat's path at contact for the stroke: on a middle or good hit, at least PEAK_SHARE of the
+   * swing's peak speed (same direction), so a hard, well-timed swing hits slow bowling hard too.
+   */
+  function contactVelocity(u, peak, q) {
+    const s = Math.hypot(u.x, u.y, u.z);
+    if ((q !== 'middle' && q !== 'good') || s < 1e-9) return u;
+    const k = Math.max(s, BAT.PEAK_SHARE * (peak || 0)) / s;
+    return { x: u.x * k, y: u.y * k, z: u.z * k };
   }
 
   /** The bat at time t (ms): blade direction b (unit) and sweet-spot velocity u (m/s). */
@@ -225,7 +240,7 @@
     return B.norm(B.mul(B.mul(B.axisAngle(0, 1, 0, -(dir || 0)), B.axisAngle(1, 0, 0, lift || 0)), tilt));
   }
 
-  const api = { BAT, batQuat, tracker, step, swingBlade, assistBlade, stateAt, judge, fit, quality, shot, shotName, cpuShot };
+  const api = { BAT, batQuat, tracker, step, swingBlade, assistBlade, contactVelocity, stateAt, judge, fit, quality, shot, shotName, cpuShot };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (root) { root.CK = root.CK || {}; root.CK.Bat = api; }
 })(typeof window !== 'undefined' ? window : null);

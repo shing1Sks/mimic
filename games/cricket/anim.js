@@ -75,7 +75,21 @@
     return { y: 0, roll: 0 };
   }
 
-  const api = { solveElbow, elbowPole, handPair, forwardOf, rightOf, fieldAction, actionPose };
+  /** Hands for a gesture, in the athlete's own frame. st: { x, z, facing }. { left, right } or null. */
+  function gestureHands(kind, st) {
+    const f = forwardOf(st.facing || 0), r = rightOf(st.facing || 0);
+    const at = (side, up, fwd) => v(st.x + r.x * side + f.x * fwd, up, st.z + r.z * side + f.z * fwd);
+    switch (kind) {
+      case 'sendoff': return { right: at(0.7, 1.75, 0.15), left: at(-0.22, 0.95, 0.05) };      // "off you go", pointing away
+      case 'facepalm': return { left: at(-0.06, 1.62, 0.16), right: at(0.06, 1.66, 0.14) };
+      case 'shrug': return { left: at(-0.45, 1.05, 0.25), right: at(0.45, 1.05, 0.25) };
+      case 'appeal': return { left: at(-0.3, 2.3, 0.2), right: at(0.3, 2.3, 0.2) };
+      case 'cheer': return { left: at(-0.25, 2.25, 0.1), right: at(0.25, 2.25, 0.1) };
+      default: return null;
+    }
+  }
+
+  const api = { solveElbow, elbowPole, handPair, forwardOf, rightOf, fieldAction, actionPose, gestureHands };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (root) { root.CK = root.CK || {}; root.CK.Anim = api; }
 })(typeof window !== 'undefined' ? window : null);

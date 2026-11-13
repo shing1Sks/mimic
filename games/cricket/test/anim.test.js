@@ -59,5 +59,20 @@ const rightOf = f => ({ x: -Math.cos(f), y: 0, z: Math.sin(f) });
   const l1 = A.actionPose(leap, 0);
   check('leap pose: in the air at the catch', Math.abs(l1.y - 0.5) < 0.05 && l1.roll === 0, l1);
 }
+{
+  // gesture hands, in the athlete's own frame
+  for (const f of [0, Math.PI]) {
+    const st = { x: 2, z: -10, facing: f }, R = rightOf(f), rel = p => ({ r: dot(sub(p, { x: 2, y: 0, z: -10 }), R), y: p.y });
+    const so = A.gestureHands('sendoff', st);
+    check(`sendoff (facing ${f.toFixed(1)}): right arm points out to his right, above the shoulder; left hand low`, rel(so.right).r > 0.5 && so.right.y > 1.6 && so.left.y < 1.2, so);
+    const fp = A.gestureHands('facepalm', st);
+    check('facepalm: both hands at the face', fp.left.y > 1.5 && fp.right.y > 1.5 && Math.abs(rel(fp.left).r) < 0.15 && Math.abs(rel(fp.right).r) < 0.15, fp);
+    const sh = A.gestureHands('shrug', st);
+    check('shrug: palms out at the waist, each on its own side', sh.left.y < 1.2 && rel(sh.left).r < -0.3 && rel(sh.right).r > 0.3, sh);
+    const ap = A.gestureHands('appeal', st);
+    check('appeal: both arms up', ap.left.y > 2 && ap.right.y > 2 && rel(ap.left).r < 0 && rel(ap.right).r > 0, ap);
+  }
+  check('unknown gesture: no arms', A.gestureHands('nope', { x: 0, z: 0, facing: 0 }) === null);
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

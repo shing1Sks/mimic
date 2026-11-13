@@ -216,7 +216,42 @@
     });
     mesh.frustumCulled = false;
     scene.add(mesh);
+    /** The fans' flags: the +x half for side A, the -x half for side B, with some white among them. */
+    uni.paint = (a, b) => {
+      pick.forEach((s, i) => mesh.setColorAt(i, col.setHex(i % 4 === 3 ? 0xffffff : s.x > 0 ? a : b).convertSRGBToLinear()));
+      mesh.instanceColor.needsUpdate = true;
+    };
     return uni;
+  }
+
+  /** Placards held up in the stands on a big moment, on the cheering side's half. */
+  function placards(scene, base) {
+    const tex = {}, pool = [];
+    const texOf = (text, css) => {
+      const k = text + css;
+      if (!tex[k]) tex[k] = canvasTex(256, 128, (c, w, h) => {
+        c.fillStyle = css; c.fillRect(0, 0, w, h); c.fillStyle = '#ffffff'; c.fillRect(8, 8, w - 16, h - 16);
+        c.fillStyle = '#14171f'; c.font = `900 ${text.length > 4 ? 46 : 92}px system-ui, sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.fillText(text, w / 2, h / 2 + 4);
+      });
+      return tex[k];
+    };
+    for (let i = 0; i < 36; i++) {
+      const s = new T.Sprite(new T.SpriteMaterial({ map: null, depthWrite: false }));
+      s.scale.set(3.6, 1.8, 1);   // readable from the far end s.visible = false; scene.add(s); pool.push({ s, t: 0, y: 0, ph: Math.random() * 6 });
+    }
+    return {
+      show(texts, side, css, secs) {
+        if (!texts.length) return;
+        const seats = base.filter(b => Math.sign(b.x) === side && b.y > 2);
+        pool.forEach((p, i) => {
+          const b = seats[Math.floor(Math.random() * seats.length)]; if (!b) return;
+          p.s.material.map = texOf(texts[i % texts.length], css); p.s.material.needsUpdate = true;
+          p.y = b.y + 1.9; p.s.position.set(b.x, p.y, b.z); p.t = secs * (0.8 + Math.random() * 0.4); p.s.visible = true;
+        });
+      },
+      update(dt, t) { pool.forEach(p => { if (p.t > 0) { p.t -= dt; p.s.position.y = p.y + Math.abs(Math.sin(t * 6 + p.ph)) * 0.35; if (p.t <= 0) p.s.visible = false; } }); },
+    };
   }
 
   // ------------------------------------------------------------------ stands
@@ -410,6 +445,7 @@
     crowd.update = function (dt) { crowd.t += dt; crowd.excite = Math.max(0, crowd.excite - dt * 0.18); if (crowd.impUpdate) crowd.impUpdate(); };
     const fx = fireworks(scene);
     const flagU = flags(scene, st.base);
+    const cards = placards(scene, st.base);
     // big screens: one over each sight screen, so the batter's view and the bowler's both see one
     const screens = [bigScreen(scene, 0, 16, CZ - RB - 20, 0), bigScreen(scene, 0, 16, CZ + RB + 20, Math.PI)];
     // LED boards and the rope: flash through the colours on a big moment
@@ -419,6 +455,7 @@
     let screenT = 0;
     const tick = dt => {
       fx.update(dt);
+      cards.update(dt, crowd.t);
       const m = bd.boards.material;
       if (flash.t > 0) { flash.t -= dt; const h = (crowd.t * 3) % 1; m.color.setHSL(h, 0.9, 0.62 + 0.25 * Math.sin(crowd.t * 30)); bd.tex.offset.x += dt * 0.8; }
       else m.color.setRGB(1, 1, 1);
@@ -434,7 +471,7 @@
     };
     /** What the big screens show: the score, or a big moment for `hot` seconds. */
     const screen = (o) => screens.forEach(sc => Object.assign(sc.S, o));
-    return { lights: { key, hemi, fill, rim }, crowd, stands: st, boards: bd, floods: fl, stumps: { bat: batEnd, bowl: bowlEnd }, fx, tick, screen };
+    return { lights: { key, hemi, fill, rim }, crowd, stands: st, boards: bd, floods: fl, stumps: { bat: batEnd, bowl: bowlEnd }, fx, tick, screen, flags: flagU, placards: cards };
   }
 
   CK.buildWorld = buildWorld;

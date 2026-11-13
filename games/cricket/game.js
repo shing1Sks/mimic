@@ -36,6 +36,8 @@
     hand1: { label: 'P2 PLAYS', vals: ['RIGHT-HANDED', 'LEFT-HANDED'], def: 0 },
     cpu: { label: 'COMPUTER', vals: ['CLUB', 'PRO'], def: 0 },
     replays: { label: 'REPLAYS', vals: ['ON', 'OFF'], def: 0 },
+    comm: { label: 'COMMENTARY', vals: ['ON', 'OFF'], def: 0 },
+    commVol: { label: 'COMMENTARY VOLUME', vals: [1, 0.7, 0.4], def: 0 },
     sound: { label: 'SOUND', vals: ['ON', 'OFF'], def: 0 },
     vol: { label: 'VOLUME', vals: [1, 0.8, 0.6, 0.4, 0.2], def: 0 },
     gfx: { label: 'GRAPHICS', vals: ['AUTO', 'HIGH', 'LOW'], def: 0 },
@@ -175,12 +177,30 @@
     people.umpire = CK.makeAthlete({ body: 'm', shirt: 0xf0f0ea, pants: 0x1c1c22, skin: 0xc68642, hair: 0x2a2a2a });
     for (let i = 0; i < 10; i++) people.fielders.push(CK.makeAthlete(Object.assign({}, KITS[1], { body: 'm', pads: i === 0, gloves: i === 0 ? 0xf2f2f2 : null, helmet: null, skin: [0xd9a273, 0x8d5524, 0xc68642, 0xf1c8a0][i % 4] })));
     [people.batter, people.nonStriker, people.bowler, people.umpire, ...people.fielders].forEach(a => scene.add(a.root));
+    // the stadium's cheerleaders: two on each of four platforms just past the rope
+    people.cheer = [];
+    const platM = new T.MeshStandardMaterial({ color: 0x1b1f2e, roughness: 0.6 }), ledM = new T.MeshBasicMaterial({ color: 0xff3d8b, toneMapped: false });
+    const pomM = [new T.MeshStandardMaterial({ color: 0xffd23f, roughness: 0.4, metalness: 0.3 }), new T.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.4, metalness: 0.4 })];
+    [[Math.PI - 0.4, 66], [Math.PI + 0.4, 66], [Math.PI / 2, 67], [-Math.PI / 2, 67]].forEach(([a, r], k) => {
+      const cx = Math.sin(a) * r, cz = PH.FIELD.CZ + Math.cos(a) * r, face = Math.atan2(-cx, PH.FIELD.CZ - cz);
+      const plat = new T.Group();
+      const top = new T.Mesh(new T.BoxGeometry(3.4, 0.8, 1.8), platM); top.position.y = 0.4; plat.add(top);
+      const led = new T.Mesh(new T.BoxGeometry(3.42, 0.14, 1.82), ledM); led.position.y = 0.72; plat.add(led);
+      plat.position.set(cx, 0, cz); plat.rotation.y = face; scene.add(plat);
+      for (const s of [-1, 1]) {
+        const A = CK.makeAthlete({ body: 'f', shirt: 0xff2f7d, pants: 0xffffff, skin: [0xf1c8a0, 0xc68642, 0xe0ac69, 0x8d5524][(k * 2 + (s > 0 ? 1 : 0)) % 4], hair: 0x1e140c });
+        scene.add(A.root);
+        const poms = [0, 1].map(j => { const m = new T.Mesh(new T.IcosahedronGeometry(0.14, 1), pomM[(k + j) % 2]); scene.add(m); return m; });
+        people.cheer.push({ A, poms, plat, x: cx + Math.cos(face) * 0.8 * s, z: cz - Math.sin(face) * 0.8 * s, face, ph: k * 0.7 + (s > 0 ? 0.35 : 0) });
+      }
+    });
     people.ready = true;
     try { CK.crowdImpostors(scene, world.crowd, CK.bakeCrowdAtlas(renderer)); } catch (e) { console.warn('crowd atlas', e); }
     paintTeams();
   });
   function paintTeams() {
     if (!people.ready || !G.match) return;
+    world.flags.paint(teamOf(0).shirt, teamOf(1).shirt);   // the fans: P1's side on the +x half, P2's on the -x half
     const inn = MA.current(G.match), bk = kitOf(inn.bat), fk = kitOf(inn.bowl);
     [people.batter, people.nonStriker].forEach(a => a.paint(bk));
     people.bowler.paint(fk);
@@ -216,7 +236,8 @@
     const firstBat = kind === 'versus' ? lobby.st.firstBat : kind === 'nets-bowl' ? 1 : 0;
     G.match = MA.create({ overs, wickets: wk, names: [0, 1].map(i => teamOf(i).name), firstBat });
     G.batRuns = [[], []];   // each innings: runs per batter (by wickets down)
-    G.att = CK.Attitude.context(); G.gesture = null;
+    G.att = CK.Attitude.context(); G.gesture = null; G.wkBalls = [];
+    setTimeout(() => paaji('start'), 1200);
     G.inGame = true; G.paused = false; G.result = null;
     showScreen(null);
     $('hud').classList.remove('hidden');
@@ -227,6 +248,42 @@
     AU.resume();
   }
 
+  // Paaji (CK.Commentary): the voice through the game's audio, his line as the subtitle
+  const paajiPlayer = CK.Commentary.createPlayer({
+    lines: CK.CommentaryLines, base: 'assets/commentary/',
+    audio: () => (AU.state.ctx && !AU.muted ? { ctx: AU.state.ctx, out: AU.state.master } : null),
+    enabled: () => opt('comm') === 'ON', volume: () => opt('commVol'),
+    onLine: l => say(l.text, Math.max(2.2, l.text.length * 0.06)),
+  });
+  let paajiLoading = false;
+  function paaji(kind) { if (!paajiLoading && AU.state.ctx) { paajiLoading = true; paajiPlayer.load(); } return paajiPlayer.moment(kind); }
+  /** The cheerleaders: a sway between balls, a pom-pom routine on the beat after a big moment. */
+  function cheerFrame(dt) {
+    if (!people.ready || !people.cheer) return;
+    const on = CK.Hype.extras(opt('gfx')).cheerleaders, t = performance.now() / 1000, dancing = G.dance > 0;
+    // far from the play: a new pose every 2nd frame while dancing, every 8th while swaying
+    cheerN = (cheerN + 1) % (dancing ? 2 : 8);
+    const step = cheerN === 0, _p = new T.Vector3();
+    cheerDt += dt;
+    for (const c of people.cheer) {
+      c.A.root.visible = on; c.plat.visible = on; c.poms.forEach(m => { m.visible = on; });
+      if (!on || !step) continue;
+      if (!c.shadowOff) { c.A.root.traverse(o => { o.castShadow = false; }); c.shadowOff = true; }
+      const beat = (t * 2.2 + c.ph) * Math.PI * 2, st = { x: c.x, z: c.z, facing: c.face };
+      let arms = null, y = 0.8;
+      if (dancing) {
+        const h = CK.Anim.gestureHands(Math.sin(beat / 2) > 0 ? 'cheer' : 'shrug', st);
+        if (Math.sin(beat / 2) <= 0) { h.left.y += 0.9; h.right.y += 0.9; }   // arms wide and high on the off-beat
+        const lift = 0.8 + Math.abs(Math.sin(beat)) * 0.2; h.left.y += lift; h.right.y += lift;   // standing on the platform
+        arms = { left: { hand: h.left }, right: { hand: h.right } };
+        y += Math.abs(Math.sin(beat)) * 0.2;
+      }
+      CK.poseAthlete(c.A, { x: c.x, z: c.z, facing: c.face + (dancing ? 0 : Math.sin(t * 1.3 + c.ph) * 0.25), y, run: 0, crouch: dancing ? 0 : 0.05, arms }, cheerDt);
+      ['left', 'right'].forEach((s, j) => { const palm = c.A.B.arms[s].palm; if (palm) { palm.getWorldPosition(_p); c.poms[j].position.copy(_p); } });
+    }
+    if (step) cheerDt = 0;
+  }
+  let cheerN = 0, cheerDt = 0;
   /** A reaction (CK.Attitude) after a moment: a gesture for a couple of seconds, maybe a chirp. */
   function attitude(ev, by) {
     if (!G.att) return;
@@ -234,6 +291,7 @@
     if (!r) return;
     r.by = by; r.until = performance.now() + r.secs * 1000;
     G.gesture = r;
+    if (r.line) paaji('sledge');
     if (r.gesture === 'batRaise') G.batCheer = Math.max(G.batCheer || 0, r.secs);
   }
   const gestureOn = who => { const g = G.gesture; return g && g.who === who && performance.now() < g.until && G.phase !== 'runup' ? g : null; };
@@ -251,6 +309,7 @@
   }
   function newBall(first) {
     if (G.att) G.att.ball++;
+    if (G.match && G.match.overs > 1 && inn() && inn().balls === (G.match.overs - 1) * 6 && inn().cur.length === 0) paaji('lastOver');
     G.phase = 'ready'; G.phaseT = 0; G.ball = null; G.ballOn = false; G.contact = null; G.outcome = null; G.hold = false;
     G.del = null; G.rel = null; G.path = null; G.cpuPlan = null; G.frames = []; G.stumpsFall = null; G.runs = null; G.fielderPlan = null;
     G.slow = 1; G.tracker = BA.tracker(); G.fed = 0;
@@ -493,7 +552,7 @@
     if (how === 'miss') {
       hud.shot(e !== undefined ? [['BEATEN', 'warn'], [e < 0 ? 'EARLY ' + Math.round(-e * 1000) + ' ms' : 'LATE ' + Math.round(e * 1000) + ' ms', '']] : [['BEATEN', 'warn']], e);
       SFX.whoosh(8);
-      if (Math.random() < 0.6) say(pick(LINES.beaten), 1.8);
+      paaji('beaten');
     }
   }
   /** Bat missed (or no shot): the pad, the stumps, a wide, then the keeper. */
@@ -519,7 +578,7 @@
   }
   function padHit(at) {
     SFX.thud(PH.len(G.ball.v), true);
-    attitude('appeal');
+    attitude('appeal'); paaji('appeal');
     const side = batSide();
     // would it have gone on to hit the stumps? (the same flight, the pad not there)
     const ghost = PH.run(G.ball, { until: b => b.p.z >= 0.05, samples: false }).end;
@@ -545,7 +604,7 @@
     const c = G.contact;
     SFX.glove();
     G.ballOn = false; ballMesh.visible = false;
-    if (c.wide) { endBallSoon(1.2, { runs: 0, extra: 'wd' }, 'TOO WIDE', 'WIDE'); say(LINES.wide[0], 1.8); return; }
+    if (c.wide) { endBallSoon(1.2, { runs: 0, extra: 'wd' }, 'TOO WIDE', 'WIDE'); paaji('wide'); return; }
     endBallSoon(1.0, { runs: 0, extra: noBall() ? 'nb' : null }, c.how === 'leave' ? 'WELL LEFT' : 'PAST THE EDGE', c.how === 'leave' ? 'LEFT ALONE' : 'BEATEN');
   }
   /** A full toss above the waist at the popping crease. */
@@ -620,7 +679,7 @@
     if (o.mishap && o.mishap.kind === 'misfield4' && !o.missCalled && G.t >= o.mishap.missT) {
       o.missCalled = true; crowdReact('ooh');
       banner('MISFIELD!', 'THROUGH ' + (o.name || '').toUpperCase() + "'S HANDS", 'neutral', 1.4);
-      attitude('mishap', o.by);
+      attitude('mishap', o.by); paaji('misfield');
     }
     if ((o.type === 'four' || o.type === 'six') && G.t >= o.t) {
       o.done = true;
@@ -633,9 +692,9 @@
     if (o.type === 'runs' && G.t >= o.t && !o.picked) {
       o.picked = true; holdBall(o.by);
       const mk = o.mishap && o.mishap.kind;
-      if (mk === 'leaveIt') { banner('LEFT IT!', 'TWO FIELDERS, NOBODY TAKES IT', 'neutral', 1.6); crowdReact('ooh'); attitude('mishap', o.by); }
-      else if (mk === 'fumble') { banner('FUMBLE!', (o.name || '').toUpperCase() + ' · EXTRA RUN', 'neutral', 1.4); crowdReact('ooh'); attitude('mishap', o.by); }
-      else if (o.dropped && o.dropped.length) { attitude('drop', o.by); banner('DROPPED!', o.dropped[0].toUpperCase() + ' PUTS IT DOWN', 'neutral', 1.6); crowdReact('ooh'); say(pick(['Put down! That should have been taken.', 'Dropped! A let-off.']), 2); }
+      if (mk === 'leaveIt') { banner('LEFT IT!', 'TWO FIELDERS, NOBODY TAKES IT', 'neutral', 1.6); crowdReact('ooh'); attitude('mishap', o.by); paaji('misfield'); }
+      else if (mk === 'fumble') { banner('FUMBLE!', (o.name || '').toUpperCase() + ' · EXTRA RUN', 'neutral', 1.4); crowdReact('ooh'); attitude('mishap', o.by); paaji('misfield'); }
+      else if (o.dropped && o.dropped.length) { attitude('drop', o.by); banner('DROPPED!', o.dropped[0].toUpperCase() + ' PUTS IT DOWN', 'neutral', 1.6); crowdReact('ooh'); paaji('dropped'); }
       const throwT = Math.max(0.5, o.back - o.t - FI.F.GATHER), fumbleT = mk === 'fumble' ? 0.9 : 0;   // a fumble: he gathers it again
       G.throwBall = { t0: G.t + FI.F.GATHER + fumbleT, dur: throwT, from: null, to: nearerEnd(o.at) };
     }
@@ -675,7 +734,8 @@
   /** Queue the end of this ball: banner words now (optional), record after `after` seconds. */
   function endBallSoon(after, rec, sub, main, replay) {
     if (G.ending) return;
-    if (!rec.runs && !rec.extra && !rec.wicket && !rec.boundary) attitude(G.contact && G.contact.how === 'miss' ? 'beaten' : 'dot');
+    if (!rec.runs && !rec.extra && !rec.wicket && !rec.boundary) { const bt = G.contact && G.contact.how === 'miss'; attitude(bt ? 'beaten' : 'dot'); if (!bt) paaji('dot'); }
+    if (rec.extra === 'nb') paaji('noBall');
     if (main) banner(main, sub || '', rec.extra ? 'neutral' : rec.runs ? 'good' : 'neutral', after);
     G.ending = { t: after, rec, replay: replay && opt('replays') === 'ON' && G.frames.length > 20 };
   }
@@ -686,14 +746,17 @@
   }
   function recordBall(rec) {
     const ib = G.match.i, bw = inn().wkts;
-    if (rec.runs && rec.extra !== 'wd' && G.batRuns) G.batRuns[ib][bw] = (G.batRuns[ib][bw] || 0) + rec.runs;
+    const before = (G.batRuns && G.batRuns[ib][bw]) || 0;
+    if (rec.runs && rec.extra !== 'wd' && G.batRuns) G.batRuns[ib][bw] = before + rec.runs;
+    if (before < 20 && G.batRuns && G.batRuns[ib][bw] >= 20) setTimeout(() => paaji('quick20'), 2600);
+    if (rec.wicket && bw + 1 === 3) setTimeout(() => paaji('threeWickets'), 2600);
     const ev = MA.record(G.match, rec);
     logEvent('ball', { rec, label: ev.label, score: [inn().runs, inn().wkts, inn().balls] });
     hud.ballDot(ev.label);
     updateScorebug();
     if (ev.matchOver || (ev.inningsOver && /^nets/.test(G.kind))) { G.phase = 'over'; setTimeout(() => (/^nets/.test(G.kind) ? endNets() : endMatch()), 600); return; }
     if (ev.inningsOver) { inningsBreak(); return; }
-    if (ev.over) { banner('END OF OVER', overSummary(), 'neutral', 1.8); world.crowd.wave = { a: Math.random() * 6.28, t: 6 }; AU.Crowd.chant(2); G.phase = 'between'; G.phaseT = 0; G.betweenT = 1.9; if (bowlSeat().kind === 'cpu') G.cpuStyle = G.cpuStyle === 'spin' ? 'pace' : 'spin'; return; }
+    if (ev.over) { paaji('betweenOvers'); banner('END OF OVER', overSummary(), 'neutral', 1.8); world.crowd.wave = { a: Math.random() * 6.28, t: 6 }; AU.Crowd.chant(2); G.phase = 'between'; G.phaseT = 0; G.betweenT = 1.9; if (bowlSeat().kind === 'cpu') G.cpuStyle = G.cpuStyle === 'spin' ? 'pace' : 'spin'; return; }
     newBall();
   }
   function overSummary() { const o = inn().overs[inn().overs.length - 1] || []; return o.join('  '); }
@@ -720,6 +783,7 @@
     $('end-card').innerHTML = [a, b].map(x => `<div class="ec-row" style="--tc:${tcol(x.bat)}"><b>${m.names[x.bat]}</b><span>${x.runs}/${x.wkts}</span><small>${MA.oversText(x.balls)} ov · 4s ${x.fours} · 6s ${x.sixes}</small></div>`).join('');
     showScreen('end');
     if (r.winner >= 0) SFX.fanfare(true);
+    paaji(G.kind !== 'versus' && r.winner === 1 ? 'lost' : 'won');
     crowdReact('cheer', 0.8);
   }
 
@@ -1262,33 +1326,45 @@
     captionT = hold || 2.2;
   }
   function hype(kind, info) {
+    const ex = CK.Hype.extras(opt('gfx'));
+    const hz = G.match && inn() ? CK.Hype.crowd(kind, { batting: teamOf(inn().bat).id, bowling: teamOf(inn().bowl).id }) : null;
+    if (hz) {
+      if (hz.groan) setTimeout(() => AU.Crowd.react('ooh', 0.3), 300);   // the other half of the ground
+      if (hz.band) SFX.band(kind);
+      if (hz.dance) G.dance = 4;
+      if (ex.placards && hz.placards.length) world.placards.show(hz.placards, teamOf(0).id === hz.roar ? 1 : -1, CK.Teams.byId(hz.roar).css, 3.2);
+    }
     if (kind === 'six') {
       crowdReact('roar'); world.crowd.excite = 1.6; SFX.horn(); SFX.drums(12); flash(0.35);
       world.boards.flash(3, true); AU.Crowd.chant(2);
       world.screen({ big: 'SIX!', sub: G.stroke ? G.stroke.kind : '', hot: 4, col: '#2fd3c3' });
       const o = info.flight && (info.flight.find(s => PH.fromCentre(s) > PH.FIELD.R) || info.flight[info.flight.length - 1]);
       const ax = o ? o.x : 0, az = o ? o.z : -60, d = Math.hypot(ax, az - PH.FIELD.CZ) || 1;
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < Math.round(10 * ex.fireworks); i++) {
         const a = Math.atan2(ax, az - PH.FIELD.CZ) + (i - 4.5) * 0.2 + (Math.random() - 0.5) * 0.1, r = PH.FIELD.R + 22;
         world.fx.burst({ x: Math.sin(a) * r, y: 36 + Math.random() * 14, z: PH.FIELD.CZ + Math.cos(a) * r }, i * 0.16 + (i > 5 ? 0.6 : 0));
       }
       void d;
       G.batCheer = 2.2;
       attitude('six');
-      say(pick(LINES.six), 2.6);
+      paaji('six');
     } else if (kind === 'four') {
       crowdReact('cheer', 0.85); world.crowd.excite = 1.15; SFX.drums(8); flash(0.2); world.boards.flash(2, true); AU.Crowd.chant(1);
       world.screen({ big: 'FOUR!', sub: G.stroke ? G.stroke.kind : '', hot: 3, col: '#ffc24d' });
       G.batCheer = 1.4;
       attitude('four');
-      say(pick(LINES.four), 2.2);
+      paaji(G.stroke && G.stroke.edge ? 'edgeFour' : 'four');
     } else if (kind === 'wicket') {
       crowdReact('roar'); world.crowd.excite = 1.3; SFX.horn(); SFX.drums(6); flash(0.25); world.boards.flash(2);
       world.screen({ big: 'OUT!', sub: info.how, hot: 3.5, col: '#ff6b7e' });
-      for (let i = 0; i < 4; i++) { const a = Math.PI + (i - 1.5) * 0.35; world.fx.burst({ x: Math.sin(a) * 84, y: 38 + Math.random() * 8, z: PH.FIELD.CZ + Math.cos(a) * 84 }, 0.5 + i * 0.2); }
+      for (let i = 0; i < Math.round(4 * ex.fireworks); i++) { const a = Math.PI + (i - 1.5) * 0.35; world.fx.burst({ x: Math.sin(a) * 84, y: 38 + Math.random() * 8, z: PH.FIELD.CZ + Math.cos(a) * 84 }, 0.5 + i * 0.2); }
       G.celebrate = { t: -0.55, dur: 1.7 };
       const h = info.how;
-      say(pick(h === 'BOWLED' ? LINES.bowled : h === 'PLAYED ON' ? LINES.playedon : h === 'LBW' ? LINES.lbw : LINES.caught), 2.4);
+      // three wickets on three balls running: the hat-trick call instead
+      const bn = inn() ? inn().balls : 0, wb = G.wkBalls || (G.wkBalls = []);
+      wb.push(bn);
+      const hat = wb.length >= 3 && wb[wb.length - 2] === bn - 1 && wb[wb.length - 3] === bn - 2;
+      paaji(hat ? 'hatTrick' : h === 'BOWLED' ? 'bowled' : h === 'PLAYED ON' ? 'playedOn' : h === 'LBW' ? 'lbw' : 'caught');
     }
   }
 
@@ -1417,7 +1493,7 @@
     const o = OPTS[k], v = o.vals[settings[k]];
     if (k === 'overs') return o.names[settings[k]];
     if (k === 'team0' || k === 'team1') return CK.Teams.byId(v).name.toUpperCase();
-    if (k === 'vol') return Math.round(v * 100) + '%';
+    if (k === 'vol' || k === 'commVol') return Math.round(v * 100) + '%';
     if (k === 'lag') return v + ' ms';
     if (k === 'gfx') return v + (v === 'AUTO' && !dyn.shadows ? ' · LIGHT' : '');
     return String(v);
@@ -1638,6 +1714,8 @@
     if (G.celebrate) G.celebrate.t += dt;
     bubbleFrame();
     if (G.batCheer > 0) G.batCheer -= dt;
+    if (G.dance > 0) G.dance -= dt;
+    cheerFrame(dt);
     // stump mic: the bowler's feet on the run-up, quicker and louder toward the crease
     if (G.phase === 'runup' && G.bowler.run > 0.3 && G.phaseT < RUN_T) { G.stepT -= dt; if (G.stepT <= 0) { G.stepT = 0.34 - 0.12 * G.phaseT / RUN_T; SFX.step(0.6 + 0.6 * G.phaseT / RUN_T); } }
     if (G.phase === 'ready' || G.phase === 'runup') bowlerFrame(dt, now);
@@ -1730,6 +1808,6 @@
   window.__cricket = {
     G, seats, settings, world, people, renderer, scene, camera, lobby, startMatch, startSolo, openLobby, toTitle, setPaused, setSeat, slotCtrl, changeOpt,
     get fps() { const s = fpsWin.reduce((a, b) => a + b, 0); return fpsWin.length / (s || 1); }, get renderScale() { return dyn.pr; }, get shadows() { return dyn.shadows; },
-    inn: () => G.match && inn(), hype, say, planViews, knockStumps, attitude,
+    inn: () => G.match && inn(), hype, say, planViews, knockStumps, attitude, paaji, paajiPlayer,
   };
 })();

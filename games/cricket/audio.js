@@ -116,6 +116,39 @@
         tone(t + i * 0.11, 0.3, { freq: f / 2, gain: 0.08, type: 'triangle' });
       });
     },
+    /**
+     * The stand's brass band with a dhol: an original sting. 'six': a rising fanfare over a
+     * bhangra-ish dhol beat; 'wicket': a short punchy call. Synthesised (no samples).
+     */
+    band(kind) {
+      if (!ok()) return;
+      const ctx = A.ctx, t0 = ctx.currentTime + 0.02, bus = ctx.createGain();
+      bus.gain.value = 0.32; bus.connect(A.sfx);
+      const N = n => 440 * Math.pow(2, (n - 69) / 12);
+      const brass = (midi, at, dur, v) => {
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(900, at); lp.frequency.linearRampToValueAtTime(2600, at + 0.06); lp.Q.value = 2;
+        const g = ctx.createGain(); g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(v, at + 0.03); g.gain.setValueAtTime(v, at + dur - 0.06); g.gain.linearRampToValueAtTime(0, at + dur);
+        lp.connect(g); g.connect(bus);
+        [-7, 0, 6].forEach(cents => {
+          const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = N(midi); o.detune.value = cents;
+          const vib = ctx.createOscillator(), vg = ctx.createGain(); vib.frequency.value = 5.5; vg.gain.value = dur > 0.4 ? 6 : 0; vib.connect(vg); vg.connect(o.detune);
+          o.connect(lp); o.start(at); o.stop(at + dur + 0.02); vib.start(at); vib.stop(at + dur + 0.02);
+        });
+      };
+      const dhol = (at, low, v) => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine'; o.frequency.setValueAtTime(low ? 110 : 220, at); o.frequency.exponentialRampToValueAtTime(low ? 55 : 160, at + 0.18);
+        g.gain.setValueAtTime(v, at); g.gain.exponentialRampToValueAtTime(0.001, at + (low ? 0.35 : 0.15));
+        o.connect(g); g.connect(bus); o.start(at); o.stop(at + 0.4);
+      };
+      if (kind === 'six') {
+        [[67, 0, 0.14], [72, 0.15, 0.14], [76, 0.3, 0.14], [79, 0.45, 0.5], [76, 1.0, 0.14], [79, 1.15, 0.7]].forEach(([n, at, d]) => { brass(n, t0 + at, d, 0.5); brass(n - 12, t0 + at, d, 0.25); });
+        [0, 0.3, 0.45, 0.6, 0.9, 1.05, 1.2, 1.35, 1.5].forEach((at, i) => dhol(t0 + at, i % 3 === 0, i % 3 === 0 ? 0.9 : 0.5));
+      } else {
+        [[72, 0, 0.12], [72, 0.14, 0.12], [67, 0.28, 0.12], [72, 0.42, 0.55]].forEach(([n, at, d]) => { brass(n, t0 + at, d, 0.5); brass(n - 12, t0 + at, d, 0.25); });
+        [0, 0.28, 0.42].forEach((at, i) => dhol(t0 + at, i !== 1, 0.8));
+      }
+    },
     /** Stadium air horns: a brassy chord with a wobble, twice. */
     horn() {
       if (!ok()) return;

@@ -8,6 +8,7 @@ Also the dev signaling mailbox for the browser controller (games/lib/mimic-link.
   POST /signal/<room>                                body {from, to, type, data} -> {seq}
   GET  /signal/<room>?for=<id>&after=<seq>&wait=<ms> -> {seq, msgs: [...]}  (long-poll, <= 15 s)
   GET  /signal-info                                  -> {lan, port, lan_bound}
+  GET  /ice                                          -> {iceServers} (STUN only here; the site adds TURN)
 Held in memory only; the contract is in docs/browser-controller.md.
 
 Usage: python tools/serve.py [port] [--lan]
@@ -132,6 +133,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         path, _, query = self.path.partition('?')
+        if path == '/ice':   # the site serves TURN credentials here; on this LAN server STUN is enough
+            return self._json(200, {'iceServers': [{'urls': 'stun:stun.l.google.com:19302'}], 'turn': False})
         if path == '/signal-info':
             host = self.server.server_address[0]
             return self._json(200, {'lan': lan_ip(), 'port': self.server.server_address[1], 'lan_bound': host != '127.0.0.1'})

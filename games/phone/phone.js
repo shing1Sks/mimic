@@ -91,8 +91,14 @@
       lost();
       return;
     }
-    // no answer (game page closed, network blocks WebRTC): try again
-    C.timer = setTimeout(() => { if (C.sid === sid && (!C.ctl || C.ctl.readyState !== 'open')) lost(); }, 12000);
+    // no link yet: give a busy game page (heavy 3D on a slow PC) time to answer, and never cut an
+    // attempt that is still negotiating; ICE 'failed' above retries straight away
+    const giveUp = (left) => { C.timer = setTimeout(() => {
+      if (C.sid !== sid || (C.ctl && C.ctl.readyState === 'open')) return;
+      if (left > 0 && pc.remoteDescription && /checking|new/.test(pc.iceConnectionState)) return giveUp(left - 1);
+      lost();
+    }, 10000); };
+    C.timer = setTimeout(() => { if (C.sid === sid && (!C.ctl || C.ctl.readyState !== 'open')) giveUp(1); }, 10000);
   }
   /** 'relay' when the link goes through the TURN server (phone and game on networks that can't meet directly). */
   async function routeOf(pc) {

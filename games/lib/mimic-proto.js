@@ -282,12 +282,38 @@
     stop() { this.running = false; }
   }
 
+  // ---------------------------------------------------------------- ICE servers
+  // Two devices behind different NATs (a phone on 4G, a PC on campus Wi-Fi) can't open a direct
+  // WebRTC link with STUN alone; a TURN relay carries it then. The site serves short-lived TURN
+  // credentials at <signaling origin>/ice; without that endpoint (the dev server) it's STUN only.
+  const STUN = [{ urls: 'stun:stun.cloudflare.com:3478' }, { urls: 'stun:stun.l.google.com:19302' }];
+  const iceCache = new Map();
+  function iceServers(signalUrl, opts) {
+    opts = opts || {};
+    const f = opts.fetch || (typeof fetch !== 'undefined' ? fetch.bind(root || globalThis) : null);
+    let url;
+    try { url = new URL(signalUrl).origin + '/ice'; } catch (e) { return Promise.resolve(STUN); }
+    const hit = iceCache.get(url);
+    if (hit && hit.until > Date.now()) return hit.p;
+    if (!f) return Promise.resolve(STUN);
+    const p = Promise.race([
+      Promise.resolve().then(() => f(url, { cache: 'no-store' })).then(r => (r && r.ok ? r.json() : null)).catch(() => null),
+      new Promise(res => setTimeout(() => res(null), opts.timeoutMs || 2500)),
+    ]).then(j => {
+      const list = j && Array.isArray(j.iceServers) && j.iceServers.length ? j.iceServers : null;
+      if (!list) iceCache.delete(url);
+      return list || STUN;
+    });
+    iceCache.set(url, { p, until: Date.now() + 10 * 60 * 1000 });   // credentials last hours; refetch now and then
+    return p;
+  }
+
   const api = {
     G, SIG, MOTION_BUTTONS, PAD_BUTTONS, KIND,
     mul, conj, rotate, normalize, fromDeviceOrientation, yawReference, relative, gravityInPhone,
     sign, readSig, motionAxes, hatIndex, hatAxis, padGamepadState,
     encodeMotion, encodePad, decode, motionGamepad, padGamepad, mergeGamepads,
-    Signal, randomId, SAFE_ID,
+    Signal, randomId, SAFE_ID, iceServers, STUN,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (root) root.MimicProto = api;

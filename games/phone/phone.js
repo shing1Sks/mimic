@@ -9,7 +9,6 @@
   const P = window.MimicProto;
   const $ = id => document.getElementById(id);
   const qs = new URLSearchParams(location.search);
-  const ICE = [{ urls: 'stun:stun.l.google.com:19302' }];
   const SIG = qs.get('sig') || (location.origin + '/signal');
   const MODES = ['grip', 'wand', 'pad'];
   const nowAbs = () => performance.timeOrigin + performance.now();
@@ -55,7 +54,7 @@
   function statusText() {
     if (S.conn !== 'ok') return;
     const ms = S.rtt !== null ? ` · ${Math.max(1, Math.round(S.rtt / 2))} ms` : '';
-    setConn('ok', (S.player ? 'Player ' + S.player : 'Connected') + ms);
+    setConn('ok', (S.player ? 'Player ' + S.player : 'Connected') + ms + (C.route === 'relay' ? ' · via relay' : ''));
   }
 
   async function connect() {
@@ -64,7 +63,10 @@
     const sid = C.sid = P.randomId(6);
     C.iceQ = [];
     setConn('wait', C.retry ? 'Reconnecting to the game…' : 'Connecting to the game…');
-    const pc = C.pc = new RTCPeerConnection({ iceServers: ICE });
+    const ice = await P.iceServers(SIG);
+    if (C.sid !== sid) return;
+    C.route = '';
+    const pc = C.pc = new RTCPeerConnection({ iceServers: ice });
     // motion: newest sample wins, a lost one is never resent; ctl: buttons, mode, rumble, pings
     C.motion = pc.createDataChannel('motion', { ordered: false, maxRetransmits: 0 });
     C.ctl = pc.createDataChannel('ctl', { ordered: true });
@@ -73,6 +75,7 @@
       if (C.sid !== sid) return;
       C.retry = 0;
       setConn('ok', 'Connected');
+      routeOf(pc).then(r => { if (C.sid === sid) { C.route = r; statusText(); } });
       sendCtl({ t: 'hello', mode: S.mode || hint || 'wand', name: deviceName });
       sendState(true);
     };
@@ -90,12 +93,20 @@
     // no answer (game page closed, network blocks WebRTC): try again
     C.timer = setTimeout(() => { if (C.sid === sid && (!C.ctl || C.ctl.readyState !== 'open')) lost(); }, 12000);
   }
+  /** 'relay' when the link goes through the TURN server (phone and game on networks that can't meet directly). */
+  async function routeOf(pc) {
+    try {
+      const st = await pc.getStats(); let pair = null; const loc = {};
+      st.forEach(r => { if (r.type === 'candidate-pair' && (r.nominated || r.selected) && r.state === 'succeeded') pair = r; if (r.type === 'local-candidate') loc[r.id] = r; });
+      return pair && loc[pair.localCandidateId] ? loc[pair.localCandidateId].candidateType : '';
+    } catch (e) { return ''; }
+  }
   function lost() {
     C.sid = null;
     clearTimeout(C.timer);
     C.retry++;
     S.player = null;
-    setConn(C.retry > 2 ? 'bad' : 'wait', C.retry > 2 ? 'Can’t reach the game. Is its page open? Retrying…' : 'Reconnecting…');
+    setConn(C.retry > 2 ? 'bad' : 'wait', C.retry > 2 ? 'Can’t reach the game. Keep its page open on the computer; retrying…' : 'Reconnecting…');
     C.timer = setTimeout(connect, Math.min(5000, 600 * C.retry));
   }
   function onSignal(m) {

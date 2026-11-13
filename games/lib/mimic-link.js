@@ -47,7 +47,7 @@
     // page without its own data-mimic-join entry (a game that places its QRs keeps its HUD clear)
     button: attr('data-button'),
     mode: attr('data-mode') || '',
-    ice: [{ urls: 'stun:stun.l.google.com:19302' }],
+    ice: null,   // null: ask the site for TURN credentials (P().iceServers); an array here overrides it
   };
   const sameOriginSignal = httpPage && cfg.signal === location.origin + '/signal';
 
@@ -177,6 +177,7 @@
     ensureRoom();
     sset('mimic.link.active', '1');
     signal = new (P().Signal)(cfg.signal, room, 'host', onSignal, { wait: 8000 });
+    if (!cfg.ice) P().iceServers(cfg.signal);   // fetch TURN credentials now, so the first phone does not wait for them
     signal.start();
   }
 
@@ -198,13 +199,15 @@
 
   async function accept(id, d) {
     if (typeof RTCPeerConnection === 'undefined' || typeof d.sdp !== 'string') return;
+    if (peers.get(id) && peers.get(id).sid === d.sid) return;      // the same offer seen twice
+    const ice = cfg.ice || await P().iceServers(cfg.signal);
     const old = peers.get(id);
-    if (old && old.sid === d.sid) return;      // the same offer seen twice
+    if (old && old.sid === d.sid) return;
     if (old) closePc(old);
     const p = old || { id, n: ++joinN, index: undefined, joined: false };
     Object.assign(p, {
       sid: d.sid, mode: d.mode === 'pad' || d.mode === 'grip' ? d.mode : 'wand', name: String(d.name || 'Phone').slice(0, 24),
-      pc: new RTCPeerConnection({ iceServers: cfg.ice }), iceQ: [], ctl: null, motion: null, open: false,
+      pc: new RTCPeerConnection({ iceServers: ice }), iceQ: [], ctl: null, motion: null, open: false,
       axes: [0, 0, 0, 0, 0, 0], buttons: 0, pad: {}, ts: 0, lastSeq: 0,
       rttMs: null, offset: null, bestRtt: Infinity, latencyMs: null, hz: 0, _cnt: 0, _cntT: now(), t0: now(),
     });

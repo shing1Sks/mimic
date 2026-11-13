@@ -56,6 +56,22 @@ function decodeWith(samples, mode) {
 }
 
 const tests = {
+  // ---------------------------------------------------------------- ICE servers (TURN for phones on another network)
+  async iceServersComeFromTheSiteWhenItHasThem() {
+    const turn = [{ urls: ['turn:turn.example:3478?transport=udp'], username: 'u', credential: 'c' }];
+    const got = await P.iceServers('https://mimic.shing.in/signal', { fetch: async url => { assert.strictEqual(url, 'https://mimic.shing.in/ice'); return { ok: true, json: async () => ({ iceServers: turn }) }; } });
+    assert.deepStrictEqual(got, turn);
+  },
+  async iceServersFallBackToStunWithoutTheEndpoint() {
+    const got = await P.iceServers('http://127.0.0.1:8765/signal', { fetch: async () => ({ ok: false, status: 404 }) });
+    assert(got.length >= 1 && got.every(s => String(s.urls).startsWith('stun:')), JSON.stringify(got));
+  },
+  async iceServersDoNotWaitForASlowEndpoint() {
+    const t0 = Date.now();
+    const got = await P.iceServers('https://slow.example/signal', { fetch: () => new Promise(() => {}), timeoutMs: 150 });
+    assert(Date.now() - t0 < 1000, 'gave up quickly');
+    assert(got.every(s => String(s.urls).startsWith('stun:')));
+  },
   // ---------------------------------------------------------------- orientation -> axes -> mimic.js
   turningLeftIsPositiveYawAfterCentre() {
     const mc = decodeWith([[70, 0, 0], [100, 0, 0]], 'wand');   // centred facing 70 deg, then 30 deg left

@@ -177,7 +177,7 @@
     ensureRoom();
     sset('mimic.link.active', '1');
     signal = new (P().Signal)(cfg.signal, room, 'host', onSignal, { wait: 8000 });
-    if (!cfg.ice) P().iceServers(cfg.signal);   // fetch TURN credentials now, so the first phone does not wait for them
+    if (!cfg.ice && P().iceServers) P().iceServers(cfg.signal);   // fetch TURN credentials now, so the first phone does not wait for them
     signal.start();
   }
 
@@ -200,7 +200,7 @@
   async function accept(id, d) {
     if (typeof RTCPeerConnection === 'undefined' || typeof d.sdp !== 'string') return;
     if (peers.get(id) && peers.get(id).sid === d.sid) return;      // the same offer seen twice
-    const ice = cfg.ice || await P().iceServers(cfg.signal);
+    const ice = cfg.ice || (P().iceServers ? await P().iceServers(cfg.signal) : [{ urls: 'stun:stun.l.google.com:19302' }]);
     const old = peers.get(id);
     if (old && old.sid === d.sid) return;
     if (old) closePc(old);

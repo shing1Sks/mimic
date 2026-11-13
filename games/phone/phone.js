@@ -63,7 +63,8 @@
     const sid = C.sid = P.randomId(6);
     C.iceQ = [];
     setConn('wait', C.retry ? 'Reconnecting to the game…' : 'Connecting to the game…');
-    const ice = await P.iceServers(SIG);
+    // an older cached mimic-proto.js has no iceServers: connect STUN-only rather than stall
+    const ice = P.iceServers ? await P.iceServers(SIG) : [{ urls: 'stun:stun.l.google.com:19302' }];
     if (C.sid !== sid) return;
     C.route = '';
     const pc = C.pc = new RTCPeerConnection({ iceServers: ice });

@@ -23,6 +23,7 @@ check('no famous real player names', !all.some(n => FAMOUS.includes(n)));
 const idx = id => T.TEAMS.findIndex(t => t.id === id);
 check('pickOther never returns the taken team', T.TEAMS.every(t => T.pickOther(t.id, t.id) !== t.id && idx(T.pickOther(t.id, t.id)) >= 0));
 check('pickOther keeps a free choice', T.pickOther('pak', 'ind') === 'pak');
+check('pickOther steps the way the player is cycling (backwards too), wrapping round', T.pickOther('pak', 'pak', -1) === 'ind' && T.pickOther('ind', 'ind', -1) === T.TEAMS[T.TEAMS.length - 1].id && T.pickOther('pak', 'pak', 1) === 'aus');
 const t0 = T.TEAMS[0], L = T.lineup(t0);
 check('lineup: batters in order, wrapping', L.batter(0) === t0.players[0] && L.batter(2) === t0.players[2] && L.batter(11) === t0.players[0]);
 check('lineup: bowlers are the last five, in rotation', [0, 1, 2, 3, 4, 5].map(L.bowler).join() === [10, 9, 8, 7, 6, 10].map(i => t0.players[i]).join());

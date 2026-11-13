@@ -92,12 +92,13 @@
 
   /**
    * The bat's path at contact for the stroke: on a middle or good hit, at least PEAK_SHARE of the
-   * swing's peak speed (same direction), so a hard, well-timed swing hits slow bowling hard too.
+   * swing's peak speed (same direction, at most 3x the contact speed), so a hard, well-timed swing
+   * hits slow bowling hard too.
    */
   function contactVelocity(u, peak, q) {
     const s = Math.hypot(u.x, u.y, u.z);
     if ((q !== 'middle' && q !== 'good') || s < 1e-9) return u;
-    const k = Math.max(s, BAT.PEAK_SHARE * (peak || 0)) / s;
+    const k = Math.min(3, Math.max(s, BAT.PEAK_SHARE * (peak || 0)) / s);   // a near-still bat keeps its (noisy) direction small
     return { x: u.x * k, y: u.y * k, z: u.z * k };
   }
 

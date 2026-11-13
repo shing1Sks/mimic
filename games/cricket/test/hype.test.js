@@ -25,5 +25,14 @@ check('the band plays on a six and a wicket (a sting), not on a single', H.crowd
 check('an unknown event: a quiet crowd', (r => !r.roar && !r.groan && !r.placards.length && !r.dance)(H.crowd('nope', ctx)));
 check('lowest graphics: no cheerleaders, no placards, half the fireworks', (q => q.cheerleaders === false && q.placards === false && q.fireworks === 0.5)(H.extras('LOW')) && (q => q.cheerleaders && q.placards && q.fireworks === 1)(H.extras('HIGH')));
 
+{
+  // a hat-trick: three wickets on three balls running, same innings, same bowler
+  const w = (inn, ball, bowler) => ({ inn, ball, bowler });
+  check('three in a row by one bowler: hat-trick', H.hatTrick([w(0, 3, 'A'), w(0, 4, 'A')], w(0, 5, 'A')));
+  check('not across innings', !H.hatTrick([w(0, 4, 'A'), w(0, 5, 'A')], w(1, 6, 'A')));
+  check('not across a change of bowler', !H.hatTrick([w(0, 4, 'A'), w(0, 5, 'A')], w(0, 6, 'B')));
+  check('not with a gap', !H.hatTrick([w(0, 2, 'A'), w(0, 4, 'A')], w(0, 5, 'A')));
+  check('not with two wickets', !H.hatTrick([w(0, 4, 'A')], w(0, 5, 'A')));
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

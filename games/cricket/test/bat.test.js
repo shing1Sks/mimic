@@ -157,5 +157,10 @@ function play(swing, tArr, o) {
   check('never lowered: 13 m/s from a 12 m/s peak stays 13', Math.abs(L(T.contactVelocity(fast, 12, 'middle')) - 13) < 1e-9);
   check('a still bat stays still', L(T.contactVelocity({ x: 0, y: 0, z: 0 }, 12, 'middle')) === 0);
 }
+{
+  // a near-still contact on a good hit must not turn into a full-power shot in a noisy direction
+  const L = v => Math.hypot(v.x, v.y, v.z);
+  check('the boost is capped at 3x the contact speed', Math.abs(L(T.contactVelocity({ x: 0, y: 0.01, z: -0.5 }, 14, 'middle')) - 3 * Math.hypot(0.01, 0.5)) < 1e-9);
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -74,5 +74,9 @@ const rightOf = f => ({ x: -Math.cos(f), y: 0, z: Math.sin(f) });
   }
   check('unknown gesture: no arms', A.gestureHands('nope', { x: 0, z: 0, facing: 0 }) === null);
 }
+{
+  const st = { x: 0, z: 0, facing: 0 }, R = rightOf(0), h = A.gestureHands('stare', st);
+  check('stare: hands on hips, each on its own side, at the waist', h && h.left.y > 0.85 && h.left.y < 1.15 && dot(h.left, R) < -0.15 && dot(h.right, R) > 0.15, h);
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

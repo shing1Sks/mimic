@@ -71,13 +71,14 @@
       } catch (e) { /* no audio: subtitles only */ }
     }
     function stop() { if (src) { try { src.onended = null; src.stop(); } catch (e) { /* done */ } src = null; } }
-    function moment(kind) {
-      const line = sched.moment(kind, performance.now());
+    /** at: when the moment happened (ms); a delayed or throttled call more than 1 s late is dropped. */
+    function moment(kind, at) {
+      const line = sched.moment(kind, at === undefined ? performance.now() : at);
       if (!line) return null;
       if (o.onLine) o.onLine(line);
+      stop();
       const a = o.enabled() && o.audio(), buf = buffers[line.id];
       if (a && buf) {
-        stop();
         if (!gain) { gain = a.ctx.createGain(); gain.connect(a.out); }
         gain.gain.value = 1.5 * o.volume();
         src = a.ctx.createBufferSource(); src.buffer = buf; src.connect(gain);

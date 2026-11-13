@@ -81,6 +81,7 @@
     const at = (side, up, fwd) => v(st.x + r.x * side + f.x * fwd, up, st.z + r.z * side + f.z * fwd);
     switch (kind) {
       case 'sendoff': return { right: at(0.7, 1.75, 0.15), left: at(-0.22, 0.95, 0.05) };      // "off you go", pointing away
+      case 'stare': return { left: at(-0.24, 1.0, -0.04), right: at(0.24, 1.0, -0.04) };   // hands on hips, staring him down
       case 'facepalm': return { left: at(-0.06, 1.62, 0.16), right: at(0.06, 1.66, 0.14) };
       case 'shrug': return { left: at(-0.45, 1.05, 0.25), right: at(0.45, 1.05, 0.25) };
       case 'appeal': return { left: at(-0.3, 2.3, 0.2), right: at(0.3, 2.3, 0.2) };

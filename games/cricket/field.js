@@ -28,7 +28,7 @@
   // (+1 run), misfield4 of stops out beyond MISFIELD_R (through for four), leaveIt of catches two
   // fielders could reach (both leave it: put down). Rolled on the top of the rng's range, so a
   // forced rng of 0 (tests: "always held") never triggers one.
-  const MISHAP = { juggle: 0.25, fumble: 0.16, misfield4: 0.15, leaveIt: 0.3 };   // tuned: ~1 visible per 12 hits, runs +4%
+  const MISHAP = { juggle: 0.25, fumble: 0.16, misfield4: 0.15, leaveIt: 0.3 };   // tuned: ~1 visible per 12 hits, runs +5%
   const MISFIELD_R = 45;
   // [name, az (deg, right-handed frame: 0 = straight at the bowler, + = off side), r (m from the stumps)]
   const SETS = {

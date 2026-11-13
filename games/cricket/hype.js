@@ -23,7 +23,12 @@
     const low = gfx === 'LOW';
     return { cheerleaders: !low, placards: !low, fireworks: low ? 0.5 : 1 };
   }
-  const api = { crowd, extras };
+  /** A hat-trick: this wicket and the two before it on consecutive balls, same innings, same bowler. */
+  function hatTrick(prev, cur) {
+    const a = prev[prev.length - 1], b = prev[prev.length - 2];
+    return !!(a && b && [a, b].every(w => w.inn === cur.inn && w.bowler === cur.bowler) && a.ball === cur.ball - 1 && b.ball === cur.ball - 2);
+  }
+  const api = { crowd, extras, hatTrick };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (root) { root.CK = root.CK || {}; root.CK.Hype = api; }
 })(typeof window !== 'undefined' ? window : null);

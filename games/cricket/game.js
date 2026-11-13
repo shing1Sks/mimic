@@ -238,7 +238,7 @@
     G.match = MA.create({ overs, wickets: wk, names: [0, 1].map(i => teamOf(i).name), firstBat });
     G.batRuns = [[], []];   // each innings: runs per batter (by wickets down)
     G.att = CK.Attitude.context(); G.gesture = null; G.wkBalls = [];
-    setTimeout(() => paaji('start'), 1200);
+    paajiLater('start', 1200);
     G.inGame = true; G.paused = false; G.result = null;
     showScreen(null);
     $('hud').classList.remove('hidden');
@@ -257,14 +257,20 @@
     onLine: l => say(l.text, Math.max(2.2, l.text.length * 0.06)),
   });
   let paajiLoading = false;
-  function paaji(kind) { if (!paajiLoading && AU.state.ctx) { paajiLoading = true; paajiPlayer.load(); } return paajiPlayer.moment(kind); }
+  function paaji(kind, at) {
+    if (opt('comm') !== 'ON') return null;
+    if (!paajiLoading && AU.state.ctx) { paajiLoading = true; paajiPlayer.load(); }
+    return paajiPlayer.moment(kind, at);
+  }
+  /** A call a little after the moment; dropped if the tab was hidden and it fires more than 1 s late. */
+  function paajiLater(kind, ms) { const due = performance.now() + ms; setTimeout(() => paaji(kind, due), ms); }
   /** The cheerleaders: a sway between balls, a pom-pom routine on the beat after a big moment. */
   function cheerFrame(dt) {
     if (!people.ready || !people.cheer) return;
-    const on = CK.Hype.extras(opt('gfx')).cheerleaders, t = performance.now() / 1000, dancing = G.dance > 0;
+    const on = CK.Hype.extras(gfxLevel()).cheerleaders, t = performance.now() / 1000, dancing = G.dance > 0;
     // far from the play: a new pose every 2nd frame while dancing, every 8th while swaying
     cheerN = (cheerN + 1) % (dancing ? 2 : 8);
-    const step = cheerN === 0, _p = new T.Vector3();
+    const step = cheerN === 0, _p = _cheerP;
     cheerDt += dt;
     for (const c of people.cheer) {
       c.A.root.visible = on; c.plat.visible = on; c.poms.forEach(m => { m.visible = on; });
@@ -285,6 +291,7 @@
     if (step) cheerDt = 0;
   }
   let cheerN = 0, cheerDt = 0;
+  const _cheerP = new T.Vector3(), _bubP = new T.Vector3();
   /** A reaction (CK.Attitude) after a moment: a gesture for a couple of seconds, maybe a chirp. */
   function attitude(ev, by) {
     if (!G.att) return;
@@ -295,6 +302,7 @@
     if (r.line) paaji('sledge');
     if (r.gesture === 'batRaise') G.batCheer = Math.max(G.batCheer || 0, r.secs);
   }
+  const gfxLevel = () => (opt('gfx') === 'AUTO' && !dyn.shadows ? 'LOW' : opt('gfx'));   // AUTO dropped to light: no extras
   const gestureOn = who => { const g = G.gesture; return g && g.who === who && performance.now() < g.until && G.phase !== 'runup' ? g : null; };
   function bubbleFrame() {
     const el = $('bubble'), g = G.gesture;
@@ -302,10 +310,16 @@
     if (!on) { el.classList.remove('on'); return; }
     const A = g.who === 'batter' ? people.batter : g.who === 'fielder' ? people.fielders[g.by] : people.bowler;
     if (!A) { el.classList.remove('on'); return; }
-    const p = new T.Vector3(); A.root.getWorldPosition(p); p.y += 2.3; p.project(camera);
-    if (p.z > 1 || Math.abs(p.x) > 1.1 || Math.abs(p.y) > 1.1) { el.classList.remove('on'); return; }
+    // split-screen: whichever half sees him (each half has its own camera)
+    const split = (G.views || []).length > 1, halves = split ? [0, 1] : [0];
+    let at = null;
+    for (const i of halves) {
+      A.root.getWorldPosition(_bubP); _bubP.y += 2.3; _bubP.project(split ? camSt[i].cam : camera);
+      if (_bubP.z <= 1 && Math.abs(_bubP.x) <= 1.05 && Math.abs(_bubP.y) <= 1.05) { const w = split ? innerWidth / 2 : innerWidth; at = { x: i * (split ? w : 0) + (_bubP.x + 1) / 2 * w, y: (1 - _bubP.y) / 2 * innerHeight }; break; }
+    }
+    if (!at) { el.classList.remove('on'); return; }
     el.querySelector('span').textContent = g.line;
-    el.style.left = ((p.x + 1) / 2 * innerWidth) + 'px'; el.style.top = ((1 - p.y) / 2 * innerHeight) + 'px';
+    el.style.left = at.x + 'px'; el.style.top = at.y + 'px';
     el.classList.add('on');
   }
   function newBall(first) {
@@ -744,8 +758,8 @@
     const ib = G.match.i, bw = inn().wkts;
     const before = (G.batRuns && G.batRuns[ib][bw]) || 0;
     if (rec.runs && rec.extra !== 'wd' && G.batRuns) G.batRuns[ib][bw] = before + rec.runs;
-    if (before < 20 && G.batRuns && G.batRuns[ib][bw] >= 20) setTimeout(() => paaji('quick20'), 2600);
-    if (rec.wicket && bw + 1 === 3) setTimeout(() => paaji('threeWickets'), 2600);
+    if (before < 20 && G.batRuns && G.batRuns[ib][bw] >= 20) paajiLater('quick20', 2600);
+    if (rec.wicket && bw + 1 === 3) paajiLater('threeWickets', 2600);
     const ev = MA.record(G.match, rec);
     logEvent('ball', { rec, label: ev.label, score: [inn().runs, inn().wkts, inn().balls] });
     hud.ballDot(ev.label);
@@ -967,7 +981,7 @@
         f.face = d > 0.3 ? Math.atan2(dx, dz) : f.face;
         f.run = d > 0.3 ? clamp(P.sp / 7, 0.4, 1) : 0;
       } else if (G.phase === 'ready' || G.phase === 'runup' || G.phase === 'between') {
-        const dx = f.x - f.cur.x, dz = f.z - f.cur.z, d = Math.hypot(dx, dz), step = Math.min(d, 6 * dt);
+        const dx = f.x - f.cur.x, dz = f.z - f.cur.z, d = Math.hypot(dx, dz), step = Math.min(d, (d > 4 ? 10 : 6) * dt);   // back to the mark before the next ball
         if (d > 0.05) { f.cur.x += dx / d * step; f.cur.z += dz / d * step; }
         if (d > 0.6) f.face = Math.atan2(dx, dz);
         f.run = d > 0.6 ? 0.85 : Math.max(0, (f.run || 0) - dt * 3);
@@ -995,7 +1009,7 @@
       if (g && !st.arms && G.ballHeldBy !== i) {
         const who = g.who === 'fielder' && g.by === i ? g.gesture : g.gesture === 'appeal' && f.keeper ? 'appeal' : null;
         if (who) { const h = CK.Anim.gestureHands(who, st); if (h) st.arms = { left: { hand: h.left }, right: { hand: h.right } }; }
-        else if (g.huddle && !f.keeper && G.phase !== 'hit') {
+        else if (g.huddle && !f.keeper && (G.phase !== 'hit' || (G.outcome && G.outcome.type === 'caught' && G.outcome.done && G.ballHeldBy !== i))) {
           // the wicket huddle: the nearer fielders run in to the bowler, arms up once they get there
           const bx = G.bowler.x + Math.sin(i * 2.1) * 1.6, bz = G.bowler.z + Math.cos(i * 2.1) * 1.6;
           const dx = bx - f.cur.x, dz = bz - f.cur.z, d = Math.hypot(dx, dz);
@@ -1308,7 +1322,7 @@
     captionT = hold || 2.2;
   }
   function hype(kind, info) {
-    const ex = CK.Hype.extras(opt('gfx'));
+    const ex = CK.Hype.extras(gfxLevel());
     const hz = G.match && inn() ? CK.Hype.crowd(kind, { batting: teamOf(inn().bat).id, bowling: teamOf(inn().bowl).id }) : null;
     if (hz) {
       if (hz.groan) setTimeout(() => AU.Crowd.react('ooh', 0.3), 300);   // the other half of the ground
@@ -1343,9 +1357,10 @@
       G.celebrate = { t: -0.55, dur: 1.7 };
       const h = info.how;
       // three wickets on three balls running: the hat-trick call instead
-      const bn = inn() ? inn().balls : 0, wb = G.wkBalls || (G.wkBalls = []);
-      wb.push(bn);
-      const hat = wb.length >= 3 && wb[wb.length - 2] === bn - 1 && wb[wb.length - 3] === bn - 2;
+      const i0 = inn(), wb = G.wkBalls || (G.wkBalls = []);
+      const cur = { inn: G.match.i, ball: i0.balls, bowler: CK.Teams.lineup(teamOf(i0.bowl)).bowler(Math.floor(i0.balls / 6)) };
+      const hat = CK.Hype.hatTrick(wb, cur);
+      wb.push(cur);
       paaji(hat ? 'hatTrick' : h === 'BOWLED' ? 'bowled' : h === 'PLAYED ON' ? 'playedOn' : h === 'LBW' ? 'lbw' : 'caught');
     }
   }
@@ -1491,7 +1506,10 @@
     const n = OPTS[k].vals.length;
     settings[k] = (settings[k] + d + n) % n;
     // the two seats never share a team: skip over the other seat's
-    if ((k === 'team0' || k === 'team1') && settings.team0 === settings.team1) settings[k] = (settings[k] + d + n) % n;
+    if (k === 'team0' || k === 'team1') {
+      const ids = OPTS[k].vals, other = k === 'team0' ? 'team1' : 'team0';
+      settings[k] = ids.indexOf(CK.Teams.pickOther(ids[settings[k]], ids[settings[other]], d));
+    }
     if (k === 'gfx') { setShadows(opt('gfx') !== 'LOW'); dyn.t = dyn.n = dyn.sum = 0; }
     saveSettings(); refreshOpts(); SFX.ui('move');
   }

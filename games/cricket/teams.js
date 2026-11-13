@@ -41,11 +41,11 @@
   ];
 
   const byId = id => TEAMS.find(t => t.id === id) || TEAMS[0];
-  /** The team a seat gets when it wants `id` but the other seat has `taken`: the next one round. */
-  function pickOther(id, taken) {
+  /** The team a seat gets when it wants `id` but the other seat has `taken`: the next one round, in the direction dir (+1/-1). */
+  function pickOther(id, taken, dir) {
     if (id !== taken) return id;
-    const i = TEAMS.findIndex(t => t.id === id);
-    return TEAMS[(i + 1) % TEAMS.length].id;
+    const i = TEAMS.findIndex(t => t.id === id), n = TEAMS.length;
+    return TEAMS[(i + (dir < 0 ? -1 : 1) + n) % n].id;
   }
   /** Names for a team's innings: batter(n) by batting order (n = wickets down), bowler(over) from the last five. */
   function lineup(team) {

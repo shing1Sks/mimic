@@ -127,7 +127,7 @@
     rope.rotation.x = Math.PI / 2; rope.position.set(0, 0.06, CZ);
     scene.add(rope);
     // LED boards: a ring of glowing panels just past the rope
-    const words = ['WILLOWLIGHT', 'MIMIC', 'DUSK SERIES', 'SIX ZONE', 'GRIP & GO', 'FLOODLIT', 'HOWZAT', 'TWILIGHT CUP'];
+    const words = ['CHAK DE FATTE', 'MIMIC', 'DUSK SERIES', 'SIX ZONE', 'GRIP & GO', 'FLOODLIT', 'HOWZAT', 'TWILIGHT CUP'];
     const tex = canvasTex(4096, 64, (g, w, h) => {
       const cols = [['#0d1b3d', '#ffb547'], ['#3a0d2e', '#ff6b8b'], ['#062b2b', '#4fe0d0'], ['#1a1030', '#c9a8ff']];
       const n = 16, cw = w / n;
@@ -136,7 +136,7 @@
         const grd = g.createLinearGradient(i * cw, 0, i * cw, h); grd.addColorStop(0, bg); grd.addColorStop(1, '#05060c');
         g.fillStyle = grd; g.fillRect(i * cw, 0, cw, h);
         g.fillStyle = fg; g.font = 'italic 800 38px Bahnschrift, "Segoe UI", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-        g.fillText(words[i % words.length], i * cw + cw / 2, h / 2 + 2);
+        g.fillText(words[i % words.length], i * cw + cw / 2, h / 2 + 2, cw - 28);   // squeezed to its own panel
       }
     });
     tex.wrapS = T.RepeatWrapping; tex.repeat.set(3, 1);
@@ -178,7 +178,7 @@
         g.fillText(S.big, 256, 112);
         g.fillStyle = '#e6e0fb'; g.font = '600 30px Bahnschrift, "Segoe UI", sans-serif'; g.fillText(S.sub, 256, 210);
       } else {
-        g.fillStyle = '#ffc24d'; g.font = 'italic 800 34px Bahnschrift, "Segoe UI", sans-serif'; g.fillText('WILLOWLIGHT', 256, 46);
+        g.fillStyle = '#ffc24d'; g.font = 'italic 800 34px Bahnschrift, "Segoe UI", sans-serif'; g.fillText('CHAK DE FATTE', 256, 46);
         g.fillStyle = '#ffffff'; g.font = '800 92px Bahnschrift, "Segoe UI", sans-serif'; g.fillText(S.score, 256, 140);
         g.fillStyle = '#b2abcf'; g.font = '600 28px Bahnschrift, "Segoe UI", sans-serif'; g.fillText(S.sub, 256, 218);
       }

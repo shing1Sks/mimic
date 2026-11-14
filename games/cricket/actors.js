@@ -200,6 +200,27 @@
     if (kit.gloves) {
       ['left', 'right'].forEach(s => { const gl = new T.Mesh(new T.BoxGeometry(0.09, 0.11, 0.1), std({ color: kit.gloves, roughness: 0.6 })); addTo(B.arms[s].palm, gl, new T.Vector3(0, 0.05, 0)); });
     }
+    // a player's own look (teams.js): skin, hair, a beard or stubble on the chin, a taller or bigger frame
+    const SKIN = [0xf1c8a0, 0xe0ac69, 0xc68642, 0x8d5524, 0x5c3a21], HAIR = { k: 0x16100a, b: 0x5a3a1e, y: 0xc9a35a, r: 0x9a4a1c, g: 0x9a9a9a };
+    // the lower part of a sphere round the jaw, a little forward of the head bone's centre (hidden until a look asks)
+    let beard = null;
+    if (B.head && !kit.noBeard) {
+      beard = new T.Mesh(new T.SphereGeometry(0.105, 14, 8, Math.PI / 2 - 1.35, 2.7, Math.PI * 0.52, Math.PI * 0.36), std({ color: 0x16100a, roughness: 0.95, side: T.DoubleSide }));   // the front of the jaw only
+      beard.scale.set(1, 1.05, 1.0); beard.visible = false;
+      addTo(B.head, beard, new T.Vector3(0, 0.035, 0.022));
+    }
+    A.look = l => {
+      if (!l) return;
+      const hair = HAIR[l.hair] || HAIR.k, skin = SKIN[l.skin] !== undefined ? SKIN[l.skin] : SKIN[2];
+      A.paint({ skin, hair });
+      if (beard) {
+        beard.visible = l.beard > 0;
+        // stubble: the skin darkened toward the hair colour; a full beard: the hair colour
+        beard.material.color.set(l.beard > 1 ? hair : new T.Color(skin).lerp(new T.Color(hair), 0.55)).convertSRGBToLinear();
+      }
+      const tall = l.build === 'T' ? 1.05 : l.build === 's' ? 0.95 : 1, wide = l.build === 'h' ? 1.1 : 1;
+      holder.scale.set(k * wide * tall, k * tall, k * wide * tall);
+    };
     // fading (the camera sees through anyone standing in front of the play)
     A.allMats = [];
     root.traverse(o => { if (o.isMesh) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { if (!A.allMats.includes(m)) A.allMats.push(m); }); });

@@ -103,7 +103,7 @@
       // the seat this phone sat in (seats follow the order phones joined, not their index)
       const i = T.seats.findIndex(s => s.kind === 'phone' && s.mc && s.mc.slot === pi);
       if (!P.on || P.auto !== 'play' || i < 0) return;
-      if (role(i) === 'bowl' && G.phase === 'ready' && !P.busy && G.phaseT > 0.8 && G.screen === 'game') {
+      if (role(i) === 'bowl' && G.phase === 'ready' && !G.walk && !P.busy && G.phaseT > 0.8 && G.screen === 'game') {
         const spin = Math.random() < P.spinChance;
         P.bowl({ peakW: spin ? 12 + Math.random() * 3 : P.arm[0] + Math.random() * (P.arm[1] - P.arm[0]), yaw: gauss() * 0.06, rho0: spin ? 0 : gauss() * 0.3,
           twist: spin ? (Math.random() < 0.5 ? -1 : 1) * (14 + Math.random() * 10) : 0, upOffset: gauss() * 18, aimElev: P.aimElev != null ? P.aimElev : -12 - Math.random() * 8, aimHead: P.aimElev != null ? 0 : gauss() * 3 });

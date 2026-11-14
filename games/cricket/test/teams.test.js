@@ -14,12 +14,15 @@ check('India and Pakistan are there', ['India', 'Pakistan'].every(n => T.TEAMS.s
 check('every team: id, name, 3-letter short, kit colours, a css colour', T.TEAMS.every(t => t.id && t.name && /^[A-Z]{3}$/.test(t.short) && [t.shirt, t.pants, t.accent].every(c => Number.isInteger(c) && c >= 0 && c <= 0xffffff) && /^#[0-9a-f]{6}$/i.test(t.css)), T.TEAMS.map(t => t.short));
 check('ids and short names unique', new Set(T.TEAMS.map(t => t.id)).size === 14 && new Set(T.TEAMS.map(t => t.short)).size === 14);
 check('11 players per team, unique within the team', T.TEAMS.every(t => t.players.length === 11 && new Set(t.players).size === 11));
-const all = T.TEAMS.flatMap(t => t.players);
-check('no player name used twice anywhere', new Set(all).size === all.length, all.length - new Set(all).size);
 const REAL = ['Mumbai Indians', 'Chennai Super Kings', 'Royal Challengers', 'Kolkata Knight Riders', 'Sunrisers', 'Rajasthan Royals', 'Delhi Capitals', 'Punjab Kings', 'Lucknow Super Giants', 'Gujarat Titans', 'Daredevils', 'Kings XI', 'Deccan Chargers'];
-check('no real IPL franchise name in any team name', T.TEAMS.every(t => !REAL.some(r => t.name.toLowerCase().includes(r.toLowerCase()))));
-const FAMOUS = ['Virat Kohli', 'Rohit Sharma', 'MS Dhoni', 'Sachin Tendulkar', 'Babar Azam', 'Shaheen Afridi', 'Jasprit Bumrah', 'Steve Smith', 'Joe Root', 'Ben Stokes', 'Kane Williamson', 'Kagiso Rabada', 'Shubman Gill', 'Hardik Pandya', 'Rishabh Pant', 'Pat Cummins', 'Mitchell Starc', 'Quinton de Kock', 'Trent Boult', 'Mohammad Rizwan'];
-check('no famous real player names', !all.some(n => FAMOUS.includes(n)));
+check('no real IPL franchise name in any team name (trademarks)', T.TEAMS.every(t => !REAL.some(r => t.name.toLowerCase().includes(r.toLowerCase()))));
+check('real players: Virat Kohli for India, Babar Azam for Pakistan, MS Dhoni keeping for Chennai', T.byId('ind').players.includes('Virat Kohli') && T.byId('pak').players.includes('Babar Azam') && T.byId('che').players[T.byId('che').keeper] === 'MS Dhoni');
+check('every player has a look: skin 0-4, beard 0-2, a hair colour', T.TEAMS.every(t => t.looks.length === 11 && t.looks.every(l => l.skin >= 0 && l.skin <= 4 && [0, 1, 2].includes(l.beard) && 'kbyrg'.includes(l.hair))));
+check('every team has a keeper', T.TEAMS.every(t => t.keeper >= 0 && t.keeper < 11));
+{
+  const L2 = T.lineup(T.byId('ind')), f = L2.fielders(L2.bowlerIdx(0));
+  check('the field: ten, keeper first, never the bowler', f.length === 10 && f[0] === T.byId('ind').keeper && !f.includes(L2.bowlerIdx(0)) && new Set(f).size === 10, f);
+}
 const idx = id => T.TEAMS.findIndex(t => t.id === id);
 check('pickOther never returns the taken team', T.TEAMS.every(t => T.pickOther(t.id, t.id) !== t.id && idx(T.pickOther(t.id, t.id)) >= 0));
 check('pickOther keeps a free choice', T.pickOther('pak', 'ind') === 'pak');

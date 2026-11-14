@@ -63,5 +63,15 @@ check('every line has an id, a moment, a priority 1-4 and subtitle text', LINES.
   check('a new big moment interrupts an older big call after 1.5 s', s2.moment('caught', c2.t) !== null);
   check('milestones (quick 20, three wickets) and results outrank a wicket call', ['quick20', 'threeWickets'].every(m => LINES.find(l => l.moment === m).prio >= 3) && ['won', 'lost', 'hatTrick'].every(m => LINES.find(l => l.moment === m).prio === 4));
 }
+{
+  // his own famous lines (w: 3) are picked three times as readily as each original one
+  const L = [{ id: 'r1', moment: 'x', prio: 2, text: 'real one', w: 3 }, { id: 'o1', moment: 'x', prio: 2, text: 'orig one' }, { id: 'o2', moment: 'x', prio: 2, text: 'orig two' }, { id: 'o3', moment: 'x', prio: 2, text: 'orig six' }];
+  const c = clock(), s = C.createScheduler({ lines: L, now: c.now, rng: seed(9), noRepeat: 1 });
+  const n = {}; let prev = null, rep = 0;
+  for (let i = 0; i < 3000; i++) { const l = s.moment('x', c.t); n[l.id] = (n[l.id] || 0) + 1; if (l.id === prev) rep++; prev = l.id; s.done(l.id); c.t += 6000; }
+  const ratio = n.r1 / ((n.o1 + n.o2 + n.o3) / 3);
+  // with no back-to-back repeats, w:3 among four lines settles at 3/5 of the time after another line: 1.8x each other one
+  check('weighted lines: a w:3 line plays ~1.8x as often as each w:1 line here, never twice in a row', ratio > 1.6 && ratio < 2.0 && rep === 0, [n, ratio.toFixed(2)]);
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

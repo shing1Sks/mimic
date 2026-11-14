@@ -69,6 +69,13 @@
 "prio": 2,
 "text": "Is khiladi ki aankh mein aaj baaz ki nazar hai!"
 },
+"batterSet_r01": {
+"file": "batterSet_r01.ogg",
+"moment": "batterSet",
+"ms": 4306,
+"prio": 2,
+"text": "It's choice, not chance, that determines your destiny."
+},
 "batterStruggling_01": {
 "file": "batterStruggling_01.ogg",
 "moment": "batterStruggling",
@@ -96,6 +103,13 @@
 "ms": 4807,
 "prio": 1,
 "text": "Itni gendein, itne kam run... kuch toh karo, mere bhai!"
+},
+"batterStruggling_r01": {
+"file": "batterStruggling_r01.ogg",
+"moment": "batterStruggling",
+"ms": 8506,
+"prio": 1,
+"text": "Adversity will come, adversity will stare at you, but it's adversity that will make you better."
 },
 "beaten_01": {
 "file": "beaten_01.ogg",
@@ -145,6 +159,13 @@
 "ms": 3906,
 "prio": 1,
 "text": "Bach gaya! Aaj kismat saath hai."
+},
+"beaten_r01": {
+"file": "beaten_r01.ogg",
+"moment": "beaten",
+"ms": 3807,
+"prio": 1,
+"text": "Agar meri chachi ke moochh hoti, toh main unhe chacha kehta!"
 },
 "betweenOvers_01": {
 "file": "betweenOvers_01.ogg",
@@ -202,6 +223,69 @@
 "prio": 1,
 "text": "Ek over mein zindagi badal jaati hai, guru!"
 },
+"betweenOvers_r01": {
+"file": "betweenOvers_r01.ogg",
+"moment": "betweenOvers",
+"ms": 4007,
+"prio": 1,
+"text": "Positive anything is better than negative nothing."
+},
+"betweenOvers_r02": {
+"file": "betweenOvers_r02.ogg",
+"moment": "betweenOvers",
+"ms": 5406,
+"prio": 1,
+"text": "Patience is bitter, but the fruit is sweet."
+},
+"betweenOvers_r03": {
+"file": "betweenOvers_r03.ogg",
+"moment": "betweenOvers",
+"ms": 5007,
+"prio": 1,
+"text": "No one travels the road to success without a puncture or two."
+},
+"betweenOvers_r04": {
+"file": "betweenOvers_r04.ogg",
+"moment": "betweenOvers",
+"ms": 6406,
+"prio": 1,
+"text": "Experience is like a comb that life gives you when you are bald."
+},
+"betweenOvers_r05": {
+"file": "betweenOvers_r05.ogg",
+"moment": "betweenOvers",
+"ms": 5007,
+"prio": 1,
+"text": "Duniya mein sabse bada rog, mere baare mein kya kahenge log!"
+},
+"betweenOvers_r06": {
+"file": "betweenOvers_r06.ogg",
+"moment": "betweenOvers",
+"ms": 3207,
+"prio": 1,
+"text": "The only thing that can be earned without hard work is dandruff."
+},
+"betweenOvers_r07": {
+"file": "betweenOvers_r07.ogg",
+"moment": "betweenOvers",
+"ms": 5606,
+"prio": 1,
+"text": "Humility is like an underwear: you have to wear it, but you should not show it."
+},
+"betweenOvers_r08": {
+"file": "betweenOvers_r08.ogg",
+"moment": "betweenOvers",
+"ms": 4906,
+"prio": 1,
+"text": "If one-day cricket was pyjama cricket, then Twenty20 is underwear cricket!"
+},
+"betweenOvers_r09": {
+"file": "betweenOvers_r09.ogg",
+"moment": "betweenOvers",
+"ms": 6506,
+"prio": 1,
+"text": "Hope sees the invisible, feels the tangible. Hope is the biggest tope!"
+},
 "bowled_01": {
 "file": "bowled_01.ogg",
 "moment": "bowled",
@@ -258,6 +342,13 @@
 "prio": 3,
 "text": "Timber! Lakdi ka dher laga diya!"
 },
+"bowled_r01": {
+"file": "bowled_r01.ogg",
+"moment": "bowled",
+"ms": 5706,
+"prio": 3,
+"text": "The gap between bat and pad is so much, I would have driven a car through it!"
+},
 "bowlerBack_01": {
 "file": "bowlerBack_01.ogg",
 "moment": "bowlerBack",
@@ -306,6 +397,13 @@
 "ms": 5006,
 "prio": 1,
 "text": "Captain ne phir bharosa kiya hai... ab izzat bachaani hai!"
+},
+"bowlerExpensive_r01": {
+"file": "bowlerExpensive_r01.ogg",
+"moment": "bowlerExpensive",
+"ms": 3306,
+"prio": 1,
+"text": "His bowling at the moment is flat as a dosa."
 },
 "bowlerOnFire_01": {
 "file": "bowlerOnFire_01.ogg",
@@ -783,6 +881,13 @@
 "prio": 2,
 "text": "Aakhri over, aur saans rok ke baitho!"
 },
+"lastOver_r01": {
+"file": "lastOver_r01.ogg",
+"moment": "lastOver",
+"ms": 6606,
+"prio": 2,
+"text": "Nobody reads the novel to reach the middle of the story, it's the ending which is more important."
+},
 "lbw_01": {
 "file": "lbw_01.ogg",
 "moment": "lbw",
@@ -1154,6 +1259,27 @@
 "prio": 3,
 "text": "Oye hoye! Isko kehte hain bat se kavita likhna!"
 },
+"six_r01": {
+"file": "six_r01.ogg",
+"moment": "six",
+"ms": 3406,
+"prio": 3,
+"text": "Air hostess ko hello bolkar aai gend!"
+},
+"six_r02": {
+"file": "six_r02.ogg",
+"moment": "six",
+"ms": 5206,
+"prio": 3,
+"text": "Toofani chhakka, sultani chhakka, aur Hindustan hakka bakka!"
+},
+"six_r03": {
+"file": "six_r03.ogg",
+"moment": "six",
+"ms": 5006,
+"prio": 3,
+"text": "That ball went so high, it could have got an air hostess down with it!"
+},
 "sledge_01": {
 "file": "sledge_01.ogg",
 "moment": "sledge",
@@ -1188,6 +1314,13 @@
 "ms": 5007,
 "prio": 1,
 "text": "Hehe! Thoda masala bhi zaroori hai, guru!"
+},
+"sledge_r01": {
+"file": "sledge_r01.ogg",
+"moment": "sledge",
+"ms": 4306,
+"prio": 1,
+"text": "Even a hen, while laying an egg, cackles as if it is an asteroid!"
 },
 "start_01": {
 "file": "start_01.ogg",
@@ -1244,6 +1377,13 @@
 "ms": 4107,
 "prio": 3,
 "text": "Teen shikaar! Sher aaj bhookha hai!"
+},
+"threeWickets_r01": {
+"file": "threeWickets_r01.ogg",
+"moment": "threeWickets",
+"ms": 6606,
+"prio": 3,
+"text": "They are like bicycles in the cycle stand: if one falls down, the complete row will be down!"
 },
 "wide_01": {
 "file": "wide_01.ogg",
@@ -1314,5 +1454,12 @@
 "ms": 3907,
 "prio": 4,
 "text": "Yeh jeet yaad rakhi jaayegi, doston!"
+},
+"won_r01": {
+"file": "won_r01.ogg",
+"moment": "won",
+"ms": 5906,
+"prio": 4,
+"text": "You rate the ability of a man with what they finish, not with what they attempt."
 }
 }

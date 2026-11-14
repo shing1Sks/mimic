@@ -112,6 +112,33 @@
   "say": "ओए होए! इसको कहते हैं bat से कविता लिखना!"
  },
  {
+  "id": "six_r01",
+  "moment": "six",
+  "prio": 3,
+  "note": "build up with a grin, then explode with joy and roar the payoff",
+  "text": "Air hostess ko hello bolkar aai gend!",
+  "say": "Air hostess को hello बोलकर आई गेंद!",
+  "w": 3
+ },
+ {
+  "id": "six_r02",
+  "moment": "six",
+  "prio": 3,
+  "note": "build up with a grin, then explode with joy and roar the payoff",
+  "text": "Toofani chhakka, sultani chhakka, aur Hindustan hakka bakka!",
+  "say": "तूफ़ानी छक्का, सुल्तानी छक्का, और हिंदुस्तान हक्का बक्का!",
+  "w": 3
+ },
+ {
+  "id": "six_r03",
+  "moment": "six",
+  "prio": 3,
+  "note": "build up with a grin, then explode with joy and roar the payoff",
+  "text": "That ball went so high, it could have got an air hostess down with it!",
+  "say": "That ball went so high, it could have got an air hostess down with it!",
+  "w": 3
+ },
+ {
   "id": "four_01",
   "moment": "four",
   "prio": 2,
@@ -368,6 +395,15 @@
   "say": "बच गया! आज किस्मत साथ है।"
  },
  {
+  "id": "beaten_r01",
+  "moment": "beaten",
+  "prio": 1,
+  "note": "a sharp gasp, then admiring",
+  "text": "Agar meri chachi ke moochh hoti, toh main unhe chacha kehta!",
+  "say": "अगर मेरी चाची के मूँछ होती, तो मैं उन्हें चाचा कहता!",
+  "w": 3
+ },
+ {
   "id": "appeal_01",
   "moment": "appeal",
   "prio": 2,
@@ -470,6 +506,15 @@
   "note": "a dramatic roar, savouring the destruction",
   "text": "Timber! Lakdi ka dher laga diya!",
   "say": "Timber! लकड़ी का ढेर लगा दिया!"
+ },
+ {
+  "id": "bowled_r01",
+  "moment": "bowled",
+  "prio": 3,
+  "note": "a dramatic roar, savouring the destruction",
+  "text": "The gap between bat and pad is so much, I would have driven a car through it!",
+  "say": "The gap between bat and pad is so much, I would have driven a car through it!",
+  "w": 3
  },
  {
   "id": "caught_01",
@@ -776,6 +821,15 @@
   "say": "हेहे! थोड़ा मसाला भी ज़रूरी है, गुरु!"
  },
  {
+  "id": "sledge_r01",
+  "moment": "sledge",
+  "prio": 1,
+  "note": "cheeky, chuckling",
+  "text": "Even a hen, while laying an egg, cackles as if it is an asteroid!",
+  "say": "Even a hen, while laying an egg, cackles as if it is an asteroid!",
+  "w": 3
+ },
+ {
   "id": "lastOver_01",
   "moment": "lastOver",
   "prio": 2,
@@ -814,6 +868,15 @@
   "note": "tense, voice low then building",
   "text": "Aakhri over, aur saans rok ke baitho!",
   "say": "आख़िरी over, और साँस रोक के बैठो!"
+ },
+ {
+  "id": "lastOver_r01",
+  "moment": "lastOver",
+  "prio": 2,
+  "note": "tense, voice low then building",
+  "text": "Nobody reads the novel to reach the middle of the story, it's the ending which is more important.",
+  "say": "Nobody reads the novel to reach the middle of the story, it's the ending which is more important.",
+  "w": 3
  },
  {
   "id": "quick20_01",
@@ -910,6 +973,15 @@
   "note": "admiring, a little awed",
   "text": "Teen shikaar! Sher aaj bhookha hai!",
   "say": "तीन शिकार! शेर आज भूखा है!"
+ },
+ {
+  "id": "threeWickets_r01",
+  "moment": "threeWickets",
+  "prio": 3,
+  "note": "admiring, a little awed",
+  "text": "They are like bicycles in the cycle stand: if one falls down, the complete row will be down!",
+  "say": "They are like bicycles in the cycle stand: if one falls down, the complete row will be down!",
+  "w": 3
  },
  {
   "id": "wide_01",
@@ -1024,6 +1096,15 @@
   "say": "ये जीत याद रखी जाएगी, दोस्तों!"
  },
  {
+  "id": "won_r01",
+  "moment": "won",
+  "prio": 4,
+  "note": "an ecstatic victory roar",
+  "text": "You rate the ability of a man with what they finish, not with what they attempt.",
+  "say": "You rate the ability of a man with what they finish, not with what they attempt.",
+  "w": 3
+ },
+ {
   "id": "lost_01",
   "moment": "lost",
   "prio": 4,
@@ -1126,6 +1207,87 @@
   "note": "slow and poetic, savouring every word like a couplet",
   "text": "Ek over mein zindagi badal jaati hai, guru!",
   "say": "एक over में ज़िंदगी बदल जाती है, गुरु!"
+ },
+ {
+  "id": "betweenOvers_r01",
+  "moment": "betweenOvers",
+  "prio": 1,
+  "note": "slow and poetic, savouring every word like a couplet",
+  "text": "Positive anything is better than negative nothing.",
+  "say": "Positive anything is better than negative nothing.",
+  "w": 3
+ },
+ {
+  "id": "betweenOvers_r02",
+  "moment": "betweenOvers",
+  "prio": 1,
+  "note": "slow and poetic, savouring every word like a couplet",
+  "text": "Patience is bitter, but the fruit is sweet.",
+  "say": "Patience is bitter, but the fruit is sweet.",
+  "w": 3
+ },
+ {
+  "id": "betweenOvers_r03",
+  "moment": "betweenOvers",
+  "prio": 1,
+  "note": "slow and poetic, savouring every word like a couplet",
+  "text": "No one travels the road to success without a puncture or two.",
+  "say": "No one travels the road to success without a puncture or two.",
+  "w": 3
+ },
+ {
+  "id": "betweenOvers_r04",
+  "moment": "betweenOvers",
+  "prio": 1,
+  "note": "slow and poetic, savouring every word like a couplet",
+  "text": "Experience is like a comb that life gives you when you are bald.",
+  "say": "Experience is like a comb that life gives you when you are bald.",
+  "w": 3
+ },
+ {
+  "id": "betweenOvers_r05",
+  "moment": "betweenOvers",
+  "prio": 1,
+  "note": "slow and poetic, savouring every word like a couplet",
+  "text": "Duniya mein sabse bada rog, mere baare mein kya kahenge log!",
+  "say": "दुनिया में सबसे बड़ा रोग, मेरे बारे में क्या कहेंगे लोग!",
+  "w": 3
+ },
+ {
+  "id": "betweenOvers_r06",
+  "moment": "betweenOvers",
+  "prio": 1,
+  "note": "slow and poetic, savouring every word like a couplet",
+  "text": "The only thing that can be earned without hard work is dandruff.",
+  "say": "The only thing that can be earned without hard work is dandruff.",
+  "w": 3
+ },
+ {
+  "id": "betweenOvers_r07",
+  "moment": "betweenOvers",
+  "prio": 1,
+  "note": "slow and poetic, savouring every word like a couplet",
+  "text": "Humility is like an underwear: you have to wear it, but you should not show it.",
+  "say": "Humility is like an underwear: you have to wear it, but you should not show it.",
+  "w": 3
+ },
+ {
+  "id": "betweenOvers_r08",
+  "moment": "betweenOvers",
+  "prio": 1,
+  "note": "slow and poetic, savouring every word like a couplet",
+  "text": "If one-day cricket was pyjama cricket, then Twenty20 is underwear cricket!",
+  "say": "If one-day cricket was pyjama cricket, then Twenty20 is underwear cricket!",
+  "w": 3
+ },
+ {
+  "id": "betweenOvers_r09",
+  "moment": "betweenOvers",
+  "prio": 1,
+  "note": "slow and poetic, savouring every word like a couplet",
+  "text": "Hope sees the invisible, feels the tangible. Hope is the biggest tope!",
+  "say": "Hope sees the invisible, feels the tangible. Hope is the biggest तोप!",
+  "w": 3
  },
  {
   "id": "start_01",
@@ -1336,6 +1498,15 @@
   "say": "Captain ने फिर भरोसा किया है... अब इज़्ज़त बचानी है!"
  },
  {
+  "id": "bowlerExpensive_r01",
+  "moment": "bowlerExpensive",
+  "prio": 1,
+  "note": "teasing with sympathy, laughing gently",
+  "text": "His bowling at the moment is flat as a dosa.",
+  "say": "His bowling at the moment is flat as a dosa.",
+  "w": 3
+ },
+ {
   "id": "batterSet_01",
   "moment": "batterSet",
   "prio": 2,
@@ -1376,6 +1547,15 @@
   "say": "इस खिलाड़ी की आँख में आज बाज़ की नज़र है!"
  },
  {
+  "id": "batterSet_r01",
+  "moment": "batterSet",
+  "prio": 2,
+  "note": "admiring, building a big crescendo",
+  "text": "It's choice, not chance, that determines your destiny.",
+  "say": "It's choice, not chance, that determines your destiny.",
+  "w": 3
+ },
+ {
   "id": "batterStruggling_01",
   "moment": "batterStruggling",
   "prio": 1,
@@ -1406,6 +1586,15 @@
   "note": "gently mocking, then encouraging",
   "text": "Itni gendein, itne kam run... kuch toh karo, mere bhai!",
   "say": "इतनी गेंदें, इतने कम run... कुछ तो करो, मेरे भाई!"
+ },
+ {
+  "id": "batterStruggling_r01",
+  "moment": "batterStruggling",
+  "prio": 1,
+  "note": "gently mocking, then encouraging",
+  "text": "Adversity will come, adversity will stare at you, but it's adversity that will make you better.",
+  "say": "Adversity will come, adversity will stare at you, but it's adversity that will make you better.",
+  "w": 3
  },
  {
   "id": "chaseStart_01",

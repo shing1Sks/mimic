@@ -33,7 +33,9 @@
         if (playing && t < playing.until && !(prio > playing.prio || (prio === 3 && playing.prio === 3 && t - playing.at >= 1500))) return null;
         if (prio === 1 && t - lastQuiet < cool) return null;
         const fresh = pool.filter(l => !recent.includes(l.id));
-        const line = fresh.length ? fresh[Math.min(fresh.length - 1, Math.floor(rng() * fresh.length))]
+        // weighted: a line with w (his own famous lines, w 3) is picked w times as readily
+        const pick = ls => { const W = ls.reduce((a, l) => a + (l.w || 1), 0); let r = rng() * W; for (const l of ls) { r -= l.w || 1; if (r < 0) return l; } return ls[ls.length - 1]; };
+        const line = fresh.length ? pick(fresh)
           : pool.slice().sort((a, b) => recent.indexOf(a.id) - recent.indexOf(b.id))[0];
         recent.push(line.id); while (recent.length > noRepeat) recent.shift();
         playing = { id: line.id, prio, at: t, until: t + lengthOf(line) };

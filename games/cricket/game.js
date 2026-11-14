@@ -173,6 +173,8 @@
   CK.Rig.onReady(() => {
     people.batter = CK.makeAthlete(Object.assign({}, KITS[0]));
     people.nonStriker = CK.makeAthlete(Object.assign({}, KITS[0]));
+    people.outgoing = CK.makeAthlete(Object.assign({}, KITS[0]));   // the man just out, walking off
+    people.outgoing.root.visible = false; scene.add(people.outgoing.root);
     people.bowler = CK.makeAthlete(Object.assign({}, KITS[1], { pads: false, helmet: null, gloves: null }));
     people.umpire = CK.makeAthlete({ body: 'm', shirt: 0xf0f0ea, pants: 0x1c1c22, skin: 0xc68642, hair: 0x2a2a2a });
     for (let i = 0; i < 10; i++) people.fielders.push(CK.makeAthlete(Object.assign({}, KITS[1], { body: 'm', pads: i === 0, gloves: i === 0 ? 0xf2f2f2 : null, helmet: null, skin: [0xd9a273, 0x8d5524, 0xc68642, 0xf1c8a0][i % 4] })));
@@ -224,10 +226,27 @@
     if (!people.ready || !G.match) return;
     world.flags.paint(teamOf(0).shirt, teamOf(1).shirt);   // the fans: P1's side on the +x half, P2's on the -x half
     const inn = MA.current(G.match), bk = kitOf(inn.bat), fk = kitOf(inn.bowl);
-    [people.batter, people.nonStriker].forEach(a => a.paint(bk));
+    [people.batter, people.nonStriker, people.outgoing].forEach(a => a.paint(bk));
     people.bowler.paint(fk);
     people.fielders.forEach(a => a.paint({ shirt: fk.shirt, pants: fk.pants }));
+    castPlayers();
   }
+  /** Who is who this ball: the real players' looks on the striker, non-striker, the man walking off, the bowler and the field. */
+  function castPlayers() {
+    if (!people.ready || !G.match) return;
+    const i = MA.current(G.match), bt = teamOf(i.bat), bw = teamOf(i.bowl), Lb = CK.Teams.lineup(bt), Lw = CK.Teams.lineup(bw);
+    people.batter.look(bt.looks[Lb.batterIdx(i.wkts)]);
+    people.nonStriker.look(bt.looks[Lb.batterIdx(i.wkts + 1)]);
+    if (people.outgoing) people.outgoing.look(bt.looks[Lb.batterIdx(i.wkts - 1)]);
+    const bi = Lw.bowlerIdx(Math.floor(i.balls / 6)), fl = Lw.fielders(bi);
+    people.bowler.look(bw.looks[bi]);
+    people.fielders.forEach((a, k) => a.look(bw.looks[fl[k]]));
+    G.fieldNames = fl.map(k => bw.players[k]);
+  }
+  /** The fielder in an outcome, by name (his position if the field is not cast). */
+  /** A fielder's name from his position's name (the drop list carries positions). */
+  function dropName(pos) { const k = G.field ? G.field.findIndex(f => f.name === pos) : -1; return (k >= 0 && G.fieldNames && G.fieldNames[k]) || pos; }
+  const fname = o => (o && o.by >= 0 && G.fieldNames && G.fieldNames[o.by]) || (o && o.name) || '';
 
   // ---------------------------------------------------------------------------------
   // Game state
@@ -432,6 +451,7 @@
     G.field = FI.setField(bowlKind(), batSide());
     if (prevField) G.field.forEach((f, i) => { if (prevField[i] && prevField[i].cur) { f.cur = prevField[i].cur; f.face = prevField[i].face; } });
     hud.speedOff();
+    castPlayers();
     prompts();
     if (!first && G.match && G.story) {
       // a new over: who has the ball (and his figures, if he is back for another spell)
@@ -790,12 +810,12 @@
       if (noBall()) { banner('NO BALL', 'CAUGHT, BUT IT WAS A NO BALL', 'neutral', 1.8); endBallSoon(1.8, { runs: 0, extra: 'nb' }); return; }
       const bc = bowlSeat().mc; if (bc && bowlSeat().kind === 'phone') bc.rumble(0.8, 140, 3);
       const btc = batSeat().mc; if (btc && batSeat().kind === 'phone') btc.rumble(0.35, 60, 1);
-      wicket('CAUGHT', o.name);
+      wicket('CAUGHT', fname(o));
       return;
     }
     if (o.mishap && o.mishap.kind === 'misfield4' && !o.missCalled && G.t >= o.mishap.missT) {
       o.missCalled = true; crowdReact('ooh');
-      banner('MISFIELD!', 'THROUGH ' + (o.name || '').toUpperCase() + "'S HANDS", 'neutral', 1.4);
+      banner('MISFIELD!', 'THROUGH ' + fname(o).toUpperCase() + "'S HANDS", 'neutral', 1.4);
       attitude('mishap', o.by); paaji('misfield');
     }
     if ((o.type === 'four' || o.type === 'six') && G.t >= o.t) {
@@ -810,8 +830,8 @@
       o.picked = true; holdBall(o.by);
       const mk = o.mishap && o.mishap.kind;
       if (mk === 'leaveIt') { banner('LEFT IT!', 'TWO FIELDERS, NOBODY TAKES IT', 'neutral', 1.6); crowdReact('ooh'); attitude('mishap', o.by); paaji('misfield'); }
-      else if (mk === 'fumble') { banner('FUMBLE!', (o.name || '').toUpperCase() + ' · EXTRA RUN', 'neutral', 1.4); crowdReact('ooh'); attitude('mishap', o.by); paaji('misfield'); }
-      else if (o.dropped && o.dropped.length) { attitude('drop', o.by); banner('DROPPED!', o.dropped[0].toUpperCase() + ' PUTS IT DOWN', 'neutral', 1.6); crowdReact('ooh'); paaji('dropped'); }
+      else if (mk === 'fumble') { banner('FUMBLE!', fname(o).toUpperCase() + ' · EXTRA RUN', 'neutral', 1.4); crowdReact('ooh'); attitude('mishap', o.by); paaji('misfield'); }
+      else if (o.dropped && o.dropped.length) { attitude('drop', o.by); banner('DROPPED!', dropName(o.dropped[0]).toUpperCase() + ' PUTS IT DOWN', 'neutral', 1.6); crowdReact('ooh'); paaji('dropped'); }
       const throwT = Math.max(0.5, o.back - o.t - FI.F.GATHER), fumbleT = mk === 'fumble' ? 0.9 : 0;   // a fumble: he gathers it again
       G.throwBall = { t0: G.t + FI.F.GATHER + fumbleT, dur: throwT, from: null, to: nearerEnd(o.at) };
     }
@@ -820,7 +840,7 @@
       if (G.t >= Math.max(o.back, runsDone) + 0.2) {
         o.endQueued = true;
         const words = ['NO RUN', 'SINGLE', 'TWO RUNS', 'THREE RUNS'][o.runs] || o.runs + ' RUNS';
-        endBallSoon(0.9, { runs: o.runs, extra: noBall() ? 'nb' : null }, (G.stroke ? G.stroke.kind + ' · ' : '') + 'TO ' + (o.name || '').toUpperCase(), words);
+        endBallSoon(0.9, { runs: o.runs, extra: noBall() ? 'nb' : null }, (G.stroke ? G.stroke.kind + ' · ' : '') + 'TO ' + fname(o).toUpperCase(), words);
       }
     }
   }
@@ -916,11 +936,21 @@
   function walkFrame(dt) {
     const W = G.walk;
     W.t += dt;
-    const skip = seats.some(x => x.kind === 'phone' && x.mc && x.mc.pressed('a')) || skipKey;
+    const skip = skipKey;
     skipKey = false;
     if (skip && W.t > 0.4) { W.t = W.dur; W.skipped = true; }
+    // after a wicket the man who is out walks off, head down, crossing the new batter on his way in
+    const O = people.outgoing;
+    if (W.kind === 'wicket' && O && W.t < W.dur) {
+      const w = walkPos(), side = batSide(), k = clamp(W.t / W.dur, 0, 1);
+      const fx = Math.sin(w.dir), fz = Math.cos(w.dir);
+      const from = { x: -0.42 * side + fz * 2.4, z: -1.0 - fx * 2.4 }, to = { x: W.from.x + fz * 2.4, z: W.from.z - fx * 2.4 };
+      const x = lerp(from.x, to.x, k * 0.85), z = lerp(from.z, to.z, k * 0.85);
+      O.root.visible = true;
+      CK.poseAthlete(O, { x, z, facing: Math.atan2(to.x - from.x, to.z - from.z), twist: 0, crouch: 0.12, run: 0.34, arms: null }, dt);
+    } else if (O) O.root.visible = false;
     // done when he is in and Paaji has finished his line (never more than 3.5 s more)
-    if (W.t >= W.dur && (W.skipped || !paajiPlayer.speaking || W.t > W.dur + 3.5)) { G.walk = null; G.phaseT = 0; prompts(); }
+    if (W.t >= W.dur && (W.skipped || !paajiPlayer.speaking || W.t > W.dur + 3.5)) { G.walk = null; G.phaseT = 0; if (O) O.root.visible = false; prompts(); }
   }
 
   function endMatch() {
@@ -1638,7 +1668,8 @@
     const bs = bowlSeat(), ts = batSeat();
     let bp = '', tp = '';
     if (bs.kind !== 'cpu') {
-      if (G.phase === 'ready') bp = (opt('aim') === 'ON' ? (G.aimRef ? 'Tilt to move the marker, ' : 'Hold the phone still, ') : '') + `<b>hold ${keyA(bs.mc)}</b> to run in`;
+      if (G.walk) bp = 'The batter is walking in · <b>Space</b> skips';
+      else if (G.phase === 'ready') bp = (opt('aim') === 'ON' ? (G.aimRef ? 'Tilt to move the marker, ' : 'Hold the phone still, ') : '') + `<b>hold ${keyA(bs.mc)}</b> to run in`;
       else if (G.phase === 'runup') bp = `Whip your arm over, <b>let go of ${keyA(bs.mc)}</b> as it comes over`;
       else bp = G.phase === 'runup' ? 'Whip it over…' : 'Wrist twist = spin · wrist turned = swing';
     } else bp = G.cpuStyle === 'spin' ? 'Computer: spin' : 'Computer: pace';

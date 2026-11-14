@@ -84,8 +84,12 @@
   const virtuals = new Map();       // phone id -> { key, index, pad }
   function snapshot(p) {
     const pr = P();
-    if (p.mode === 'pad') return pr.padGamepad(0, p.pad, p.ts, p.label);
-    return pr.motionGamepad(0, p.axes, p.buttons, p.ts, p.label);
+    if (p.mode === 'pad') return pr.padGamepad(0, p.pad, p.stampT || p.ts, p.label);
+    const g = pr.motionGamepad(0, p.axes, p.buttons, p.stampT || p.ts, p.label);
+    // every recent sample, stamped at capture (createTimeline): a game that reads __samples sees them
+    // all, evenly spaced, instead of whichever one was newest when it polled
+    g.__samples = p.hist;
+    return g;
   }
   function virtualList() {
     const out = [];
@@ -221,7 +225,7 @@
     Object.assign(p, {
       sid: d.sid, mode: d.mode === 'pad' || d.mode === 'grip' ? d.mode : 'wand', name: String(d.name || 'Phone').slice(0, 24),
       pc: new RTCPeerConnection({ iceServers: ice }), iceQ: [], ctl: null, motion: null, open: false,
-      axes: [0, 0, 0, 0, 0, 0], buttons: 0, pad: {}, ts: 0, lastSeq: 0,
+      axes: [0, 0, 0, 0, 0, 0], buttons: 0, pad: {}, ts: 0, lastSeq: 0, stampT: 0, hist: [], tl: P().createTimeline(),
       rttMs: null, offset: null, bestRtt: Infinity, latencyMs: null, hz: 0, _cnt: 0, _cntT: now(), t0: now(),
     });
     p.label = '';
@@ -304,7 +308,13 @@
     if ((d.kind === P().KIND.PAD) !== (p.mode === 'pad')) return;
     p.lastSeq = d.seq;
     p.ts = now();
-    if (d.kind === P().KIND.MOTION) { p.axes = d.axes; p.buttons = d.buttons; }
+    // on the page's clock at capture (once the clock offset is known), else at arrival
+    p.stampT = p.offset !== null ? p.tl.stamp(d.t - p.offset - timeOrigin(), p.ts) : p.ts;
+    if (d.kind === P().KIND.MOTION) {
+      p.axes = d.axes; p.buttons = d.buttons;
+      p.hist.push({ t: p.stampT, axes: d.axes, buttons: d.buttons });
+      if (p.hist.length > 48) p.hist.splice(0, p.hist.length - 48);
+    }
     else p.pad = d.pad;
     // the player has the phone in hand now: any button press closes the floating QR panel (the
     // phone cannot reach its close button)

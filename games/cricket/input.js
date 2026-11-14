@@ -36,7 +36,7 @@
    */
   function create(kind, mc, role) {
     const S = { samples: [], events: [], lastA: false, q: { x: 0, y: 0, z: 0, w: 1 }, a: false, hz: 0, on: false };
-    let lastKey = '', nNew = 0, hzT = performance.now(), mLast = 0, mTwist = 0, mRho = 0;
+    let lastKey = '', lastWebT = -Infinity, nNew = 0, hzT = performance.now(), mLast = 0, mTwist = 0, mRho = 0;
     function push(s) {
       const ss = S.samples;
       if (ss.length && s.t <= ss[ss.length - 1].t) s.t = ss[ss.length - 1].t + 0.5;
@@ -51,6 +51,18 @@
       const p = motionPads()[mc.slot || 0];
       S.on = !!(p && sending(p));
       if (!S.on) return;
+      // a browser phone (mimic-link) hands over every sample stamped at capture: take them all, in order
+      // (polling only the newest lost ~5% of them and kept the network's jitter in the timing)
+      if (p.__samples && p.__samples.length) {
+        for (const w of p.__samples) {
+          if (w.t <= lastWebT) continue;
+          lastWebT = w.t;
+          const wx = w.axes.map(v => v / 32767), wa = !!(w.buttons & 1);
+          push({ t: w.t, q: Bo.decodePad(wx), a: wa, acc: [wx[3], wx[4], wx[5]] });
+          if (window.MimicRec && MimicRec.active) MimicRec.event('m', { slot: mc.slot, st: +w.t.toFixed(2), ax: wx.map(v => +v.toFixed(5)), a: wa, web: 1 });
+        }
+        return;
+      }
       const ax = p.axes, a = !!(p.buttons[0] && p.buttons[0].pressed);
       const key = ax[0] + ',' + ax[1] + ',' + ax[2] + ',' + ax[3] + ',' + ax[4] + ',' + ax[5] + ',' + a;
       if (key === lastKey) return;

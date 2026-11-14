@@ -318,7 +318,34 @@
     return p;
   }
 
+  /**
+   * A browser phone's samples on the page's clock. capture: when the phone read its sensor, already
+   * mapped to this page's performance.now() (phone time minus the measured clock offset); arrival:
+   * when the packet was handled here. Each sample is stamped at its capture time plus the network's
+   * floor (the least delay seen over the last `win` ms), so network jitter, and packets bunched
+   * behind a slow frame, keep their real spacing, while the stamp still means "as it would have
+   * arrived on a clear link" (the same sense as a Bluetooth pad's timestamp). Never later than its
+   * arrival, always moving forward.
+   */
+  function createTimeline(o) {
+    const win = (o && o.win) || 3000, hist = [];   // [arrival, delay], delays rising (a monotonic deque)
+    let last = -Infinity;
+    return {
+      stamp(capture, arrival) {
+        const d = arrival - capture;
+        while (hist.length && hist[hist.length - 1][1] >= d) hist.pop();
+        hist.push([arrival, d]);
+        while (hist.length > 1 && hist[0][0] < arrival - win) hist.shift();
+        let t = Math.min(arrival, capture + hist[0][1]);
+        if (t <= last) t = last + 0.01;
+        last = t;
+        return t;
+      },
+    };
+  }
+
   const api = {
+    createTimeline,
     G, SIG, MOTION_BUTTONS, PAD_BUTTONS, KIND,
     mul, conj, rotate, normalize, fromDeviceOrientation, yawReference, relative, gravityInPhone,
     sign, readSig, motionAxes, hatIndex, hatAxis, padGamepadState,

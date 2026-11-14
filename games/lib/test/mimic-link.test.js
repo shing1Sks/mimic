@@ -375,6 +375,42 @@ const tests = {
     const out = require('child_process').execFileSync('python', ['-c', code]).toString().trim();
     assert.strictEqual(out, 'ok');
   },
+
+  // ---------------------------------------------------------------- a browser phone's samples on the page's clock
+  // measured 2026-11-14 on the user's phone over a hotspot: 60 Hz captures 16.7 ms apart arrived with
+  // 6-31 ms of jitter (and bunched behind any slow frame); stamped at arrival, that wobble read as swing speed
+  timelineStampsAtCaptureNotArrival() {
+    const tl = P.createTimeline();
+    let seed = 3; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const stamps = [];
+    for (let i = 0; i < 400; i++) { const cap = 1000 + i * 16.7, arr = cap + 10 + rnd() * 30; stamps.push(tl.stamp(cap, arr)); }
+    const gaps = stamps.slice(200).map((t, i, a) => (i ? t - a[i - 1] : 16.7));
+    assert(gaps.every(g => Math.abs(g - 16.7) < 0.6), 'evenly spaced once the floor is known: ' + Math.min(...gaps).toFixed(2) + '..' + Math.max(...gaps).toFixed(2));
+    near(stamps[399] - (1000 + 399 * 16.7), 10, 1.5, 'capture time plus the network floor');
+  },
+  timelineSurvivesAStalledPage() {
+    // the page was busy for 300 ms: 18 samples land at once; they keep their own spacing
+    const tl = P.createTimeline();
+    for (let i = 0; i < 100; i++) tl.stamp(i * 16.7, i * 16.7 + 12);
+    const burst = []; for (let i = 100; i < 118; i++) burst.push(tl.stamp(i * 16.7, 118 * 16.7 + 12));
+    const g = burst.map((t, i) => (i ? t - burst[i - 1] : 16.7));
+    assert(g.every(x => Math.abs(x - 16.7) < 0.6), 'burst keeps spacing: ' + g.map(x => x.toFixed(1)).join(','));
+  },
+  timelineNeverInTheFutureAndAlwaysForward() {
+    const tl = P.createTimeline();
+    let last = -Infinity;
+    for (let i = 0; i < 50; i++) {
+      const arr = i * 16.7 + 5, s = tl.stamp(i * 16.7 + (i === 20 ? 40 : 0), arr);   // one capture time off (a clock blip)
+      assert(s <= arr + 1e-9, 'not after its own arrival'); assert(s > last, 'strictly forward'); last = s;
+    }
+  },
+  timelineAdaptsWhenTheClockOffsetMoves() {
+    // the clock-offset estimate steps by 25 ms (a better ping): within the window the floor follows
+    const tl = P.createTimeline({ win: 2000 });
+    for (let i = 0; i < 200; i++) tl.stamp(i * 16.7, i * 16.7 + 10);
+    let s = 0; for (let i = 200; i < 400; i++) s = tl.stamp(i * 16.7 - 25, i * 16.7 + 10);
+    near(s, 399 * 16.7 + 10, 1.5, 'back to arrival-floor after the window');
+  },
 };
 
 (async () => {

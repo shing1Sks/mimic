@@ -1691,5 +1691,181 @@
   "note": "cheeky and delighted",
   "text": "Is shot pe toh poora stadium naach utha!",
   "say": "इस shot पे तो पूरा stadium नाच उठा!"
+ },
+ {
+  "id": "fifty_01",
+  "moment": "fifty",
+  "prio": 3,
+  "note": "proud and rising, applauding a fine knock, then roaring",
+  "text": "Pachaas! Bat utha ke salaam karo, guru, yeh kamaai hui hai!",
+  "say": "पचास! Bat उठा के सलाम करो, गुरु, ये कमाई हुई है!"
+ },
+ {
+  "id": "fifty_02",
+  "moment": "fifty",
+  "prio": 3,
+  "note": "proud and rising, applauding a fine knock, then roaring",
+  "text": "Fifty! Aur abhi toh party shuru hui hai!",
+  "say": "Fifty! और अभी तो party शुरू हुई है!"
+ },
+ {
+  "id": "fifty_03",
+  "moment": "fifty",
+  "prio": 3,
+  "note": "proud and rising, applauding a fine knock, then roaring",
+  "text": "Aadha shatak! Stadium khada ho gaya, taaliyan ruk nahi rahi!",
+  "say": "आधा शतक! Stadium खड़ा हो गया, तालियाँ रुक नहीं रहीं!"
+ },
+ {
+  "id": "fifty_04",
+  "moment": "fifty",
+  "prio": 3,
+  "note": "proud and rising, applauding a fine knock, then roaring",
+  "text": "Pachaas run, aur har run mein pasina, har run mein jazba!",
+  "say": "पचास run, और हर run में पसीना, हर run में जज़्बा!"
+ },
+ {
+  "id": "hundred_01",
+  "moment": "hundred",
+  "prio": 4,
+  "note": "overwhelmed with joy, near tears, then a huge roar",
+  "text": "Shatak! Sau run! Aaj iska naam itihaas mein likha jayega!",
+  "say": "शतक! सौ run! आज इसका नाम इतिहास में लिखा जाएगा!"
+ },
+ {
+  "id": "hundred_02",
+  "moment": "hundred",
+  "prio": 4,
+  "note": "overwhelmed with joy, near tears, then a huge roar",
+  "text": "Century! Helmet utaro, aasmaan ko dekho, aaj tum raja ho!",
+  "say": "Century! Helmet उतारो, आसमान को देखो, आज तुम राजा हो!"
+ },
+ {
+  "id": "hundred_03",
+  "moment": "hundred",
+  "prio": 4,
+  "note": "overwhelmed with joy, near tears, then a huge roar",
+  "text": "Sau ka aankda! Jaise Himalaya ki choti pe jhanda gaad diya!",
+  "say": "सौ का आँकड़ा! जैसे हिमालय की चोटी पे झंडा गाड़ दिया!"
+ },
+ {
+  "id": "drsReview_01",
+  "moment": "drsReview",
+  "prio": 2,
+  "note": "hushed and tense, building suspense",
+  "text": "Review le liya! Ab teesri aankh faisla karegi!",
+  "say": "Review ले लिया! अब तीसरी आँख फ़ैसला करेगी!"
+ },
+ {
+  "id": "drsReview_02",
+  "moment": "drsReview",
+  "prio": 2,
+  "note": "hushed and tense, building suspense",
+  "text": "Dil ki dhadkan tez, aur screen pe sabki nazar!",
+  "say": "दिल की धड़कन तेज़, और screen पे सबकी नज़र!"
+ },
+ {
+  "id": "drsReview_03",
+  "moment": "drsReview",
+  "prio": 2,
+  "note": "hushed and tense, building suspense",
+  "text": "Technology ki adaalat lagi hai, guru!",
+  "say": "Technology की अदालत लगी है, गुरु!"
+ },
+ {
+  "id": "drsOut_01",
+  "moment": "drsOut",
+  "prio": 3,
+  "note": "explosive, the verdict lands like thunder",
+  "text": "Out! Teesri aankh ne bhi keh diya, jao bhai, pavilion!",
+  "say": "Out! तीसरी आँख ने भी कह दिया, जाओ भाई, pavilion!"
+ },
+ {
+  "id": "drsOut_02",
+  "moment": "drsOut",
+  "prio": 3,
+  "note": "explosive, the verdict lands like thunder",
+  "text": "Hitting! Seedha stumps pe! Koi bahana nahi!",
+  "say": "Hitting! सीधा stumps पे! कोई बहाना नहीं!"
+ },
+ {
+  "id": "drsNotOut_01",
+  "moment": "drsNotOut",
+  "prio": 3,
+  "note": "relieved and laughing, a great escape",
+  "text": "Not out! Bach gaya, bach gaya! Aaj kismat iske saath hai!",
+  "say": "Not out! बच गया, बच गया! आज किस्मत इसके साथ है!"
+ },
+ {
+  "id": "drsNotOut_02",
+  "moment": "drsNotOut",
+  "prio": 3,
+  "note": "relieved and laughing, a great escape",
+  "text": "Missing! Gend stumps ko chhoo ke bhi nahi gayi!",
+  "say": "Missing! गेंद stumps को छू के भी नहीं गई!"
+ },
+ {
+  "id": "timeout_01",
+  "moment": "timeout",
+  "prio": 2,
+  "note": "like a showman hyping the break",
+  "text": "Strategic timeout! Thodi saans lo, thoda paani piyo, aur plan banao!",
+  "say": "Strategic timeout! थोड़ी साँस लो, थोड़ा पानी पियो, और plan बनाओ!"
+ },
+ {
+  "id": "timeout_02",
+  "moment": "timeout",
+  "prio": 2,
+  "note": "like a showman hyping the break",
+  "text": "Break ka time, aur stadium mein DJ ka dhamaal!",
+  "say": "Break का time, और stadium में DJ का धमाल!"
+ },
+ {
+  "id": "timeout_03",
+  "moment": "timeout",
+  "prio": 2,
+  "note": "like a showman hyping the break",
+  "text": "Captain ka dimaag chal raha hai, aur crowd ka josh bhi!",
+  "say": "Captain का दिमाग़ चल रहा है, और crowd का जोश भी!"
+ },
+ {
+  "id": "potm_01",
+  "moment": "potm",
+  "prio": 2,
+  "note": "warm and grand, like presenting an award",
+  "text": "Aaj ka asli hero! Player of the match, taaliyan ho jaayein!",
+  "say": "आज का असली hero! Player of the match, तालियाँ हो जाएँ!"
+ },
+ {
+  "id": "potm_02",
+  "moment": "potm",
+  "prio": 2,
+  "note": "warm and grand, like presenting an award",
+  "text": "Is khiladi ne aaj match ko apni mutthi mein kar liya!",
+  "say": "इस खिलाड़ी ने आज match को अपनी मुट्ठी में कर लिया!"
+ },
+ {
+  "id": "potm_03",
+  "moment": "potm",
+  "prio": 2,
+  "note": "warm and grand, like presenting an award",
+  "text": "Sabse chamakta sitaara, aaj ka player of the match!",
+  "say": "सबसे चमकता सितारा, आज का player of the match!"
+ },
+ {
+  "id": "signOff_01",
+  "moment": "signOff",
+  "prio": 1,
+  "note": "warm, slow farewell with a smile",
+  "text": "Toh doston, aaj ke liye bas itna hi. Khelte raho, muskurate raho!",
+  "say": "तो दोस्तों, आज के लिए बस इतना ही। खेलते रहो, मुस्कुराते रहो!"
+ },
+ {
+  "id": "signOff_02",
+  "moment": "signOff",
+  "prio": 1,
+  "note": "warm, slow farewell with a smile",
+  "text": "Match khatam, par yaadein hamesha rahengi. Sat sri akal!",
+  "say": "Match ख़त्म, पर यादें हमेशा रहेंगी। सत श्री अकाल!"
  }
 ]

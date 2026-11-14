@@ -344,7 +344,24 @@
       g.add(t); towers.push(t);
     }));
     scene.add(g);
-    return { group: g, towers };
+    // moths: specks of light circling in front of each bank of lamps
+    g.updateMatrixWorld(true);
+    const N = 36, centres = [], wp = new T.Vector3();
+    towers.forEach(t => { t.children[1].getWorldPosition(wp); centres.push(wp.clone().lerp(new T.Vector3(0, wp.y, CZ), 0.03)); });
+    const pos = new Float32Array(centres.length * N * 3), ph = Array.from({ length: centres.length * N }, () => [Math.random() * 6.28, 1.5 + Math.random() * 4.5, 0.6 + Math.random() * 1.6, (Math.random() - 0.5) * 4]);
+    const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.BufferAttribute(pos, 3));
+    const moths = new T.Points(geo, new T.PointsMaterial({ color: 0xfff3d6, size: 0.28, transparent: true, opacity: 0.85, depthWrite: false, blending: T.AdditiveBlending, toneMapped: false }));
+    moths.frustumCulled = false; scene.add(moths);
+    const tickMoths = (dt, t) => {
+      for (let i = 0; i < ph.length; i++) {
+        const c = centres[(i / N) | 0], q = ph[i], a = q[0] + t * q[2];
+        pos[i * 3] = c.x + Math.cos(a) * q[1] + Math.sin(t * 7 + i) * 0.15;
+        pos[i * 3 + 1] = c.y + q[3] + Math.sin(a * 1.7) * 1.2;
+        pos[i * 3 + 2] = c.z + Math.sin(a) * q[1];
+      }
+      geo.attributes.position.needsUpdate = true;
+    };
+    return { group: g, towers, moths, tickMoths };
   }
 
   // ------------------------------------------------------------------ fireworks (sixes)
@@ -456,6 +473,7 @@
     let screenT = 0;
     const tick = dt => {
       fx.update(dt);
+      fl.tickMoths(dt, crowd.t);
       cards.update(dt, crowd.t);
       const m = bd.boards.material;
       if (flash.t > 0) { flash.t -= dt; const h = (crowd.t * 3) % 1; m.color.setHSL(h, 0.9, 0.62 + 0.25 * Math.sin(crowd.t * 30)); bd.tex.offset.x += dt * 0.8; }

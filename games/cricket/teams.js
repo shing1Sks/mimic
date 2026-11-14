@@ -52,6 +52,18 @@
       'Prabhsimran Singh:2,1,k*; Priyansh Arya:2,1,k; Shreyas Iyer:2,1,k; Josh Inglis:0,0,b; Nehal Wadhera:2,1,k; Shashank Singh:2,1,k; Marcus Stoinis:1,2,k,h; Marco Jansen:0,0,b,T; Yuzvendra Chahal:2,1,k,s; Arshdeep Singh:2,1,k,T; Harpreet Brar:2,2,k'),
   ];
 
+  // signatures: a bowler's run-up (long for the big quicks, a short burst, a few steps for spinners)
+  // and how he celebrates a wicket (wings: arms spread; leap: a jump and a turn; sky: pointing up; fist)
+  const RUNS = {
+    spin: 'Kuldeep Yadav, Ravindra Jadeja, Axar Patel, Shadab Khan, Abrar Ahmed, Adam Zampa, Adil Rashid, Keshav Maharaj, Mitchell Santner, Michael Bracewell, Noor Ahmad, Krunal Pandya, Suyash Sharma, Sunil Narine, Varun Chakaravarthy, Wanindu Hasaranga, Maheesh Theekshana, Yuzvendra Chahal, Harpreet Brar, Zeeshan Ansari',
+    long: 'Mitchell Starc, Shaheen Shah Afridi, Haris Rauf, Pat Cummins, Josh Hazlewood, Mark Wood, Kagiso Rabada, Anrich Nortje, Lungi Ngidi, Lockie Ferguson, Matt Henry, Trent Boult, Marco Jansen, Naseem Shah, Mohammed Shami, Spencer Johnson, Harshit Rana, Khaleel Ahmed, Brydon Carse, Mohammed Siraj',
+    short: 'Jasprit Bumrah, Matheesha Pathirana, Jofra Archer, Bhuvneshwar Kumar, Deepak Chahar',
+  };
+  const CELS = { wings: 'Shaheen Shah Afridi', leap: 'Mohammed Siraj, Wanindu Hasaranga', sky: 'Mitchell Starc, Keshav Maharaj', fist: 'Kagiso Rabada, Jasprit Bumrah, Pat Cummins, Haris Rauf, Lockie Ferguson' };
+  const inList = (tbl, name) => Object.keys(tbl).find(k => tbl[k].split(', ').includes(name));
+  /** A player's signature: { run: 'long'|'short'|'spin'|'mid', cel: 'wings'|'leap'|'sky'|'fist'|'cheer' }. */
+  const sig = name => ({ run: inList(RUNS, name) || 'mid', cel: inList(CELS, name) || 'cheer' });
+
   const byId = id => TEAMS.find(t => t.id === id) || TEAMS[0];
   /** The team a seat gets when it wants `id` but the other seat has `taken`: the next one round, in the direction dir (+1/-1). */
   function pickOther(id, taken, dir) {
@@ -70,7 +82,7 @@
     };
   }
 
-  const api = { TEAMS, byId, pickOther, lineup };
+  const api = { TEAMS, byId, pickOther, lineup, sig };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (root) { root.CK = root.CK || {}; root.CK.Teams = api; }
 })(typeof window !== 'undefined' ? window : null);

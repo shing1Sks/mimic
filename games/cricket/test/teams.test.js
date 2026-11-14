@@ -44,5 +44,6 @@ check('byId finds a team; an unknown id falls back to the first', T.byId('ind').
   }
   check('every pair of teams is told apart by shirt and HUD colour (RGB distance >= 45)', close.length === 0, close);
 }
+check('signatures: a short burst for Bumrah, a long run for Starc, a few steps for Kuldeep, wings for Shaheen, a plain cheer for others', T.sig('Jasprit Bumrah').run === 'short' && T.sig('Mitchell Starc').run === 'long' && T.sig('Kuldeep Yadav').run === 'spin' && T.sig('Shaheen Shah Afridi').cel === 'wings' && T.sig('Virat Kohli').run === 'mid' && T.sig('Virat Kohli').cel === 'cheer');
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

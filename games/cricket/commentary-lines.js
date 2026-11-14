@@ -209,7 +209,29 @@
     {"id": "fanCam_05", "moment": "fanCam", "prio": 2, "text": "Camera dekh ke aise naache jaise baraat mein dulhe ka bhai!"},
     {"id": "cheerCam_01", "moment": "cheerCam", "prio": 1, "text": "Aur yeh dekhiye, cheerleaders ka special number!"},
     {"id": "cheerCam_02", "moment": "cheerCam", "prio": 1, "text": "Chhakka pada, aur stage pe dhamaal!"},
-    {"id": "cheerCam_03", "moment": "cheerCam", "prio": 1, "text": "Is shot pe toh poora stadium naach utha!"}
+    {"id": "cheerCam_03", "moment": "cheerCam", "prio": 1, "text": "Is shot pe toh poora stadium naach utha!"},
+    {"id": "fifty_01", "moment": "fifty", "prio": 3, "text": "Pachaas! Bat utha ke salaam karo, guru, yeh kamaai hui hai!"},
+    {"id": "fifty_02", "moment": "fifty", "prio": 3, "text": "Fifty! Aur abhi toh party shuru hui hai!"},
+    {"id": "fifty_03", "moment": "fifty", "prio": 3, "text": "Aadha shatak! Stadium khada ho gaya, taaliyan ruk nahi rahi!"},
+    {"id": "fifty_04", "moment": "fifty", "prio": 3, "text": "Pachaas run, aur har run mein pasina, har run mein jazba!"},
+    {"id": "hundred_01", "moment": "hundred", "prio": 4, "text": "Shatak! Sau run! Aaj iska naam itihaas mein likha jayega!"},
+    {"id": "hundred_02", "moment": "hundred", "prio": 4, "text": "Century! Helmet utaro, aasmaan ko dekho, aaj tum raja ho!"},
+    {"id": "hundred_03", "moment": "hundred", "prio": 4, "text": "Sau ka aankda! Jaise Himalaya ki choti pe jhanda gaad diya!"},
+    {"id": "drsReview_01", "moment": "drsReview", "prio": 2, "text": "Review le liya! Ab teesri aankh faisla karegi!"},
+    {"id": "drsReview_02", "moment": "drsReview", "prio": 2, "text": "Dil ki dhadkan tez, aur screen pe sabki nazar!"},
+    {"id": "drsReview_03", "moment": "drsReview", "prio": 2, "text": "Technology ki adaalat lagi hai, guru!"},
+    {"id": "drsOut_01", "moment": "drsOut", "prio": 3, "text": "Out! Teesri aankh ne bhi keh diya, jao bhai, pavilion!"},
+    {"id": "drsOut_02", "moment": "drsOut", "prio": 3, "text": "Hitting! Seedha stumps pe! Koi bahana nahi!"},
+    {"id": "drsNotOut_01", "moment": "drsNotOut", "prio": 3, "text": "Not out! Bach gaya, bach gaya! Aaj kismat iske saath hai!"},
+    {"id": "drsNotOut_02", "moment": "drsNotOut", "prio": 3, "text": "Missing! Gend stumps ko chhoo ke bhi nahi gayi!"},
+    {"id": "timeout_01", "moment": "timeout", "prio": 2, "text": "Strategic timeout! Thodi saans lo, thoda paani piyo, aur plan banao!"},
+    {"id": "timeout_02", "moment": "timeout", "prio": 2, "text": "Break ka time, aur stadium mein DJ ka dhamaal!"},
+    {"id": "timeout_03", "moment": "timeout", "prio": 2, "text": "Captain ka dimaag chal raha hai, aur crowd ka josh bhi!"},
+    {"id": "potm_01", "moment": "potm", "prio": 2, "text": "Aaj ka asli hero! Player of the match, taaliyan ho jaayein!"},
+    {"id": "potm_02", "moment": "potm", "prio": 2, "text": "Is khiladi ne aaj match ko apni mutthi mein kar liya!"},
+    {"id": "potm_03", "moment": "potm", "prio": 2, "text": "Sabse chamakta sitaara, aaj ka player of the match!"},
+    {"id": "signOff_01", "moment": "signOff", "prio": 1, "text": "Toh doston, aaj ke liye bas itna hi. Khelte raho, muskurate raho!"},
+    {"id": "signOff_02", "moment": "signOff", "prio": 1, "text": "Match khatam, par yaadein hamesha rahengi. Sat sri akal!"}
   ];
   if (typeof module !== 'undefined' && module.exports) module.exports = { LINES };
   if (root) { root.CK = root.CK || {}; root.CK.CommentaryLines = LINES; }

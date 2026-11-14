@@ -240,8 +240,22 @@
     if (people.outgoing) people.outgoing.look(bt.looks[Lb.batterIdx(i.wkts - 1)]);
     const bi = Lw.bowlerIdx(Math.floor(i.balls / 6)), fl = Lw.fielders(bi);
     people.bowler.look(bw.looks[bi]);
+    G.bowlSig = CK.Teams.sig(bw.players[bi]);
     people.fielders.forEach((a, k) => a.look(bw.looks[fl[k]]));
     G.fieldNames = fl.map(k => bw.players[k]);
+  }
+  /**
+   * A wicket celebration in the bowler's own style (teams.js sig): wings (arms spread like a glider),
+   * leap (a jump with a full turn), sky (both hands pointing up), fist (pumping), or both arms up.
+   */
+  function celebrationPose(bw) {
+    const ct = G.celebrate ? Math.max(0, G.celebrate.t) : 0, now = performance.now() / 1000, cel = G.bowlSig ? G.bowlSig.cel : 'cheer';
+    const H = (dx, y, dz) => ({ hand: { x: bw.x + dx, y, z: bw.z + dz } });
+    if (cel === 'wings') return { arms: { left: H(0.95, 1.5 + Math.sin(now * 5) * 0.08, 0.05), right: H(-0.95, 1.5 - Math.sin(now * 5) * 0.08, 0.05) }, y: 0, spin: 0, lean: 0.25 };
+    if (cel === 'leap') { const j = clamp(ct / 0.7, 0, 1); return { arms: { left: H(0.3, 2.5, 0.1), right: H(-0.3, 2.5, 0.1) }, y: Math.sin(j * Math.PI) * 0.55, spin: j * Math.PI * 2, lean: 0 }; }
+    if (cel === 'sky') return { arms: { left: H(0.1, 2.6, 0.25), right: H(-0.1, 2.6, 0.25) }, y: 0, spin: 0, lean: -0.1 };
+    if (cel === 'fist') return { arms: { right: H(-0.28, 1.55 + Math.abs(Math.sin(now * 9)) * 0.4, 0.3), left: H(0.32, 1.0, 0.05) }, y: 0, spin: 0, lean: 0.15 };
+    return { arms: { left: H(0.35, 2.45, 0.15), right: H(-0.35, 2.45, 0.15) }, y: Math.abs(Math.sin(now * 6.25)) * 0.18, spin: 0, lean: 0 };
   }
   /** The fielder in an outcome, by name (his position if the field is not cast). */
   /** A fielder's name from his position's name (the drop list carries positions). */
@@ -252,6 +266,10 @@
   // Game state
   const Z_CONTACT = -1.25;          // where the bat meets the ball (in front of the front pad)
   const RUN_T = 1.25;               // s from the mark to the crease
+  // the computer bowler runs in his own way (teams.js sig): the human's run is timed to his own arm
+  const RUNS = { long: [1.55, -35.5], short: [0.95, -28.5], spin: [0.8, -25.5], mid: [RUN_T, -31.5] };
+  const runSig = () => (G.match && bowlSeat().kind === 'cpu' && G.bowlSig ? RUNS[G.bowlSig.run] || RUNS.mid : RUNS.mid);
+  const runT = () => runSig()[0];
   const G = {
     screen: 'title', inGame: false, paused: false, kind: null, match: null, phase: 'idle', t: 0, phaseT: 0,
     ball: null, ballOn: false, del: null, rel: null, path: null, contact: null, outcome: null, hold: false,
@@ -278,7 +296,7 @@
     G.match = MA.create({ overs, wickets: wk, names: [0, 1].map(i => teamOf(i).name), firstBat });
     G.batRuns = [[], []];   // each innings: runs per batter (by wickets down)
     G.att = CK.Attitude.context(); G.gesture = null; G.wkBalls = [];
-    G.story = CK.Story.create();
+    G.story = CK.Story.create(); G.timeouts = {};
     G.inGame = true; G.paused = false; G.result = null;
     showScreen(null);
     $('hud').classList.remove('hidden');
@@ -305,6 +323,42 @@
   }
   /** A call a little after the moment; dropped if the tab was hidden and it fires more than 1 s late. */
   function paajiLater(kind, ms) { const due = performance.now() + ms; setTimeout(() => paaji(kind, due), ms); }
+  /**
+   * The crowd chanting a side's name (assets/chants: one voice per team), layered nine times with
+   * a little detune, delay, pan and a stadium echo, so it sounds like a stand. seat: 0 / 1.
+   */
+  const chantBuf = {};
+  let chantMan = null, chantOut = null, chantBusy = 0;
+  async function teamChant(seat, k) {
+    const ctx = AU.state.ctx;
+    if (!ctx || !G.match || performance.now() < chantBusy) return;
+    const tm = teamOf(seat);
+    try {
+      if (!chantMan) chantMan = await (await fetch('assets/chants/manifest.json')).json();
+      const e = chantMan[tm.id]; if (!e) return;
+      if (!chantBuf[tm.id]) chantBuf[tm.id] = await ctx.decodeAudioData(await (await fetch('assets/chants/' + e.file)).arrayBuffer());
+    } catch (err) { return; }
+    const buf = chantBuf[tm.id];
+    chantBusy = performance.now() + buf.duration * 1000 + 600;
+    if (!chantOut) {
+      // the stand: a band-limited bus with a slap-back echo off the far roof
+      chantOut = ctx.createGain();
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2600;
+      const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 180;
+      const dl = ctx.createDelay(1); dl.delayTime.value = 0.21; const fb = ctx.createGain(); fb.gain.value = 0.32;
+      chantOut.connect(hp); hp.connect(lp); lp.connect(AU.state.master); lp.connect(dl); dl.connect(fb); fb.connect(dl); fb.connect(AU.state.master);
+    }
+    chantOut.gain.value = 0.55 * (k || 1);
+    const t0 = ctx.currentTime + 0.02;
+    for (let i = 0; i < 9; i++) {
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      src.playbackRate.value = 0.94 + Math.random() * 0.12; src.detune.value = (Math.random() - 0.5) * 60;
+      const g = ctx.createGain(); g.gain.value = 0.16 + Math.random() * 0.08;
+      const pan = ctx.createStereoPanner(); pan.pan.value = (Math.random() - 0.5) * 1.6;
+      src.connect(g); g.connect(pan); pan.connect(chantOut);
+      src.start(t0 + Math.random() * 0.16);
+    }
+  }
   /** The cheerleaders: a sway between balls, a pom-pom routine on the beat after a big moment. */
   function cheerFrame(dt) {
     if (!people.ready || !people.cheer) return;
@@ -462,6 +516,8 @@
       const note = CK.Story.batterNote(G.story, { inn: G.match.i, wk: inn().wkts });
       if (note) paajiLater(note, 700);
     }
+    if (G.helmetOff && people.batter && people.batter.helmet) { people.batter.helmet.visible = true; G.helmetOff = false; }
+    G.milestone = null; G.skipReplay = false;
     if (!first) updateScorebug();
   }
   function bowlKind() {
@@ -564,7 +620,7 @@
   // the computer bowler: a style per innings, a varied plan per ball, human-sized errors
   function cpuBowlerFrame(dt) {
     if (G.phase === 'ready' && G.phaseT > 1.0) { G.aim = cpuAim(); G.phase = 'runup'; G.phaseT = 0; G.bowler.phase = 'run'; G.cutAt = 0.85; prompts(); }
-    else if (G.phase === 'runup' && G.phaseT > RUN_T + 0.25) {
+    else if (G.phase === 'runup' && G.phaseT > runT() + 0.25) {
       const sk = cpuSkill(), spin = G.cpuStyle === 'spin';
       const pace = spin ? rand(78, 92) / 3.6 : rand(128, 146) / 3.6;
       const twist = spin ? (rng() < 0.65 ? 1 : -1) * rand(14, 26) : 0;
@@ -726,8 +782,19 @@
     const pitchedLeg = G.path.pitch && G.path.pitch.x * side < -(PH.PITCH.STUMP_HALF + PH.BALL.R);
     const inLine = Math.abs(at.x) <= PH.PITCH.STUMP_HALF + PH.BALL.R;
     const out = hitting && !pitchedLeg && inLine;
+    // the tracked flight on from the pad to the stumps (before the pad stops it), for a review
+    const track = PH.run(G.ball, { until: b => b.p.z >= 0.05, every: 1 }).samples || [];
     G.ball.v = { x: G.ball.v.x * 0.15 + rand(-0.6, 0.6), y: 0.8, z: -G.ball.v.z * 0.06 };
     G.contact.lbw = { out, hitting, pitchedLeg, inLine, at };
+    if (opt('replays') === 'ON' && (hitting || (inLine && !pitchedLeg))) {
+      const v = CK.DRS.verdict({ pitch: G.path.pitch, at, stumps: { x: ghost.p.x, y: ghost.p.y }, side });
+      G.contact.state = 'dead';
+      startDRS(v, at, track, () => {
+        if (v.out) { G.skipReplay = true; wicket('LBW', null, at); }
+        else endBallSoon(0.8, { runs: 0, extra: null }, 'NOT OUT ON REVIEW', 'NOT OUT');
+      });
+      return;
+    }
     if (out) { wicket('LBW', null, at); return; }
     G.contact.state = 'dead';
     endBallSoon(1.4, { runs: 0, extra: null }, pitchedLeg ? 'PITCHED OUTSIDE LEG' : !inLine ? 'HIT OUTSIDE THE LINE' : 'MISSING THE STUMPS', 'PAD');
@@ -874,7 +941,7 @@
     if (!rec.runs && !rec.extra && !rec.wicket && !rec.boundary) { const bt = G.contact && G.contact.how === 'miss'; attitude(bt ? 'beaten' : 'dot'); if (!bt) paaji('dot'); }
     if (rec.extra === 'nb') paaji('noBall');
     if (main) banner(main, sub || '', rec.extra ? 'neutral' : rec.runs ? 'good' : 'neutral', after);
-    G.ending = { t: after, rec, replay: replay && opt('replays') === 'ON' && G.frames.length > 20 };
+    G.ending = { t: after, rec, replay: replay && !G.skipReplay && opt('replays') === 'ON' && G.frames.length > 20 };
   }
   function finishBall() {
     const e = G.ending; G.ending = null;
@@ -887,17 +954,42 @@
     if (rec.runs && rec.extra !== 'wd' && G.batRuns) G.batRuns[ib][bw] = before + rec.runs;
     if (before < 20 && G.batRuns && G.batRuns[ib][bw] >= 20) paajiLater('quick20', 2600);
     if (rec.wicket && bw + 1 === 3) paajiLater('threeWickets', 2600);
-    if (G.story) CK.Story.ball(G.story, { inn: ib, wk: bw, bowler: bowlerName(), runs: rec.runs || 0, extra: rec.extra || null, wicket: !!rec.wicket });
+    if (G.story) CK.Story.ball(G.story, { inn: ib, wk: bw, bowler: bowlerName(), runs: rec.runs || 0, extra: rec.extra || null, wicket: !!rec.wicket, batName: CK.Teams.lineup(teamOf(inn().bat)).batter(bw) });
+    const mile = rec.extra !== 'wd' && G.batRuns ? CK.Story.milestone(before, G.batRuns[ib][bw] || 0) : null;
     const ev = MA.record(G.match, rec);
     logEvent('ball', { rec, label: ev.label, score: [inn().runs, inn().wkts, inn().balls] });
     hud.ballDot(ev.label);
     updateScorebug();
     if (ev.matchOver || (ev.inningsOver && /^nets/.test(G.kind))) { G.phase = 'over'; setTimeout(() => (/^nets/.test(G.kind) ? endNets() : endMatch()), 600); return; }
-    if (ev.inningsOver) { inningsBreak(); return; }
+    if (mile && !ev.matchOver && !ev.inningsOver) milestone(mile, ib, bw);
+    if (ev.inningsOver) { interlude('INNINGS BREAK', inningsBreak); return; }
     if (rec.wicket && !ev.over) { newBall(); walkOut('wicket'); return; }
+    if (mile && !ev.over) { G.phase = 'between'; G.phaseT = 0; G.betweenT = 3.0; return; }
     if (rec.wicket) G.pendingWalk = true;
-    if (ev.over) { const sm = G.story ? CK.Story.overStart(G.story, { inn: G.match.i, bowler: bowlerName() }) : null; paaji(sm && sm !== 'newBowler' ? sm : Math.random() < 0.5 ? 'newBowler' : 'betweenOvers'); banner('END OF OVER', overSummary(), 'neutral', 1.8); world.crowd.wave = { a: Math.random() * 6.28, t: 6 }; AU.Crowd.chant(2); G.phase = 'between'; G.phaseT = 0; G.betweenT = 1.9; if (bowlSeat().kind === 'cpu') G.cpuStyle = G.cpuStyle === 'spin' ? 'pace' : 'spin'; return; }
+    if (ev.over && G.match.overs >= 3 && inn().balls === Math.ceil(G.match.overs / 2) * 6 && !(G.timeouts || (G.timeouts = {}))[G.match.i]) {
+      // the strategic timeout halfway through a longer innings
+      G.timeouts[G.match.i] = true; G.phase = 'between'; G.phaseT = 0; G.betweenT = 1.2;
+      interlude('STRATEGIC TIMEOUT', () => {});
+      return;
+    }
+    if (ev.over && Math.random() < 0.5) setTimeout(() => teamChant(inn().bat, 0.8), 700);
+    if (ev.over) { const sm = G.story ? CK.Story.overStart(G.story, { inn: G.match.i, bowler: bowlerName() }) : null; paaji(sm && sm !== 'newBowler' ? sm : Math.random() < 0.5 ? 'newBowler' : 'betweenOvers'); if (!mile) banner('END OF OVER', overSummary(), 'neutral', 1.8); world.crowd.wave = { a: Math.random() * 6.28, t: 6 }; AU.Crowd.chant(2); G.phase = 'between'; G.phaseT = 0; G.betweenT = mile ? 3.0 : 1.9; if (bowlSeat().kind === 'cpu') G.cpuStyle = G.cpuStyle === 'spin' ? 'pace' : 'spin'; return; }
     newBall();
+  }
+  /** A fifty or a hundred: the bat raised to every stand, the crowd up, Paaji, fireworks for a hundred. */
+  function milestone(kind, ib, bw) {
+    const name = CK.Teams.lineup(teamOf(inn().bat)).batter(bw), b = CK.Story.batter(G.story, { inn: ib, wk: bw });
+    banner(kind === 'hundred' ? 'HUNDRED!' : 'FIFTY!', name.toUpperCase() + ' · ' + b.runs + ' (' + b.balls + ')', 'good', 2.8);
+    paajiLater(kind, 250);
+    G.batCheer = 3.0; G.milestone = { kind, t: 0 };
+    crowdReact('cheer', 1); world.crowd.excite = 1.4; world.crowd.wave = { a: Math.random() * 6.28, t: 7 }; world.boards.flash(3, true);
+    setTimeout(() => teamChant(inn().bat, 1.1), 1600);
+    if (kind === 'hundred') {
+      SFX.band('six');
+      if (people.batter.helmet) { people.batter.helmet.visible = false; G.helmetOff = true; }   // helmet off, face to the sky
+      const ex = CK.Hype.extras(gfxLevel());
+      for (let i = 0; i < Math.round(10 * ex.fireworks); i++) setTimeout(() => { const a = Math.random() * 6.28; world.fx.burst({ x: Math.sin(a) * 80, y: 34 + Math.random() * 12, z: PH.FIELD.CZ + Math.cos(a) * 80 }, 0.6 + Math.random() * 0.5); }, i * 220);
+    }
   }
   /** The man bowling this over (the bowling side's last five, in turn). */
   function bowlerName() { return CK.Teams.lineup(teamOf(inn().bowl)).bowler(Math.floor(inn().balls / 6)); }
@@ -925,6 +1017,9 @@
     G.walk = { t: 0, dur, kind, from: kind === 'wicket' ? { x: -7 * side, z: 11 } : { x: -9 * side, z: 14 } };
     const show = () => { if (G.walk) banner(kind === 'wicket' ? 'NEW BATTER' : 'OPENING THE BATTING', name.toUpperCase() + ' · ' + teamOf(inn().bat).short, 'neutral', 2.2); };
     if (kind === 'wicket') show(); else setTimeout(show, 2300);
+    const L = CK.Teams.lineup(teamOf(inn().bat)), n = L.batterIdx(inn().wkts) + 1, bt = teamOf(inn().bat);
+    $('pc-num').textContent = n; $('pc-name').textContent = name; $('pc-sub').textContent = bt.name.toUpperCase() + ' · ' + (n <= 2 ? 'OPENER' : n <= 7 ? 'NO. ' + n + ' BAT' : 'LOWER ORDER');
+    $('pcard').style.setProperty('--tc', bt.css); $('pcard').classList.add('on');
     paaji(kind === 'start' ? 'start' : kind === 'chase' ? 'chaseStart' : 'newBatter');
     prompts();
   }
@@ -950,7 +1045,7 @@
       CK.poseAthlete(O, { x, z, facing: Math.atan2(to.x - from.x, to.z - from.z), twist: 0, crouch: 0.12, run: 0.34, arms: null }, dt);
     } else if (O) O.root.visible = false;
     // done when he is in and Paaji has finished his line (never more than 3.5 s more)
-    if (W.t >= W.dur && (W.skipped || !paajiPlayer.speaking || W.t > W.dur + 3.5)) { G.walk = null; G.phaseT = 0; if (O) O.root.visible = false; prompts(); }
+    if (W.t >= W.dur && (W.skipped || !paajiPlayer.speaking || W.t > W.dur + 3.5)) { G.walk = null; G.phaseT = 0; if (O) O.root.visible = false; $('pcard').classList.remove('on'); prompts(); }
   }
 
   function endMatch() {
@@ -963,6 +1058,18 @@
     showScreen('end');
     if (r.winner >= 0) SFX.fanfare(true);
     if (r.winner >= 0) paaji(G.kind !== 'versus' && r.winner === 1 ? 'lost' : 'won');
+    const pm = G.story ? CK.Story.potm(G.story) : null;
+    if (pm) {
+      const seat = pm.kind === 'bat' ? m.innings[pm.inn].bat : m.innings[pm.inn].bowl;
+      $('end-potm').innerHTML = `<small>PLAYER OF THE MATCH</small><b>${pm.name}</b><span>${teamOf(seat).short} · ${pm.line}</span>`;
+      paajiLater('potm', 5200); paajiLater('signOff', 10500);
+    } else $('end-potm').innerHTML = '';
+    if (r.winner >= 0) {
+      // the finale: fireworks all round the ground
+      const ex = CK.Hype.extras(gfxLevel());
+      for (let i = 0; i < Math.round(18 * ex.fireworks); i++) setTimeout(() => { const a = Math.random() * 6.28; world.fx.burst({ x: Math.sin(a) * 82, y: 32 + Math.random() * 16, z: PH.FIELD.CZ + Math.cos(a) * 82 }, 0.6 + Math.random() * 0.6); }, 300 + i * 260);
+      setTimeout(() => teamChant(r.winner, 1.2), 1800);
+    }
     crowdReact('cheer', 0.8);
   }
 
@@ -1100,10 +1207,10 @@
     const B = G.bowler, side = armSide();
     B.phase === 'run' ? (B.run = Math.min(1, B.run + dt * 3)) : (B.run = Math.max(0, B.run - dt * 2.5));
     const sw = -side;   // world x of the bowling arm's side
-    const markZ = -31.5, creaseZ = BO.BOWL.FROM_Z - 0.75, cx = sw * 0.55;
+    const markZ = runSig()[1], creaseZ = BO.BOWL.FROM_Z - 0.75, cx = sw * 0.55;
     if (B.phase === 'mark') { B.x = sw * 1.2; B.z = markZ; }
     else if (B.phase === 'run') {
-      const k = clamp(G.phaseT / RUN_T, 0, 1), e = k * (2 - k);
+      const k = clamp(G.phaseT / runT(), 0, 1), e = k * (2 - k);
       B.x = lerp(sw * 1.2, cx, e); B.z = lerp(markZ, creaseZ, e);
       if (k >= 1) B.run = Math.max(0.2, B.run - dt * 4);
     } else if (B.phase === 'follow') {
@@ -1124,7 +1231,7 @@
   function cpuArmDir() {
     const B = G.bowler;
     let phi = -2.6;
-    if (G.phase === 'runup') { const k = clamp((G.phaseT - (RUN_T - 0.15)) / 0.4, 0, 1); phi = -2.6 + k * 2.75; }
+    if (G.phase === 'runup') { const k = clamp((G.phaseT - (runT() - 0.15)) / 0.4, 0, 1); phi = -2.6 + k * 2.75; }
     else if (B.phase === 'follow') phi = 0.15 + clamp(B.relT / 0.35, 0, 1) * 2.3;
     return halfTurn(BO.rotate(BO.armQuat(phi, 0, 0), { x: 0, y: 0, z: -1 }));
   }
@@ -1237,9 +1344,10 @@
     const bw = F.bowler, A = people.bowler;
     // a gesture (send-off, appeal) takes his arms once the celebration has had its moment
     const bg = gestureOn('bowler'), gh = bg && (!bw.cel || G.celebrate.t > 1.0) ? CK.Anim.gestureHands(bg.gesture, bw) : null;
-    const bArms = gh ? { left: { hand: gh.left }, right: { hand: gh.right } } : bw.cel ? { left: { hand: { x: bw.x + 0.35, y: 2.45, z: bw.z + 0.15 } }, right: { hand: { x: bw.x - 0.35, y: 2.45, z: bw.z + 0.15 } } } : null;
+    const sc = celebrationPose(bw);
+    const bArms = gh ? { left: { hand: gh.left }, right: { hand: gh.right } } : bw.cel ? sc.arms : null;
     if (gh) bw.cel = bw.cel || 1;   // keep the phone's arm out of it
-    CK.poseAthlete(A, { x: bw.x, z: bw.z, facing: bw.facing, run: bw.run, crouch: bw.crouch, lean: bw.lean, y: bw.cel && !gh ? Math.abs(Math.sin(performance.now() / 160)) * 0.18 * bw.cel : 0, arms: bArms }, dt);
+    CK.poseAthlete(A, { x: bw.x, z: bw.z, facing: bw.facing + (bw.cel && !gh ? sc.spin : 0), run: bw.run, crouch: bw.crouch, lean: bw.lean + (bw.cel && !gh ? sc.lean : 0), y: bw.cel && !gh ? sc.y * bw.cel : 0, arms: bArms }, dt);
     const sh = CK.boneWorld(A, bw.arm === 'left' ? 'UpperArmL' : 'UpperArmR', new T.Vector3());
     const r = bw.armDir;
     const hand = { x: sh.x + r.x * 0.66, y: sh.y + r.y * 0.66, z: sh.z + r.z * 0.66 };
@@ -1311,13 +1419,20 @@
    * side's fans. HOLD, Space or a click skips.
    */
   function bugText(t) { const b = $('replay-bug'); b.lastChild.textContent = t; }
-  function startCutaway(rec, done) {
-    const six = rec.boundary && rec.runs === 6, wk = !!rec.wicket;
-    const shots = six ? ['cheer', 'fans'] : wk && Math.random() < 0.6 ? ['fans'] : [];
+  function startCutaway(rec, done, o) {
+    const six = rec && rec.boundary && rec.runs === 6, wk = !!(rec && rec.wicket);
+    const shots = o ? o.shots : six ? ['cheer', 'fans'] : wk && Math.random() < 0.6 ? ['fans'] : [];
     if (!shots.length || !people.fans || !CK.Hype.extras(gfxLevel()).cheerleaders || opt('replays') !== 'ON') { done(); return; }
-    paintFans(six ? inn().bat : inn().bowl);
+    paintFans(o ? o.fans : six ? inn().bat : inn().bowl);
     G.cutaway = { shots, i: -1, t: 0, shot: null, done };
     nextCut();
+  }
+  /** A break in play (the strategic timeout, the innings break): the DJ, the cheerleaders, the fans. */
+  function interlude(title, done) {
+    banner(title, title === 'INNINGS BREAK' ? 'TIME FOR SOME FUN' : 'THE DJ TAKES OVER', 'neutral', 2.0);
+    SFX.band('six'); paaji(title === 'INNINGS BREAK' ? 'betweenOvers' : 'timeout');
+    setTimeout(() => teamChant(Math.random() < 0.5 ? 0 : 1, 1), 900);
+    startCutaway(null, done, { shots: ['cheer', 'fans'], fans: inn().bat });
   }
   function nextCut() {
     const C = G.cutaway;
@@ -1348,6 +1463,72 @@
     if (C.t >= C.dur) nextCut();
   }
 
+  /**
+   * DRS: the ball-tracking review of a close LBW. The flight drawn in from the hand to the pad (red),
+   * then projected on to the stumps (blue); the panel answers pitching, impact and wickets one by
+   * one, then the verdict. Space, a click or HOLD jumps to the verdict.
+   */
+  const drsGroup = new T.Group(); drsGroup.visible = false; scene.add(drsGroup);
+  function startDRS(v, at, track, done) {
+    while (drsGroup.children.length) { const c = drsGroup.children.pop(); if (c.geometry) c.geometry.dispose(); }
+    const P = (x, y, z) => new T.Vector3(x, y, z);
+    const from = G.del ? G.del.from : { x: 0.3, y: 2.1, z: -18.4 }, pitch = G.path.pitch || { x: at.x, z: at.z - 2 };
+    const pre = new T.CatmullRomCurve3([P(from.x, from.y, from.z), P((from.x + pitch.x) / 2, (from.y + 0.04) / 2 + 0.25, (from.z + pitch.z) / 2), P(pitch.x, 0.04, pitch.z), P(at.x, at.y, at.z)]);
+    const post = track.filter(q => q.z > at.z + 0.02).map(q => P(q.x, q.y, q.z));
+    const mk = (curve, col, op) => {
+      const m = new T.Mesh(new T.TubeGeometry(curve, 80, 0.038, 8), new T.MeshBasicMaterial({ color: col, transparent: true, opacity: op, toneMapped: false, depthTest: false }));
+      m.renderOrder = 5; m.geometry.setDrawRange(0, 0); drsGroup.add(m); return m;
+    };
+    const tubes = [mk(pre, 0xff3b30, 0.95)];
+    if (post.length >= 2) tubes.push(mk(new T.CatmullRomCurve3([P(at.x, at.y, at.z), ...post]), 0x4fb8ff, 0.8));
+    const disc = (p, col) => { const d = new T.Mesh(new T.CircleGeometry(0.11, 24), new T.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.85, toneMapped: false, depthTest: false })); d.rotation.x = -Math.PI / 2; d.position.set(p.x, 0.02, p.z); d.renderOrder = 6; drsGroup.add(d); };
+    disc(pitch, v.rows[0].v === 'OUTSIDE LEG' ? 0xff3b30 : 0x22c55e);
+    // the wicket zone: the stumps' frame, lit by the verdict
+    const zone = new T.Mesh(new T.PlaneGeometry(0.2286, 0.711), new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18, toneMapped: false, depthTest: false, side: T.DoubleSide }));
+    zone.position.set(0, 0.3555, 0); zone.renderOrder = 4; drsGroup.add(zone);
+    drsGroup.visible = true;
+    G.drs = { t: 0, v, tubes, zone, done, said: 0 };
+    ['drs-r0', 'drs-r1', 'drs-r2'].forEach((id, i) => { const r = $(id); r.className = 'drs-row'; r.querySelector('b').textContent = v.rows[i].v; });
+    $('drs-v').className = 'drs-verdict'; $('drs-v').innerHTML = (v.out ? 'OUT' : 'NOT OUT') + (v.umpiresCall ? "<small>UMPIRE'S CALL</small>" : '');
+    $('drs-v').style.color = v.out ? '#ff6b7e' : '#4ade80';
+    $('drs').classList.add('on'); bugText('DRS'); $('replay-bug').classList.add('on'); $('hud').classList.add('replaying');
+    banner('REVIEW!', 'THE UMPIRE SENDS IT UPSTAIRS', 'neutral', 1.4);
+    paaji('drsReview'); SFX.sting();
+    if (people.batter) people.batter.setOpacity(0.2);
+  }
+  function drsFrame(dt) {
+    const D = G.drs;
+    if (seats.some(x => x.kind === 'phone' && x.mc && x.mc.pressed('a')) || skipKey) D.t = Math.max(D.t, 4.6);
+    skipKey = false;
+    D.t += dt;
+    // the flight draws in over 1.6 s: the real part, then the projection
+    const k = clamp(D.t / 1.6, 0, 1);
+    D.tubes.forEach((m, i) => { const n = m.geometry.index.count, f = D.tubes.length > 1 ? clamp(k * 2 - i, 0, 1) : k; m.geometry.setDrawRange(0, Math.floor(n * f / 6) * 6); });
+    [1.9, 2.6, 3.3].forEach((t, i) => {
+      const r = $('drs-r' + i);
+      if (D.t >= t && !r.classList.contains('on')) {
+        const val = D.v.rows[i].v, good = val === 'IN LINE' || val === 'HITTING' || val === 'OUTSIDE OFF';
+        r.classList.add('on', val === "UMPIRE'S CALL" ? 'ump' : good ? 'good' : 'bad'); SFX.tick && SFX.tick();
+        if (i === 2) D.zone.material.color.setHex(val === 'MISSING' ? 0xff3b30 : val === 'HITTING' ? 0x22c55e : 0xeab308), D.zone.material.opacity = 0.45;
+      }
+    });
+    if (D.t >= 4.1 && !D.said) {
+      D.said = 1; $('drs-v').classList.add('on');
+      paaji(D.v.out ? 'drsOut' : 'drsNotOut'); D.v.out ? crowdReact('roar') : crowdReact('ooh');
+      world.screen({ big: D.v.out ? 'OUT' : 'NOT OUT', sub: 'DRS', hot: 2.5, col: D.v.out ? '#ff6b7e' : '#4ade80' });
+    }
+    // the cameras: behind the bowler's arm down the line, then side-on at the stumps
+    if (D.t < 1.9) { _p.set(0.15, 2.4, -14.5 + D.t * 1.6); _l.set(0, 0.45, -1.2); setCam(_p, _l, 22, D.t < dt * 1.5 ? 1 : 1 - Math.exp(-dt * 3)); }
+    else { _p.set(2.9, 1.05, -2.6); _l.set(0, 0.42, -0.5); setCam(_p, _l, 30, 1 - Math.exp(-dt * 3)); }
+    cam.mode = 'drs'; G.camMode = 'drs'; G.views = ['drs']; $('hud').classList.remove('split');
+    applyCamTo(cam, dt, innerWidth / innerHeight);
+    if (D.t >= 5.6) {
+      G.drs = null; drsGroup.visible = false; $('drs').classList.remove('on'); $('replay-bug').classList.remove('on'); $('hud').classList.remove('replaying');
+      if (people.batter) people.batter.setOpacity(1);
+      D.done();
+    }
+  }
+
   // ---------------------------------------------------------------------------------
   // Cameras. Each player watches from his own end: the batter from behind the stumps, the
   // bowler from behind his own arm, bowling into the screen and following the ball down to the
@@ -1365,6 +1546,7 @@
   /** A shot everyone shares (big moments): the celebration, the catch, the ball in play. */
   function sharedShot() {
     if (G.celebrate && G.celebrate.t > 0 && G.celebrate.t < G.celebrate.dur) return 'celebrate';
+    if (G.milestone && G.milestone.t < 3.0) return 'milestone';
     const o = G.outcome;
     if (G.phase === 'hit' && o && o.type === 'caught' && G.t >= o.t - 0.5 && G.field[o.by]) return 'catch';
     if (G.phase === 'hit' && G.ball && o && o.type !== 'playedon' && G.phaseT > 0.15) return 'follow';
@@ -1412,6 +1594,11 @@
     } else if (shot === 'celebrate') {
       const B = G.bowler;
       _p.set(B.x + 1.2 * armSide(), 1.7, B.z + 6.5); _l.set(B.x, 1.45, B.z);
+      setCamOn(st, _p, _l, 32, cut ? 1 : 1 - Math.exp(-dt * 4));
+    } else if (shot === 'milestone') {
+      // in close on the batter, bat raised: slowly round him
+      const bx = -0.42 * side, a = 0.35 * side + (G.milestone ? G.milestone.t * 0.12 * side : 0);
+      _p.set(bx + Math.sin(a) * 4.6, 1.85, -1.0 + Math.cos(a) * 4.6); _l.set(bx, 2.25, -1.0);   // in front of him (he faces the batting end)
       setCamOn(st, _p, _l, 32, cut ? 1 : 1 - Math.exp(-dt * 4));
     } else if (shot === 'walkout') {
       // in front of the striker as he walks out, backing toward the crease with him
@@ -1568,6 +1755,7 @@
       G.batCheer = 2.2;
       attitude('six');
       paaji('six');
+      setTimeout(() => teamChant(inn().bat, 1), 2400);
     } else if (kind === 'four') {
       crowdReact('cheer', 0.85); world.crowd.excite = 1.15; SFX.drums(8); flash(0.2); world.boards.flash(2, true); AU.Crowd.chant(1);
       world.screen({ big: 'FOUR!', sub: G.stroke ? G.stroke.kind : '', hot: 3, col: '#ffc24d' });
@@ -1579,6 +1767,7 @@
       world.screen({ big: 'OUT!', sub: info.how, hot: 3.5, col: '#ff6b7e' });
       for (let i = 0; i < Math.round(4 * ex.fireworks); i++) { const a = Math.PI + (i - 1.5) * 0.35; world.fx.burst({ x: Math.sin(a) * 84, y: 38 + Math.random() * 8, z: PH.FIELD.CZ + Math.cos(a) * 84 }, 0.5 + i * 0.2); }
       G.celebrate = { t: -0.55, dur: 1.7 };
+      setTimeout(() => teamChant(inn().bowl, 1), 2200);
       const h = info.how;
       // three wickets on three balls running: the hat-trick call instead
       const i0 = inn(), wb = G.wkBalls || (G.wkBalls = []);
@@ -1644,7 +1833,9 @@
     $('sb-score').textContent = `${i.runs}-${i.wkts}`;
     $('sb-overs').textContent = `${MA.oversText(i.balls)}/${m.overs}`;
     const nd = MA.need(m);
-    $('sb-info').textContent = nd ? nd.text : `RUN RATE ${MA.runRate(i).toFixed(2)}`;
+    $('sb-info').textContent = nd ? nd.text + (nd.balls > 0 ? ' · RRR ' + (nd.runs / (nd.balls / 6)).toFixed(2) : '') : `RUN RATE ${MA.runRate(i).toFixed(2)}`;
+    const pt = G.story ? CK.Story.partnership(G.story, m.i) : null;
+    $('sb-part').textContent = pt && (pt.runs || pt.balls) ? `P'SHIP ${pt.runs} (${pt.balls})` : '';
     const bl = CK.Teams.lineup(teamOf(i.bat)), wl = CK.Teams.lineup(teamOf(i.bowl)), br = (G.batRuns && G.batRuns[m.i][i.wkts]) || 0;
     $('sb-bowler').innerHTML = `<b style="color:${tcol(i.bat)}">${bl.batter(i.wkts)}</b> ${br}* · <b style="color:${tcol(i.bowl)}">${wl.bowler(Math.floor(i.balls / 6))}</b> BOWLING`;
     world.screen({ score: `${m.names[i.bat]}  ${i.runs}-${i.wkts}`, sub: `${MA.oversText(i.balls)} OVERS · ` + (nd ? nd.text : 'RUN RATE ' + MA.runRate(i).toFixed(2)) });
@@ -1689,7 +1880,7 @@
     refreshFocus();
   }
   function toTitle() {
-    G.inGame = false; G.match = null; G.phase = 'idle'; G.paused = false; G.replay = null; G.ending = null; G.walk = null; G.cutaway = null; G.pendingWalk = false;
+    G.inGame = false; G.match = null; G.phase = 'idle'; G.paused = false; G.replay = null; G.ending = null; G.walk = null; G.cutaway = null; G.pendingWalk = false; G.drs = null; drsGroup.visible = false; $('drs').classList.remove('on');
     $('replay-bug').classList.remove('on');
     ballMesh.visible = false; batMesh.visible = false; aimRing.visible = false; trail.clear();
     showScreen('title'); setPanel('main');
@@ -1761,7 +1952,7 @@
     else if (act === 'options') setPanel('opts');
     else if (act === 'back') { if (G.screen === 'solo') toTitle(); else setPanel('main'); }
     else if (act === 'resume') setPaused(false);
-    else if (act === 'restart') { G.walk = null; G.cutaway = null; G.pendingWalk = false; const k = G.kind; G.replay = null; G.ending = null; $('replay-bug').classList.remove('on'); startMatch(k); }
+    else if (act === 'restart') { G.walk = null; G.cutaway = null; G.pendingWalk = false; G.drs = null; drsGroup.visible = false; $('drs').classList.remove('on'); const k = G.kind; G.replay = null; G.ending = null; $('replay-bug').classList.remove('on'); startMatch(k); }
     else if (act === 'quit') toTitle();
     else if (act === 'continue') continueAfterBreak();
     else if (act === 'rematch') { if (G.kind === 'versus') lobby.st.firstBat = 1 - G.match.innings[0].bat; startMatch(G.kind); }
@@ -1926,7 +2117,7 @@
   // ---------------------------------------------------------------------------------
   // The main loop
   let lastNow = performance.now(), skipKey = false;
-  const skippable = () => G.replay || G.cutaway || G.walk;
+  const skippable = () => G.replay || G.cutaway || G.walk || G.drs;
   addEventListener('keydown', e => { if (skippable() && (e.key === ' ' || e.key === 'Enter')) { skipKey = true; e.preventDefault(); } });
   addEventListener('pointerdown', () => { if (skippable()) skipKey = true; });
   const fpsWin = [];
@@ -1940,12 +2131,13 @@
     }
     G.phaseT += dt;
     if (G.celebrate) G.celebrate.t += dt;
+    if (G.milestone) G.milestone.t += dt;
     bubbleFrame();
     if (G.batCheer > 0) G.batCheer -= dt;
     if (G.dance > 0) G.dance -= dt;
     cheerFrame(dt);
     // stump mic: the bowler's feet on the run-up, quicker and louder toward the crease
-    if (G.phase === 'runup' && G.bowler.run > 0.3 && G.phaseT < RUN_T) { G.stepT -= dt; if (G.stepT <= 0) { G.stepT = 0.34 - 0.12 * G.phaseT / RUN_T; SFX.step(0.6 + 0.6 * G.phaseT / RUN_T); } }
+    if (G.phase === 'runup' && G.bowler.run > 0.3 && G.phaseT < runT()) { G.stepT -= dt; if (G.stepT <= 0) { G.stepT = 0.34 - 0.12 * G.phaseT / runT(); SFX.step(0.6 + 0.6 * G.phaseT / runT()); } }
     if (G.walk) walkFrame(dt);
     else if (G.phase === 'ready' || G.phase === 'runup') bowlerFrame(dt, now);
     if (G.cheerSpecial > 0) G.cheerSpecial -= dt;
@@ -1992,6 +2184,7 @@
       replayFrame(rdt);
     }
     else if (G.cutaway) cutawayFrame(rdt);
+    else if (G.drs) drsFrame(rdt);
     else {
       let ts = 1;
       if (G.tsT > 0) { G.tsT -= rdt; ts = 0.3; }
@@ -2042,6 +2235,6 @@
   window.__cricket = {
     G, seats, settings, world, people, renderer, scene, camera, lobby, startMatch, startSolo, openLobby, toTitle, setPaused, setSeat, slotCtrl, changeOpt,
     get fps() { const s = fpsWin.reduce((a, b) => a + b, 0); return fpsWin.length / (s || 1); }, get renderScale() { return dyn.pr; }, get shadows() { return dyn.shadows; },
-    inn: () => G.match && inn(), hype, say, planViews, knockStumps, attitude, paaji, paajiPlayer, walkOut, startCutaway,
+    inn: () => G.match && inn(), hype, say, planViews, knockStumps, attitude, paaji, paajiPlayer, walkOut, startCutaway, startDRS, milestone, interlude, teamChant, castPlayers, endMatch, updateScorebug, newBall,
   };
 })();

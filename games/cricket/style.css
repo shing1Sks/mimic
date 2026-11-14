@@ -222,3 +222,33 @@ h1 span { display: block; color: transparent; -webkit-text-stroke: 2px var(--gol
   box-shadow:0 6px 18px rgba(0,0,0,.35);transition:opacity .15s,transform .15s}
 #bubble::after{content:'';position:absolute;left:50%;bottom:-7px;margin-left:-7px;border:7px solid transparent;border-bottom:0;border-top-color:#fff}
 #bubble.on{opacity:1;transform:translate(-50%,-100%) scale(1)}
+
+/* scorebug: the partnership */
+.sb-part { margin-left: auto; font-size: 11px; letter-spacing: 0.14em; opacity: 0.8; white-space: nowrap; padding-left: 10px; }
+/* DRS: the ball-tracking verdict panel */
+#drs { position: absolute; right: 26px; top: 50%; transform: translate(16px, -50%); width: min(300px, 40vw); background: rgba(8, 10, 24, 0.86); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 12px 14px 14px; opacity: 0; transition: opacity 0.25s, transform 0.25s; font-family: inherit; color: #f4f1e8; }
+#drs.on { opacity: 1; transform: translate(0, -50%); }
+.drs-head { display: flex; align-items: center; gap: 8px; font-weight: 800; letter-spacing: 0.22em; font-size: 12px; color: var(--gold); margin-bottom: 10px; }
+.drs-head i { width: 8px; height: 8px; border-radius: 50%; background: #d4223a; animation: blink 1s infinite; }
+.drs-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; margin: 4px 0; border-radius: 7px; background: rgba(255,255,255,0.05); font-size: 13px; letter-spacing: 0.12em; opacity: 0.35; transition: opacity 0.2s, background 0.2s; }
+.drs-row b { font-weight: 800; letter-spacing: 0.08em; }
+.drs-row.on { opacity: 1; }
+.drs-row.good { background: rgba(34, 197, 94, 0.28); }
+.drs-row.bad { background: rgba(220, 38, 38, 0.32); }
+.drs-row.ump { background: rgba(234, 179, 8, 0.3); }
+.drs-verdict { margin-top: 10px; text-align: center; font-weight: 900; font-style: italic; font-size: 34px; letter-spacing: 0.06em; opacity: 0; transform: scale(0.8); transition: opacity 0.2s, transform 0.3s cubic-bezier(.2,1.6,.4,1); }
+.drs-verdict.on { opacity: 1; transform: none; }
+.drs-verdict small { display: block; font-size: 12px; font-style: normal; letter-spacing: 0.2em; opacity: 0.85; }
+/* the walk-out lower third: who is coming in */
+#pcard { position: absolute; left: 24px; bottom: 120px; display: flex; align-items: center; gap: 12px; padding: 10px 18px 10px 10px; background: rgba(8, 10, 24, 0.86); border-left: 5px solid var(--tc, #ffd36b); border-radius: 8px; color: #f4f1e8; opacity: 0; transform: translateX(-14px); transition: opacity 0.3s, transform 0.3s; }
+#pcard.on { opacity: 1; transform: none; }
+.pc-num { width: 40px; height: 40px; border-radius: 8px; display: grid; place-items: center; font-weight: 900; font-size: 20px; background: var(--tc, #ffd36b); color: #0b0b14; }
+.pc-name { font-weight: 800; font-size: 20px; letter-spacing: 0.04em; }
+.pc-sub { font-size: 11px; letter-spacing: 0.18em; opacity: 0.75; margin-top: 2px; }
+/* end screen: the player of the match */
+.e-potm:empty { display: none; }
+.e-potm { margin: 10px auto 0; display: inline-flex; flex-direction: column; align-items: center; padding: 10px 22px; border-radius: 10px; background: linear-gradient(135deg, rgba(255, 211, 107, 0.22), rgba(255, 211, 107, 0.06)); border: 1px solid rgba(255, 211, 107, 0.45); }
+.e-potm small { font-size: 11px; letter-spacing: 0.28em; color: var(--gold); }
+.e-potm b { font-size: 22px; letter-spacing: 0.03em; margin-top: 2px; }
+.e-potm span { font-size: 12px; letter-spacing: 0.16em; opacity: 0.8; }
+@media (max-width: 640px) { #drs { right: 12px; width: 58vw; } #pcard { left: 12px; bottom: 96px; } }

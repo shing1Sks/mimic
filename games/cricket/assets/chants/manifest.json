@@ -1,0 +1,72 @@
+{
+"aus": {
+"file": "aus.ogg",
+"ms": 3806,
+"text": "Aus-sie! Aus-sie! Aus-sie!"
+},
+"blr": {
+"file": "blr.ogg",
+"ms": 5807,
+"text": "Ben-ga-luru! Ben-ga-luru! Ben-ga-luru!"
+},
+"che": {
+"file": "che.ogg",
+"ms": 3806,
+"text": "Chen-nai! Chen-nai! Chen-nai!"
+},
+"del": {
+"file": "del.ogg",
+"ms": 2961,
+"text": "Dil-li! Dil-li! Dil-li!"
+},
+"eng": {
+"file": "eng.ogg",
+"ms": 3806,
+"text": "Eng-land! Eng-land! Eng-land!"
+},
+"hyd": {
+"file": "hyd.ogg",
+"ms": 3506,
+"text": "Hy-der-a-bad! Hy-der-a-bad!"
+},
+"ind": {
+"file": "ind.ogg",
+"ms": 6706,
+"text": "In-di-a! In-di-a! In-di-a!"
+},
+"jai": {
+"file": "jai.ogg",
+"ms": 4506,
+"text": "Jai-pur! Jai-pur! Jai-pur!"
+},
+"kol": {
+"file": "kol.ogg",
+"ms": 4306,
+"text": "Kol-ka-ta! Kol-ka-ta! Kol-ka-ta!"
+},
+"mum": {
+"file": "mum.ogg",
+"ms": 4306,
+"text": "Mum-bai! Mum-bai! Mum-bai!"
+},
+"nzl": {
+"file": "nzl.ogg",
+"ms": 4506,
+"text": "Black Caps! Black Caps! Black Caps!"
+},
+"pak": {
+"file": "pak.ogg",
+"ms": 5907,
+"text": "Pa-ki-stan! Pa-ki-stan! Pa-ki-stan!"
+},
+"pun": {
+"file": "pun.ogg",
+"ms": 4107,
+"text": "Pun-jab! Pun-jab! Pun-jab!"
+},
+"rsa": {
+"file": "rsa.ogg",
+"ms": 6707,
+"text": "Pro-teas! Pro-teas! Pro-teas!"
+}
+}

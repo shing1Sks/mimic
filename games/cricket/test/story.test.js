@@ -37,5 +37,23 @@ const ball = (st, o) => S.ball(st, Object.assign({ inn: 0, wk: 0, bowler: 'A', r
   check('wides are not balls faced', S.batter(st3, { inn: 0, wk: 0 }).balls === 0);
   check('runs and balls in words: 31 (5)', (b => b.runs === 30 && b.balls === 5)(S.batter(st, { inn: 0, wk: 0 })));
 }
+{
+  // milestones, the partnership, the player of the match
+  check('a milestone when a batter passes 50 and 100, once each', S.milestone(48, 52) === 'fifty' && S.milestone(52, 56) === null && S.milestone(97, 101) === 'hundred' && S.milestone(45, 104) === 'hundred');
+  const st = S.create();
+  for (let i = 0; i < 4; i++) ball(st, { runs: 4, batName: 'Opener' });
+  ball(st, { wicket: true, batName: 'Opener' });
+  ball(st, { runs: 6, wk: 1, batName: 'Number Three' }); ball(st, { runs: 1, wk: 1, batName: 'Number Three' });
+  check('the partnership starts again after a wicket', (p => p.runs === 7 && p.balls === 2)(S.partnership(st, 0)), S.partnership(st, 0));
+  const st2 = S.create();
+  for (let i = 0; i < 6; i++) ball(st2, { runs: 6, batName: 'Big Hitter' });
+  for (let i = 0; i < 12; i++) ball(st2, { inn: 1, wk: Math.min(i, 3), wicket: i < 3, bowler: 'Quick', batName: 'Tail ' + i });
+  const pm = S.potm(st2);
+  check('player of the match: the bigger impact (36 off 6 vs 3 for 0)', pm && (pm.name === 'Quick' || pm.name === 'Big Hitter') && /[(]/.test(pm.line), pm);
+  const st3 = S.create();
+  for (let i = 0; i < 6; i++) ball(st3, { runs: 1, batName: 'Steady' });
+  for (let i = 0; i < 6; i++) ball(st3, { inn: 1, wicket: i < 4, wk: i, bowler: 'Strike', batName: 'B' + i });
+  check('four wickets beat six singles', S.potm(st3).name === 'Strike' && S.potm(st3).line === '4-0 (1)', S.potm(st3));
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -664,6 +664,55 @@
 "prio": 2,
 "text": "Catches jitwaate hain match, aur yeh toh gira diya!"
 },
+"drsNotOut_01": {
+"file": "drsNotOut_01.ogg",
+"moment": "drsNotOut",
+"ms": 7707,
+"prio": 3,
+"text": "Not out! Bach gaya, bach gaya! Aaj kismat iske saath hai!"
+},
+"drsNotOut_02": {
+"file": "drsNotOut_02.ogg",
+"moment": "drsNotOut",
+"ms": 6206,
+"prio": 3,
+"text": "Missing! Gend stumps ko chhoo ke bhi nahi gayi!"
+},
+"drsOut_01": {
+"file": "drsOut_01.ogg",
+"moment": "drsOut",
+"ms": 6706,
+"prio": 3,
+"text": "Out! Teesri aankh ne bhi keh diya, jao bhai, pavilion!"
+},
+"drsOut_02": {
+"file": "drsOut_02.ogg",
+"moment": "drsOut",
+"ms": 6106,
+"prio": 3,
+"text": "Hitting! Seedha stumps pe! Koi bahana nahi!"
+},
+"drsReview_01": {
+"file": "drsReview_01.ogg",
+"moment": "drsReview",
+"ms": 4806,
+"prio": 2,
+"text": "Review le liya! Ab teesri aankh faisla karegi!"
+},
+"drsReview_02": {
+"file": "drsReview_02.ogg",
+"moment": "drsReview",
+"ms": 4406,
+"prio": 2,
+"text": "Dil ki dhadkan tez, aur screen pe sabki nazar!"
+},
+"drsReview_03": {
+"file": "drsReview_03.ogg",
+"moment": "drsReview",
+"ms": 2592,
+"prio": 2,
+"text": "Technology ki adaalat lagi hai, guru!"
+},
 "edgeFour_01": {
 "file": "edgeFour_01.ogg",
 "moment": "edgeFour",
@@ -733,6 +782,34 @@
 "ms": 6006,
 "prio": 2,
 "text": "Camera dekh ke aise naache jaise baraat mein dulhe ka bhai!"
+},
+"fifty_01": {
+"file": "fifty_01.ogg",
+"moment": "fifty",
+"ms": 5407,
+"prio": 3,
+"text": "Pachaas! Bat utha ke salaam karo, guru, yeh kamaai hui hai!"
+},
+"fifty_02": {
+"file": "fifty_02.ogg",
+"moment": "fifty",
+"ms": 4906,
+"prio": 3,
+"text": "Fifty! Aur abhi toh party shuru hui hai!"
+},
+"fifty_03": {
+"file": "fifty_03.ogg",
+"moment": "fifty",
+"ms": 7206,
+"prio": 3,
+"text": "Aadha shatak! Stadium khada ho gaya, taaliyan ruk nahi rahi!"
+},
+"fifty_04": {
+"file": "fifty_04.ogg",
+"moment": "fifty",
+"ms": 5406,
+"prio": 3,
+"text": "Pachaas run, aur har run mein pasina, har run mein jazba!"
 },
 "four_01": {
 "file": "four_01.ogg",
@@ -845,6 +922,27 @@
 "ms": 6107,
 "prio": 4,
 "text": "Hat-trick! Aaj toh bowler ke ghar Diwali hai!"
+},
+"hundred_01": {
+"file": "hundred_01.ogg",
+"moment": "hundred",
+"ms": 6506,
+"prio": 4,
+"text": "Shatak! Sau run! Aaj iska naam itihaas mein likha jayega!"
+},
+"hundred_02": {
+"file": "hundred_02.ogg",
+"moment": "hundred",
+"ms": 9407,
+"prio": 4,
+"text": "Century! Helmet utaro, aasmaan ko dekho, aaj tum raja ho!"
+},
+"hundred_03": {
+"file": "hundred_03.ogg",
+"moment": "hundred",
+"ms": 6406,
+"prio": 4,
+"text": "Sau ka aankda! Jaise Himalaya ki choti pe jhanda gaad diya!"
 },
 "lastOver_01": {
 "file": "lastOver_01.ogg",
@@ -1133,6 +1231,27 @@
 "prio": 3,
 "text": "Apne hi pair pe kulhaadi maar li, guru!"
 },
+"potm_01": {
+"file": "potm_01.ogg",
+"moment": "potm",
+"ms": 6406,
+"prio": 2,
+"text": "Aaj ka asli hero! Player of the match, taaliyan ho jaayein!"
+},
+"potm_02": {
+"file": "potm_02.ogg",
+"moment": "potm",
+"ms": 4506,
+"prio": 2,
+"text": "Is khiladi ne aaj match ko apni mutthi mein kar liya!"
+},
+"potm_03": {
+"file": "potm_03.ogg",
+"moment": "potm",
+"ms": 5806,
+"prio": 2,
+"text": "Sabse chamakta sitaara, aaj ka player of the match!"
+},
 "quick20_01": {
 "file": "quick20_01.ogg",
 "moment": "quick20",
@@ -1160,6 +1279,20 @@
 "ms": 3106,
 "prio": 3,
 "text": "Bowlers ki shaamat aa gayi aaj!"
+},
+"signOff_01": {
+"file": "signOff_01.ogg",
+"moment": "signOff",
+"ms": 6807,
+"prio": 1,
+"text": "Toh doston, aaj ke liye bas itna hi. Khelte raho, muskurate raho!"
+},
+"signOff_02": {
+"file": "signOff_02.ogg",
+"moment": "signOff",
+"ms": 7006,
+"prio": 1,
+"text": "Match khatam, par yaadein hamesha rahengi. Sat sri akal!"
 },
 "six_01": {
 "file": "six_01.ogg",
@@ -1384,6 +1517,27 @@
 "ms": 6606,
 "prio": 3,
 "text": "They are like bicycles in the cycle stand: if one falls down, the complete row will be down!"
+},
+"timeout_01": {
+"file": "timeout_01.ogg",
+"moment": "timeout",
+"ms": 6406,
+"prio": 2,
+"text": "Strategic timeout! Thodi saans lo, thoda paani piyo, aur plan banao!"
+},
+"timeout_02": {
+"file": "timeout_02.ogg",
+"moment": "timeout",
+"ms": 5006,
+"prio": 2,
+"text": "Break ka time, aur stadium mein DJ ka dhamaal!"
+},
+"timeout_03": {
+"file": "timeout_03.ogg",
+"moment": "timeout",
+"ms": 5106,
+"prio": 2,
+"text": "Captain ka dimaag chal raha hai, aur crowd ka josh bhi!"
 },
 "wide_01": {
 "file": "wide_01.ogg",

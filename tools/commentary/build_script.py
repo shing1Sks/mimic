@@ -266,6 +266,45 @@ Chhakka pada, aur stage pe dhamaal! | छक्का पड़ा, और stage
 Is shot pe toh poora stadium naach utha! | इस shot पे तो पूरा stadium नाच उठा!
 ''')
 
+m('fifty', 3, 'proud and rising, applauding a fine knock, then roaring', '''
+Pachaas! Bat utha ke salaam karo, guru, yeh kamaai hui hai! | पचास! Bat उठा के सलाम करो, गुरु, ये कमाई हुई है!
+Fifty! Aur abhi toh party shuru hui hai! | Fifty! और अभी तो party शुरू हुई है!
+Aadha shatak! Stadium khada ho gaya, taaliyan ruk nahi rahi! | आधा शतक! Stadium खड़ा हो गया, तालियाँ रुक नहीं रहीं!
+Pachaas run, aur har run mein pasina, har run mein jazba! | पचास run, और हर run में पसीना, हर run में जज़्बा!
+''')
+m('hundred', 4, 'overwhelmed with joy, near tears, then a huge roar', '''
+Shatak! Sau run! Aaj iska naam itihaas mein likha jayega! | शतक! सौ run! आज इसका नाम इतिहास में लिखा जाएगा!
+Century! Helmet utaro, aasmaan ko dekho, aaj tum raja ho! | Century! Helmet उतारो, आसमान को देखो, आज तुम राजा हो!
+Sau ka aankda! Jaise Himalaya ki choti pe jhanda gaad diya! | सौ का आँकड़ा! जैसे हिमालय की चोटी पे झंडा गाड़ दिया!
+''')
+m('drsReview', 2, 'hushed and tense, building suspense', '''
+Review le liya! Ab teesri aankh faisla karegi! | Review ले लिया! अब तीसरी आँख फ़ैसला करेगी!
+Dil ki dhadkan tez, aur screen pe sabki nazar! | दिल की धड़कन तेज़, और screen पे सबकी नज़र!
+Technology ki adaalat lagi hai, guru! | Technology की अदालत लगी है, गुरु!
+''')
+m('drsOut', 3, 'explosive, the verdict lands like thunder', '''
+Out! Teesri aankh ne bhi keh diya, jao bhai, pavilion! | Out! तीसरी आँख ने भी कह दिया, जाओ भाई, pavilion!
+Hitting! Seedha stumps pe! Koi bahana nahi! | Hitting! सीधा stumps पे! कोई बहाना नहीं!
+''')
+m('drsNotOut', 3, 'relieved and laughing, a great escape', '''
+Not out! Bach gaya, bach gaya! Aaj kismat iske saath hai! | Not out! बच गया, बच गया! आज किस्मत इसके साथ है!
+Missing! Gend stumps ko chhoo ke bhi nahi gayi! | Missing! गेंद stumps को छू के भी नहीं गई!
+''')
+m('timeout', 2, 'like a showman hyping the break', '''
+Strategic timeout! Thodi saans lo, thoda paani piyo, aur plan banao! | Strategic timeout! थोड़ी साँस लो, थोड़ा पानी पियो, और plan बनाओ!
+Break ka time, aur stadium mein DJ ka dhamaal! | Break का time, और stadium में DJ का धमाल!
+Captain ka dimaag chal raha hai, aur crowd ka josh bhi! | Captain का दिमाग़ चल रहा है, और crowd का जोश भी!
+''')
+m('potm', 2, 'warm and grand, like presenting an award', '''
+Aaj ka asli hero! Player of the match, taaliyan ho jaayein! | आज का असली hero! Player of the match, तालियाँ हो जाएँ!
+Is khiladi ne aaj match ko apni mutthi mein kar liya! | इस खिलाड़ी ने आज match को अपनी मुट्ठी में कर लिया!
+Sabse chamakta sitaara, aaj ka player of the match! | सबसे चमकता सितारा, आज का player of the match!
+''')
+m('signOff', 1, 'warm, slow farewell with a smile', '''
+Toh doston, aaj ke liye bas itna hi. Khelte raho, muskurate raho! | तो दोस्तों, आज के लिए बस इतना ही। खेलते रहो, मुस्कुराते रहो!
+Match khatam, par yaadein hamesha rahengi. Sat sri akal! | Match ख़त्म, पर यादें हमेशा रहेंगी। सत श्री अकाल!
+''')
+
 # His own famous lines (the user asked for them, 2026-11-14), verbatim as published in Sportskeeda,
 # ThePrint and Wikiquote collections of "Sidhuisms". Appended to the moments they suit and picked
 # three times as readily (w: 3). Left out: the sexist ones and any that mock a named player.

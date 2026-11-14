@@ -196,6 +196,7 @@
       const grille = new T.Mesh(new T.TorusGeometry(0.11, 0.006, 4, 16, Math.PI), std({ color: 0x9aa3ad, metalness: 0.7, roughness: 0.35 }));
       grille.rotation.set(Math.PI / 2, 0, Math.PI); grille.position.set(0, -0.06, 0.04); grille.scale.set(1, 1.1, 1); h.add(grille);
       addTo(B.head, h, new T.Vector3(0, 0.12, 0.0));
+      A.helmet = h;
     }
     if (kit.gloves) {
       ['left', 'right'].forEach(s => { const gl = new T.Mesh(new T.BoxGeometry(0.09, 0.11, 0.1), std({ color: kit.gloves, roughness: 0.6 })); addTo(B.arms[s].palm, gl, new T.Vector3(0, 0.05, 0)); });

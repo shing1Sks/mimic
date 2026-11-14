@@ -164,7 +164,7 @@
   }
   const ballQ = new T.Quaternion(), _dq = new T.Quaternion(), _ax = new T.Vector3();
   const cpuBat = { q: BA.batQuat(0, 0, 'vertical') };
-  const aimRing = new T.Mesh(new T.RingGeometry(0.24, 0.34, 40), new T.MeshBasicMaterial({ color: 0xffd36b, transparent: true, opacity: 0.85, toneMapped: false, depthWrite: false }));
+  const aimRing = new T.Mesh(new T.RingGeometry(0.3, 0.46, 40), new T.MeshBasicMaterial({ color: 0xffd36b, transparent: true, opacity: 0.85, toneMapped: false, depthWrite: false }));
   aimRing.rotation.x = -Math.PI / 2; aimRing.visible = false; scene.add(aimRing);
   const aimDot = new T.Mesh(new T.CircleGeometry(0.08, 16), aimRing.material); aimDot.rotation.x = -Math.PI / 2; aimRing.add(aimDot); aimDot.rotation.x = 0;
   const pitchMark = new T.Mesh(new T.CircleGeometry(0.11, 20), new T.MeshBasicMaterial({ color: 0x7fe6ff, transparent: true, opacity: 0.0, toneMapped: false, depthWrite: false }));
@@ -194,6 +194,27 @@
         people.cheer.push({ A, poms, plat, x: cx + Math.cos(face) * 0.8 * s, z: cz - Math.sin(face) * 0.8 * s, face, ph: k * 0.7 + (s > 0 ? 0.35 : 0) });
       }
     });
+    // the fan cam: three painted, shirtless superfans with a flag, at the rope by a cheer platform
+    people.fans = [];
+    {
+      const a0 = Math.PI / 2 + 0.11, r = 68.4;
+      for (let k = 0; k < 3; k++) {
+        const a = a0 + (k - 1) * 0.022, x = Math.sin(a) * r, z = PH.FIELD.CZ + Math.cos(a) * r, face = Math.atan2(-x, PH.FIELD.CZ - z);
+        const skin = [0xd9a273, 0xc68642, 0x8d5524][k];
+        const A = CK.makeAthlete({ body: 'm', shirt: skin, pants: [0x1d2433, 0x3a3f4a, 0x23324d][k], skin, hair: 0x1a120b });
+        A.root.scale.set(1.18, 1, 1.15);            // a well-fed superfan, shirt off
+        // the belly, and the team painted across the chest (stuck to the torso bone: it moves with him)
+        const tb = A.B.torso, ws = new T.Vector3(); A.root.updateMatrixWorld(true); tb.getWorldScale(ws);
+        const sk = 1 / (ws.x || 1);
+        const belly = new T.Mesh(new T.SphereGeometry(0.17, 14, 10), new T.MeshStandardMaterial({ color: new T.Color(skin).convertSRGBToLinear(), roughness: 0.75 }));
+        belly.scale.set(0.95 * sk, 0.85 * sk, 0.8 * sk); belly.position.set(0, -0.03 * sk, 0.06 * sk); tb.add(belly);
+        const paint = new T.Mesh(new T.PlaneGeometry(0.36, 0.22), new T.MeshStandardMaterial({ transparent: true, roughness: 0.7 }));
+        paint.scale.setScalar(sk); paint.position.set(0, 0.26 * sk, 0.13 * sk); tb.add(paint);
+        A.root.traverse(o => { o.castShadow = false; });
+        scene.add(A.root);
+        people.fans.push({ A, paint, flag: k === 1 ? fanFlag() : null, x, z, face, ph: k * 1.7, k });
+      }
+    }
     people.ready = true;
     cheerN = -1; cheerFrame(0);   // the cheerleaders on their platforms from the start (the title shows the ground)
     try { CK.crowdImpostors(scene, world.crowd, CK.bakeCrowdAtlas(renderer)); } catch (e) { console.warn('crowd atlas', e); }
@@ -238,13 +259,14 @@
     G.match = MA.create({ overs, wickets: wk, names: [0, 1].map(i => teamOf(i).name), firstBat });
     G.batRuns = [[], []];   // each innings: runs per batter (by wickets down)
     G.att = CK.Attitude.context(); G.gesture = null; G.wkBalls = [];
-    paajiLater('start', 1200);
+    G.story = CK.Story.create();
     G.inGame = true; G.paused = false; G.result = null;
     showScreen(null);
     $('hud').classList.remove('hidden');
     paintTeams();
     newBall(true);
     banner(kind === 'versus' ? `${G.match.names[inn().bat]} BATS` : kind === 'nets-bowl' ? 'YOU BOWL' : 'YOU BAT', `${overs} OVER${overs > 1 ? 'S' : ''} · ${wk} WICKET${wk > 1 ? 'S' : ''}`, 'neutral', 2.2);
+    walkOut('start');
     updateScorebug();
     AU.resume();
   }
@@ -267,30 +289,104 @@
   /** The cheerleaders: a sway between balls, a pom-pom routine on the beat after a big moment. */
   function cheerFrame(dt) {
     if (!people.ready || !people.cheer) return;
-    const on = CK.Hype.extras(gfxLevel()).cheerleaders, t = performance.now() / 1000, dancing = G.dance > 0;
-    // far from the play: a new pose every 2nd frame while dancing, every 8th while swaying
+    const on = CK.Hype.extras(gfxLevel()).cheerleaders, t = performance.now() / 1000, dancing = G.dance > 0, special = G.cheerSpecial > 0;
+    // far from the play: a new pose every 2nd frame while dancing, every 8th while swaying (every
+    // frame for the special number, with the camera on them)
     cheerN = (cheerN + 1) % (dancing ? 2 : 8);
-    const step = cheerN === 0, _p = _cheerP;
+    const step = cheerN === 0 || special, _p = _cheerP;
     cheerDt += dt;
     for (const c of people.cheer) {
       c.A.root.visible = on; c.plat.visible = on; c.poms.forEach(m => { m.visible = on; });
       if (!on || !step) continue;
       if (!c.shadowOff) { c.A.root.traverse(o => { o.castShadow = false; }); c.shadowOff = true; }
       const beat = (t * 2.2 + c.ph) * Math.PI * 2, st = { x: c.x, z: c.z, facing: c.face };
-      let arms = null, y = 0.8;
-      if (dancing) {
+      let arms = null, y = 0.8, spin = 0;
+      if (special) {
+        // the special number: a jump and a full spin together, then pom-poms high and wide
+        const s = clamp(1 - G.cheerSpecial / 2.0, 0, 1), jump = clamp((s - 0.05) / 0.4, 0, 1);
+        spin = jump * Math.PI * 2;
+        y += Math.sin(jump * Math.PI) * 0.55;
+        const h = CK.Anim.gestureHands('cheer', st);
+        const wide = s > 0.45 ? Math.sin((s - 0.45) * 14 + c.ph) * 0.35 : 0, up = 1.15 + (s > 0.45 ? 0.2 : 0) + y - 0.8;
+        h.left.y += up + wide; h.right.y += up - wide;
+        arms = { left: { hand: h.left }, right: { hand: h.right } };
+      } else if (dancing) {
         const h = CK.Anim.gestureHands(Math.sin(beat / 2) > 0 ? 'cheer' : 'shrug', st);
         if (Math.sin(beat / 2) <= 0) { h.left.y += 0.9; h.right.y += 0.9; }   // arms wide and high on the off-beat
         const lift = 0.8 + Math.abs(Math.sin(beat)) * 0.2; h.left.y += lift; h.right.y += lift;   // standing on the platform
         arms = { left: { hand: h.left }, right: { hand: h.right } };
         y += Math.abs(Math.sin(beat)) * 0.2;
       }
-      CK.poseAthlete(c.A, { x: c.x, z: c.z, facing: c.face + (dancing ? 0 : Math.sin(t * 1.3 + c.ph) * 0.25), y, run: 0, crouch: dancing ? 0 : 0.05, arms }, cheerDt);
+      CK.poseAthlete(c.A, { x: c.x, z: c.z, facing: c.face + spin + (dancing || special ? 0 : Math.sin(t * 1.3 + c.ph) * 0.25), y, run: 0, crouch: dancing || special ? 0 : 0.05, arms }, cheerDt);
       ['left', 'right'].forEach((s, j) => { const palm = c.A.B.arms[s].palm; if (palm) { palm.getWorldPosition(_p); c.poms[j].position.copy(_p); } });
     }
     if (step) cheerDt = 0;
+    fanFrame(dt, !!(G.cutaway && G.cutaway.shot === 'fans'));
   }
   let cheerN = 0, cheerDt = 0;
+  // the superfans' body paint and flag: the team's colours on canvas (made once per team)
+  const fanTex = {};
+  const hex6 = n => '#' + n.toString(16).padStart(6, '0');
+  function teamCanvas(tm, w, h, draw) {
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    draw(c.getContext('2d'), hex6(tm.shirt), hex6(tm.accent));
+    const t = new T.CanvasTexture(c); t.colorSpace = T.SRGBColorSpace; return t;
+  }
+  function fanFlag() {
+    const geo = new T.PlaneGeometry(1.5, 0.95, 14, 1);
+    const flag = new T.Mesh(geo, new T.MeshStandardMaterial({ side: T.DoubleSide, roughness: 0.8 }));
+    const pole = new T.Mesh(new T.CylinderGeometry(0.02, 0.02, 1.6, 6), new T.MeshStandardMaterial({ color: 0xcfcfcf, roughness: 0.5 }));
+    scene.add(flag); scene.add(pole);
+    return { flag, pole, base: Float32Array.from(geo.attributes.position.array) };
+  }
+  /** Paint the superfans for team seat i: body paint stripes and the flag. */
+  function paintFans(i) {
+    if (!people.fans) return;
+    const tm = teamOf(i), key = tm.id;
+    if (!fanTex[key]) {
+      fanTex[key] = {
+        body: teamCanvas(tm, 160, 100, (x, a, b) => { x.clearRect(0, 0, 160, 100); x.fillStyle = a; x.beginPath(); x.ellipse(80, 50, 78, 46, 0, 0, Math.PI * 2); x.fill(); x.fillStyle = b; x.fillRect(4, 40, 152, 20); x.fillStyle = a === '#ffffff' || a === '#f2f2f2' ? '#c8102e' : '#ffffff'; x.font = 'bold 40px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(tm.short, 80, 52); }),
+        flag: teamCanvas(tm, 192, 120, (x, a, b) => { x.fillStyle = a; x.fillRect(0, 0, 192, 120); x.fillStyle = b; x.fillRect(0, 44, 192, 32); x.fillStyle = a; x.font = 'bold 30px sans-serif'; x.textAlign = 'center'; x.fillText(tm.short, 96, 71); }),
+      };
+    }
+    for (const f of people.fans) {
+      f.paint.material.map = fanTex[key].body; f.paint.material.needsUpdate = true;
+      if (f.flag) { f.flag.flag.material.map = fanTex[key].flag; f.flag.flag.material.needsUpdate = true; }
+    }
+  }
+  /** The superfans: jumping and waving the flag when the fan cam is on them, swaying otherwise. */
+  function fanFrame(dt, live) {
+    if (!people.fans) return;
+    const on = CK.Hype.extras(gfxLevel()).cheerleaders, t = performance.now() / 1000;
+    for (const f of people.fans) {
+      f.A.root.visible = on; if (f.flag) { f.flag.flag.visible = on; f.flag.pole.visible = on; }
+      if (!on || (!live && cheerN !== 0)) continue;
+      const st = { x: f.x, z: f.z, facing: f.face }, beat = t * 2.6 + f.ph;
+      let arms = null, y = 0;
+      if (live) {
+        const h = CK.Anim.gestureHands('cheer', st), w = Math.sin(beat * Math.PI * 2);
+        if (f.k === 0) { h.left.y += 0.3 + 0.3 * w; h.right.y += 0.3 - 0.3 * w; }                    // fist pumps
+        else if (f.k === 1) { h.right.y += 0.45; h.left.y += 0.15 + 0.2 * w; }                     // the flag high
+        else { const mx = (h.left.x + h.right.x) / 2, mz = (h.left.z + h.right.z) / 2, c = 0.5 + 0.5 * w;   // clapping overhead
+          h.left.x = lerp(h.left.x, mx, c); h.left.z = lerp(h.left.z, mz, c); h.right.x = lerp(h.right.x, mx, c); h.right.z = lerp(h.right.z, mz, c); h.left.y += 0.35; h.right.y += 0.35; }
+        arms = { left: { hand: h.left }, right: { hand: h.right } };
+        y = Math.max(0, Math.sin(beat * Math.PI)) * (f.k === 1 ? 0.12 : 0.26);
+      }
+      CK.poseAthlete(f.A, { x: f.x, z: f.z, facing: f.face + (live ? Math.sin(beat * 2) * 0.2 : Math.sin(t + f.ph) * 0.15), y, run: 0, crouch: live ? 0 : 0.1, arms }, live ? dt : dt * 8);
+      if (f.flag) {
+        // the pole in the right hand, the flag streaming out and waving
+        f.A.B.arms.right.palm.getWorldPosition(_fanP);
+        f.flag.pole.position.set(_fanP.x, _fanP.y + 0.55, _fanP.z);
+        const g = f.flag.flag;
+        g.position.set(_fanP.x, _fanP.y + 1.1, _fanP.z); g.rotation.set(0, f.face + Math.sin(t * 1.7) * 0.35, 0);
+        g.translateX(0.75);
+        const pos = g.geometry.attributes.position, b = f.flag.base;
+        for (let v = 0; v < pos.count; v++) { const px = b[v * 3] + 0.75; pos.array[v * 3 + 2] = Math.sin(px * 4.2 - t * 9) * 0.12 * px; }
+        pos.needsUpdate = true;
+      }
+    }
+  }
+  const _fanP = new T.Vector3();
   const _cheerP = new T.Vector3(), _bubP = new T.Vector3();
   /** A reaction (CK.Attitude) after a moment: a gesture for a couple of seconds, maybe a chirp. */
   function attitude(ev, by) {
@@ -328,7 +424,7 @@
     G.phase = 'ready'; G.phaseT = 0; G.ball = null; G.ballOn = false; G.contact = null; G.outcome = null; G.hold = false;
     G.del = null; G.rel = null; G.path = null; G.cpuPlan = null; G.frames = []; G.stumpsFall = null; G.runs = null; G.fielderPlan = null;
     G.slow = 1; G.tracker = BA.tracker(); G.fed = 0;
-    G.celebrate = null; G.batCheer = 0; G.eventFrame = null; G.cutAt = 0; G.keyUp = 0; G.stepT = 0; G.landAt = null; G.tsT = 0;
+    G.celebrate = null; G.batCheer = 0; G.eventFrame = null; G.cutAt = 0; G.keyUp = 0; G.aimRef = null; G.stepT = 0; G.landAt = null; G.tsT = 0;
     G.bowler = { x: armSide() * 1.5, z: -31.5, run: 0, phase: 'mark', relT: 0 };
     ballMesh.visible = false; trail.clear(); trail.push({ x: 0, y: -5, z: 0 }, false);
     resetStumps();
@@ -337,6 +433,15 @@
     if (prevField) G.field.forEach((f, i) => { if (prevField[i] && prevField[i].cur) { f.cur = prevField[i].cur; f.face = prevField[i].face; } });
     hud.speedOff();
     prompts();
+    if (!first && G.match && G.story) {
+      // a new over: who has the ball (and his figures, if he is back for another spell)
+      if (inn().balls > 0 && inn().balls % 6 === 0) {
+        const nm = bowlerName(), w = CK.Story.bowler(G.story, { inn: G.match.i, bowler: nm });
+        banner(w.balls ? 'BACK INTO THE ATTACK' : 'NEW BOWLER', nm.toUpperCase() + (w.balls ? ' · ' + CK.Story.figures(G.story, { inn: G.match.i, bowler: nm }) : ''), 'neutral', 1.8);
+      }
+      const note = CK.Story.batterNote(G.story, { inn: G.match.i, wk: inn().wkts });
+      if (note) paajiLater(note, 700);
+    }
     if (!first) updateScorebug();
   }
   function bowlKind() {
@@ -347,12 +452,6 @@
 
   // ---------------------------------------------------------------------------------
   // The delivery
-  /** Aim spot from where the bowler points the phone (mirrored room: right = right on screen). */
-  function aimFromPhone(q) {
-    const f = BO.rotate(q, { x: 0, y: 0, z: -1 });
-    const elev = Math.asin(clamp(f.y, -1, 1)) / deg, head = Math.atan2(f.x, -f.z) / deg;
-    return { len: clamp(1 - elev * 0.35, -0.6, 12), x: -clamp(head * 0.06, -1.4, 1.4) };
-  }
   function defaultAim() { return { x: 0.11 * batSide(), len: 5.8 }; }
 
   function bowlerFrame(dt, now) {
@@ -361,11 +460,15 @@
     const inp = s.input;
     const ev = inp.drain();
     if (G.phase === 'ready') {
-      // HOLD locks the spot as it was just before the press (the arm is already moving on it)
+      // HOLD locks the marker as it was just before the press (the arm is already moving on it)
       for (const e of ev) if (e.kind === 'press' && G.phaseT > 0.5) { startRunup(e.t); return; }
       if (opt('aim') === 'ON') {
-        const a = aimFromPhone(inp.S.q);
-        G.aimSm.x = lerp(G.aimSm.x, a.x, 0.25); G.aimSm.len = lerp(G.aimSm.len, a.len, 0.25);
+        // the marker starts on a good length; once the phone settles in the stance, tilting it from
+        // there steers it (any grip: only the change counts, so the phone pointing up is fine)
+        if (!G.aimRef) { Object.assign(G.aimSm, defaultAim()); if (G.phaseT > 0.3 && BO.steady(inp.S.samples, 250, 0.06)) { G.aimRef = inp.S.q; G.aimBase = defaultAim(); } }
+        // a big quick move (bringing the phone up from the follow-through) is not aiming: settle again
+        else if (!BO.steady(inp.S.samples, 150, 0.35)) G.aimRef = null;
+        else { const a = BO.tiltAim(G.aimRef, inp.S.q, G.aimBase); G.aimSm.x = lerp(G.aimSm.x, a.x, 0.3); G.aimSm.len = lerp(G.aimSm.len, a.len, 0.3); }
       } else Object.assign(G.aimSm, defaultAim());
     } else if (G.phase === 'runup') {
       if (!G.keyUp) for (const e of ev) if (e.kind === 'release') { G.keyUp = e.t; G.cutAt = 0; break; }
@@ -376,6 +479,7 @@
   }
   function startRunup(tPress) {
     G.aim = { x: G.aimSm.x, len: G.aimSm.len };
+    const mc = bowlSeat().mc; if (mc && opt('aim') === 'ON') mc.rumble(0.35, 40, 0);   // the marker locks
     G.phase = 'runup'; G.phaseT = 0; G.bowler.phase = 'run'; G.tPress = tPress; G.keyUp = 0;
     G.cutAt = 0.75;                                   // the run-up shot, then back behind the batter
     prompts();
@@ -464,11 +568,14 @@
   function deliveryCard(del, rel, pr) {
     const lines = [];
     if (!rel.cpu) {
-      const ms = Math.round(rel.dt - BO.BOWL.DT_IDEAL);
-      if (Math.abs(del.lenAdj) < 0.25) lines.push([rel.dtRef ? 'ON YOUR TIMING' : 'ON TIME', 'hot']);
-      else lines.push([(ms < 0 ? 'EARLY ' : 'LATE ') + Math.abs(ms) + ' ms · ' + Math.abs(del.lenAdj).toFixed(1) + ' m ' + (del.lenAdj < 0 ? 'FULLER' : 'SHORTER'), 'warn']);
-      const a = Math.round(rel.az / deg);
-      if (Math.abs(a) >= 3) lines.push(['ARM ' + Math.abs(a) + '° ' + (a > 0 ? 'RIGHT' : 'LEFT') + (rel.azRef ? ' OF YOUR LINE' : ''), Math.abs(a) > 10 ? 'warn' : '']);
+      // how far off the marker, and why: the key's timing (length) and the arm's line (line)
+      const miss = Math.hypot(del.lenAdj, del.lineAdj || 0);
+      if (miss < 0.25) lines.push(['ON THE MARKER', 'hot']);
+      else {
+        const why = Math.abs(rel.lenErr || 0) < 0.03 && Math.abs(rel.az || 0) < 0.05 ? 'FLAT OUT SPRAYS IT' : Math.abs(del.lenAdj) >= Math.abs(del.lineAdj || 0)
+          ? (rel.lenErr < 0 ? 'LET GO EARLY' : 'LET GO LATE') : ('ARM ' + ((del.lineAdj || 0) > 0 ? 'RIGHT' : 'LEFT') + ' OF LINE');
+        lines.push(['MISSED BY ' + miss.toFixed(1) + ' m · ' + why, miss > 0.6 ? 'warn' : '']);
+      }
     }
     const plain = Object.assign({}, del, { w: { x: 0, y: 0, z: 0 }, swing: 0, seamKick: 0 });
     const p0 = PH.run(BO.launch(plain), { until: b => b.p.z >= 0 || b.t > 3, samples: false }).end.p;
@@ -751,7 +858,7 @@
   }
   function finishBall() {
     const e = G.ending; G.ending = null;
-    if (e.replay && !G.replay) { startReplay(() => recordBall(e.rec)); return; }
+    if (e.replay && !G.replay) { startReplay(() => startCutaway(e.rec, () => recordBall(e.rec))); return; }
     recordBall(e.rec);
   }
   function recordBall(rec) {
@@ -760,15 +867,20 @@
     if (rec.runs && rec.extra !== 'wd' && G.batRuns) G.batRuns[ib][bw] = before + rec.runs;
     if (before < 20 && G.batRuns && G.batRuns[ib][bw] >= 20) paajiLater('quick20', 2600);
     if (rec.wicket && bw + 1 === 3) paajiLater('threeWickets', 2600);
+    if (G.story) CK.Story.ball(G.story, { inn: ib, wk: bw, bowler: bowlerName(), runs: rec.runs || 0, extra: rec.extra || null, wicket: !!rec.wicket });
     const ev = MA.record(G.match, rec);
     logEvent('ball', { rec, label: ev.label, score: [inn().runs, inn().wkts, inn().balls] });
     hud.ballDot(ev.label);
     updateScorebug();
     if (ev.matchOver || (ev.inningsOver && /^nets/.test(G.kind))) { G.phase = 'over'; setTimeout(() => (/^nets/.test(G.kind) ? endNets() : endMatch()), 600); return; }
     if (ev.inningsOver) { inningsBreak(); return; }
-    if (ev.over) { paaji('betweenOvers'); banner('END OF OVER', overSummary(), 'neutral', 1.8); world.crowd.wave = { a: Math.random() * 6.28, t: 6 }; AU.Crowd.chant(2); G.phase = 'between'; G.phaseT = 0; G.betweenT = 1.9; if (bowlSeat().kind === 'cpu') G.cpuStyle = G.cpuStyle === 'spin' ? 'pace' : 'spin'; return; }
+    if (rec.wicket && !ev.over) { newBall(); walkOut('wicket'); return; }
+    if (rec.wicket) G.pendingWalk = true;
+    if (ev.over) { const sm = G.story ? CK.Story.overStart(G.story, { inn: G.match.i, bowler: bowlerName() }) : null; paaji(sm && sm !== 'newBowler' ? sm : Math.random() < 0.5 ? 'newBowler' : 'betweenOvers'); banner('END OF OVER', overSummary(), 'neutral', 1.8); world.crowd.wave = { a: Math.random() * 6.28, t: 6 }; AU.Crowd.chant(2); G.phase = 'between'; G.phaseT = 0; G.betweenT = 1.9; if (bowlSeat().kind === 'cpu') G.cpuStyle = G.cpuStyle === 'spin' ? 'pace' : 'spin'; return; }
     newBall();
   }
+  /** The man bowling this over (the bowling side's last five, in turn). */
+  function bowlerName() { return CK.Teams.lineup(teamOf(inn().bowl)).bowler(Math.floor(inn().balls / 6)); }
   function overSummary() { const o = inn().overs[inn().overs.length - 1] || []; return o.join('  '); }
 
   function inningsBreak() {
@@ -782,7 +894,34 @@
     showScreen('break');
     G.cpuStyle = 'pace';
   }
-  function continueAfterBreak() { showScreen(null); paintTeams(); newBall(true); banner(`${G.match.names[inn().bat]} BATS`, MA.need(G.match).text, 'neutral', 2); }
+  function continueAfterBreak() { showScreen(null); paintTeams(); newBall(true); banner(`${G.match.names[inn().bat]} BATS`, MA.need(G.match).text, 'neutral', 2); walkOut('chase'); }
+  /**
+   * The striker walks out to the middle: at the start of each innings and after a wicket. The first
+   * ball waits for him and for Paaji's line (so the welcome is never cut off); HOLD skips it.
+   */
+  function walkOut(kind) {
+    const name = CK.Teams.lineup(teamOf(inn().bat)).batter(inn().wkts);
+    const side = batSide(), dur = kind === 'wicket' ? 3.2 : 4.2;
+    G.walk = { t: 0, dur, kind, from: kind === 'wicket' ? { x: -7 * side, z: 11 } : { x: -9 * side, z: 14 } };
+    const show = () => { if (G.walk) banner(kind === 'wicket' ? 'NEW BATTER' : 'OPENING THE BATTING', name.toUpperCase() + ' · ' + teamOf(inn().bat).short, 'neutral', 2.2); };
+    if (kind === 'wicket') show(); else setTimeout(show, 2300);
+    paaji(kind === 'start' ? 'start' : kind === 'chase' ? 'chaseStart' : 'newBatter');
+    prompts();
+  }
+  function walkPos() {
+    const W = G.walk, side = batSide(), k = clamp(W.t / W.dur, 0, 1), e = k * (2 - k);
+    const to = { x: -0.42 * side, z: -1.0 };
+    return { x: lerp(W.from.x, to.x, e), z: lerp(W.from.z, to.z, e), k, dir: Math.atan2(to.x - W.from.x, to.z - W.from.z) };
+  }
+  function walkFrame(dt) {
+    const W = G.walk;
+    W.t += dt;
+    const skip = seats.some(x => x.kind === 'phone' && x.mc && x.mc.pressed('a')) || skipKey;
+    skipKey = false;
+    if (skip && W.t > 0.4) { W.t = W.dur; W.skipped = true; }
+    // done when he is in and Paaji has finished his line (never more than 3.5 s more)
+    if (W.t >= W.dur && (W.skipped || !paajiPlayer.speaking || W.t > W.dur + 3.5)) { G.walk = null; G.phaseT = 0; prompts(); }
+  }
 
   function endMatch() {
     G.phase = 'over'; G.inGame = true;
@@ -898,6 +1037,12 @@
     const hands = { x: C.x + d.x / dl * 0.48, y: C.y + d.y / dl * 0.48, z: C.z + d.z / dl * 0.48 };
     const low = { x: hands.x + b.x * 0.1, y: hands.y + b.y * 0.1, z: hands.z + b.z * 0.1 };
     const runOff = G.runs && G.phase === 'hit' ? runProgress() : null;
+    if (G.walk && G.walk.t < G.walk.dur) {
+      // walking out to the crease, bat under the arm
+      const w = walkPos();
+      const st = { x: w.x, z: w.z, facing: w.dir, twist: 0, crouch: 0, run: 0.42, arms: null };
+      return { st, bat: { p: { x: w.x - 0.3 * Math.cos(w.dir), y: 0.72, z: w.z + 0.3 * Math.sin(w.dir) }, q: BA.batQuat(0.5, 0, 'vertical') } };
+    }
     const st = { x, z, facing: side * Math.PI / 2, twist: 0.45 * side + clamp(Math.atan2(b.x, -b.z) * 0.25, -0.5, 0.5) * (Math.abs(b.y) < 0.8 ? 1 : 0.2), crouch: 0.35, run: 0,
       arms: side > 0 ? { left: { hand: hands }, right: { hand: low } } : { right: { hand: hands }, left: { hand: low } } };
     if (runOff) { st.z = runOff.z; st.x = 0.9 * side; st.facing = runOff.dir > 0 ? 0 : Math.PI; st.run = runOff.dir ? 1 : 0; st.arms = null; st.twist = 0; st.crouch = 0; }
@@ -1111,7 +1256,7 @@
     const ev = G.eventFrame != null ? G.eventFrame : Math.max(0, frames.length - 90);
     const i0 = Math.max(0, ev - 48), i1 = Math.min(frames.length - 1, ev + 100);
     G.replay = { frames, t: 0, done, start: i0, end: i1 };
-    $('replay-bug').classList.add('on'); $('hud').classList.add('replaying');
+    bugText('REPLAY'); $('replay-bug').classList.add('on'); $('hud').classList.add('replaying');
     SFX.sting();
   }
   function replayFrame(dt) {
@@ -1128,6 +1273,49 @@
       G.replay = null; $('replay-bug').classList.remove('on'); $('hud').classList.remove('replaying');
       R.done();
     }
+  }
+
+  /**
+   * After the replay of a six: the stadium cam on the cheerleaders' special number, then the fan
+   * cam on the batting side's painted superfans. After a wicket's replay, sometimes, the bowling
+   * side's fans. HOLD, Space or a click skips.
+   */
+  function bugText(t) { const b = $('replay-bug'); b.lastChild.textContent = t; }
+  function startCutaway(rec, done) {
+    const six = rec.boundary && rec.runs === 6, wk = !!rec.wicket;
+    const shots = six ? ['cheer', 'fans'] : wk && Math.random() < 0.6 ? ['fans'] : [];
+    if (!shots.length || !people.fans || !CK.Hype.extras(gfxLevel()).cheerleaders || opt('replays') !== 'ON') { done(); return; }
+    paintFans(six ? inn().bat : inn().bowl);
+    G.cutaway = { shots, i: -1, t: 0, shot: null, done };
+    nextCut();
+  }
+  function nextCut() {
+    const C = G.cutaway;
+    C.i++; C.t = 0; C.shot = C.shots[C.i];
+    if (!C.shot) { G.cutaway = null; $('replay-bug').classList.remove('on'); $('hud').classList.remove('replaying'); C.done(); return; }
+    C.dur = C.shot === 'cheer' ? 2.1 : 2.6;
+    if (C.shot === 'cheer') { G.cheerSpecial = 2.0; bugText('STADIUM CAM'); if (Math.random() < 0.5) paaji('cheerCam'); }
+    else { bugText('FAN CAM'); paaji('fanCam'); crowdReact('cheer', 0.6); }
+    $('replay-bug').classList.add('on'); $('hud').classList.add('replaying');
+    C.first = true;
+  }
+  function cutawayFrame(dt) {
+    const C = G.cutaway;
+    if (seats.some(x => x.kind === 'phone' && x.mc && x.mc.pressed('a')) || skipKey) { C.shots.length = C.i + 1; C.t = C.dur; }
+    skipKey = false;
+    C.t += dt;
+    if (G.cheerSpecial > 0) G.cheerSpecial -= dt;
+    cheerFrame(dt);
+    // the camera: in front of the platform (the cheer cam) or right up close to the superfans
+    let x, z, face, h, d, fov;
+    if (C.shot === 'cheer') { const c = people.cheer[4]; x = c.plat.position.x; z = c.plat.position.z; face = c.face; h = 1.95; d = 8.5; fov = 32; }
+    else { const f = people.fans[1]; x = f.x; z = f.z; face = f.face; h = 1.75; d = 5.6; fov = 38; }
+    const fx = Math.sin(face), fz = Math.cos(face), drift = C.t * 0.35;
+    _p.set(x + fx * d - fz * (1.3 - drift), h + 0.35, z + fz * d + fx * (1.3 - drift)); _l.set(x, h, z);
+    cam.mode = 'cut'; G.camMode = 'cut'; G.views = ['cut']; $('hud').classList.remove('split');
+    setCam(_p, _l, fov, C.first ? 1 : 1 - Math.exp(-dt * 4)); C.first = false;
+    applyCamTo(cam, dt, innerWidth / innerHeight);
+    if (C.t >= C.dur) nextCut();
   }
 
   // ---------------------------------------------------------------------------------
@@ -1155,6 +1343,7 @@
   /** The live views this frame: one full screen, or two halves in a two-player match. */
   function planViews() {
     if (!G.inGame || !G.match) return ['title'];
+    if (G.walk && G.walk.t < G.walk.dur + 0.2) return ['walkout'];
     const sh = sharedShot();
     if (sh) return [sh];
     const role = i => (inn().bowl === i ? 'bowl' : 'bat');
@@ -1194,6 +1383,11 @@
       const B = G.bowler;
       _p.set(B.x + 1.2 * armSide(), 1.7, B.z + 6.5); _l.set(B.x, 1.45, B.z);
       setCamOn(st, _p, _l, 32, cut ? 1 : 1 - Math.exp(-dt * 4));
+    } else if (shot === 'walkout') {
+      // in front of the striker as he walks out, backing toward the crease with him
+      const w = walkPos(), fx = Math.sin(w.dir), fz = Math.cos(w.dir);
+      _p.set(w.x + fx * 5.6 - fz * 1.6, 1.8, w.z + fz * 5.6 + fx * 1.6); _l.set(w.x, 1.55, w.z);
+      setCamOn(st, _p, _l, 36, cut ? 1 : 1 - Math.exp(-dt * 5));
     } else if (shot === 'runup') {
       // end-on to the bowler, running in at the camera, then cut back behind the batter
       const B = G.bowler;
@@ -1444,7 +1638,7 @@
     const bs = bowlSeat(), ts = batSeat();
     let bp = '', tp = '';
     if (bs.kind !== 'cpu') {
-      if (G.phase === 'ready') bp = (opt('aim') === 'ON' ? 'Point to aim, then ' : '') + `<b>hold ${keyA(bs.mc)}</b> to run in`;
+      if (G.phase === 'ready') bp = (opt('aim') === 'ON' ? (G.aimRef ? 'Tilt to move the marker, ' : 'Hold the phone still, ') : '') + `<b>hold ${keyA(bs.mc)}</b> to run in`;
       else if (G.phase === 'runup') bp = `Whip your arm over, <b>let go of ${keyA(bs.mc)}</b> as it comes over`;
       else bp = G.phase === 'runup' ? 'Whip it over…' : 'Wrist twist = spin · wrist turned = swing';
     } else bp = G.cpuStyle === 'spin' ? 'Computer: spin' : 'Computer: pace';
@@ -1464,7 +1658,7 @@
     refreshFocus();
   }
   function toTitle() {
-    G.inGame = false; G.match = null; G.phase = 'idle'; G.paused = false; G.replay = null; G.ending = null;
+    G.inGame = false; G.match = null; G.phase = 'idle'; G.paused = false; G.replay = null; G.ending = null; G.walk = null; G.cutaway = null; G.pendingWalk = false;
     $('replay-bug').classList.remove('on');
     ballMesh.visible = false; batMesh.visible = false; aimRing.visible = false; trail.clear();
     showScreen('title'); setPanel('main');
@@ -1536,7 +1730,7 @@
     else if (act === 'options') setPanel('opts');
     else if (act === 'back') { if (G.screen === 'solo') toTitle(); else setPanel('main'); }
     else if (act === 'resume') setPaused(false);
-    else if (act === 'restart') { const k = G.kind; G.replay = null; G.ending = null; $('replay-bug').classList.remove('on'); startMatch(k); }
+    else if (act === 'restart') { G.walk = null; G.cutaway = null; G.pendingWalk = false; const k = G.kind; G.replay = null; G.ending = null; $('replay-bug').classList.remove('on'); startMatch(k); }
     else if (act === 'quit') toTitle();
     else if (act === 'continue') continueAfterBreak();
     else if (act === 'rematch') { if (G.kind === 'versus') lobby.st.firstBat = 1 - G.match.innings[0].bat; startMatch(G.kind); }
@@ -1701,8 +1895,9 @@
   // ---------------------------------------------------------------------------------
   // The main loop
   let lastNow = performance.now(), skipKey = false;
-  addEventListener('keydown', e => { if (G.replay && (e.key === ' ' || e.key === 'Enter')) { skipKey = true; e.preventDefault(); } });
-  addEventListener('pointerdown', () => { if (G.replay) skipKey = true; });
+  const skippable = () => G.replay || G.cutaway || G.walk;
+  addEventListener('keydown', e => { if (skippable() && (e.key === ' ' || e.key === 'Enter')) { skipKey = true; e.preventDefault(); } });
+  addEventListener('pointerdown', () => { if (skippable()) skipKey = true; });
   const fpsWin = [];
   function gameFrame(dt, now) {
     for (const s of seats) if (s.input) s.input.frame(now);
@@ -1720,16 +1915,20 @@
     cheerFrame(dt);
     // stump mic: the bowler's feet on the run-up, quicker and louder toward the crease
     if (G.phase === 'runup' && G.bowler.run > 0.3 && G.phaseT < RUN_T) { G.stepT -= dt; if (G.stepT <= 0) { G.stepT = 0.34 - 0.12 * G.phaseT / RUN_T; SFX.step(0.6 + 0.6 * G.phaseT / RUN_T); } }
-    if (G.phase === 'ready' || G.phase === 'runup') bowlerFrame(dt, now);
+    if (G.walk) walkFrame(dt);
+    else if (G.phase === 'ready' || G.phase === 'runup') bowlerFrame(dt, now);
+    if (G.cheerSpecial > 0) G.cheerSpecial -= dt;
     if (G.phase === 'void' && G.phaseT > 1.6) newBall();
-    if (G.phase === 'between' && G.phaseT > G.betweenT) newBall();
+    if (G.phase === 'between' && G.phaseT > G.betweenT) { newBall(); if (G.pendingWalk) { G.pendingWalk = false; walkOut('wicket'); } }
     // the aim spot
-    const showAim = G.phase === 'ready' && bowlSeat().kind !== 'cpu' && opt('aim') === 'ON';
+    const showAim = G.phase === 'ready' && !G.walk && bowlSeat().kind !== 'cpu' && opt('aim') === 'ON';
     aimRing.visible = showAim || (G.phase === 'runup' && bowlSeat().kind !== 'cpu' && opt('aim') === 'ON');
     if (aimRing.visible) {
       const a = G.phase === 'runup' ? G.aim : G.aimSm;
       aimRing.position.set(a.x, 0.015, -a.len);
-      aimRing.material.opacity = G.phase === 'runup' ? 0.95 : 0.6 + 0.3 * Math.sin(now / 200);
+      // yellow and pulsing while it steers, grey until the phone settles, red once locked
+      aimRing.material.color.setHex(G.phase === 'runup' ? 0xff3b30 : G.aimRef ? 0xffd36b : 0xb8b8b8);
+      aimRing.material.opacity = G.phase === 'runup' ? 0.95 : G.aimRef ? 0.7 + 0.25 * Math.sin(now / 160) : 0.5;
     }
     if (G.phase === 'flight' || G.phase === 'hit') {
       if (G.hold) { judgeContact(now); if (G.hold && now - G.contact.tArr > lagMs() + 400) { G.hold = false; beaten('miss'); } }
@@ -1761,6 +1960,7 @@
       skipKey = false;
       replayFrame(rdt);
     }
+    else if (G.cutaway) cutawayFrame(rdt);
     else {
       let ts = 1;
       if (G.tsT > 0) { G.tsT -= rdt; ts = 0.3; }
@@ -1811,6 +2011,6 @@
   window.__cricket = {
     G, seats, settings, world, people, renderer, scene, camera, lobby, startMatch, startSolo, openLobby, toTitle, setPaused, setSeat, slotCtrl, changeOpt,
     get fps() { const s = fpsWin.reduce((a, b) => a + b, 0); return fpsWin.length / (s || 1); }, get renderScale() { return dyn.pr; }, get shadows() { return dyn.shadows; },
-    inn: () => G.match && inn(), hype, say, planViews, knockStumps, attitude, paaji, paajiPlayer,
+    inn: () => G.match && inn(), hype, say, planViews, knockStumps, attitude, paaji, paajiPlayer, walkOut, startCutaway,
   };
 })();

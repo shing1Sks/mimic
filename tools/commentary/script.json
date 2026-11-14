@@ -1158,5 +1158,349 @@
   "note": "a warm, booming welcome",
   "text": "Pads pehno, bat uthao, aur ho jao shuru!",
   "say": "Pads पहनो, bat उठाओ, और हो जाओ शुरू!"
+ },
+ {
+  "id": "newBatter_01",
+  "moment": "newBatter",
+  "prio": 2,
+  "note": "welcoming the new man in, warm but with a challenge in the voice",
+  "text": "Naya khiladi aa raha hai, pads kas ke, dil mazboot karke!",
+  "say": "नया खिलाड़ी आ रहा है, pads कस के, दिल मज़बूत करके!"
+ },
+ {
+  "id": "newBatter_02",
+  "moment": "newBatter",
+  "prio": 2,
+  "note": "welcoming the new man in, warm but with a challenge in the voice",
+  "text": "Agla batsman maidaan mein! Dekhte hain iske bat mein kitna dum hai!",
+  "say": "अगला batsman मैदान में! देखते हैं इसके bat में कितना दम है!"
+ },
+ {
+  "id": "newBatter_03",
+  "moment": "newBatter",
+  "prio": 2,
+  "note": "welcoming the new man in, warm but with a challenge in the voice",
+  "text": "Chalo bhai, ab tumhari baari! Jahan woh chhod gaya, wahin se uthao!",
+  "say": "चलो भाई, अब तुम्हारी बारी! जहाँ वो छोड़ गया, वहीं से उठाओ!"
+ },
+ {
+  "id": "newBatter_04",
+  "moment": "newBatter",
+  "prio": 2,
+  "note": "welcoming the new man in, warm but with a challenge in the voice",
+  "text": "Naya chehra, nayi umeed! Crease pe aao, sher!",
+  "say": "नया चेहरा, नई उम्मीद! Crease पे आओ, शेर!"
+ },
+ {
+  "id": "newBatter_05",
+  "moment": "newBatter",
+  "prio": 2,
+  "note": "welcoming the new man in, warm but with a challenge in the voice",
+  "text": "Ek gaya, doosra aaya... cricket ki gaadi rukti nahi, guru!",
+  "say": "एक गया, दूसरा आया... cricket की गाड़ी रुकती नहीं, गुरु!"
+ },
+ {
+  "id": "newBatter_06",
+  "moment": "newBatter",
+  "prio": 2,
+  "note": "welcoming the new man in, warm but with a challenge in the voice",
+  "text": "Naya batsman, aur bowler ki aankhon mein chamak!",
+  "say": "नया batsman, और bowler की आँखों में चमक!"
+ },
+ {
+  "id": "newBowler_01",
+  "moment": "newBowler",
+  "prio": 1,
+  "note": "curious and teasing, sizing up a fresh bowler",
+  "text": "Naya gendbaaz, nayi chaal! Dekhte hain kya jaadu hai iski jholi mein!",
+  "say": "नया गेंदबाज़, नई चाल! देखते हैं क्या जादू है इसकी झोली में!"
+ },
+ {
+  "id": "newBowler_02",
+  "moment": "newBowler",
+  "prio": 1,
+  "note": "curious and teasing, sizing up a fresh bowler",
+  "text": "Gend badli haath mein, ab khel badlega!",
+  "say": "गेंद बदली हाथ में, अब खेल बदलेगा!"
+ },
+ {
+  "id": "newBowler_03",
+  "moment": "newBowler",
+  "prio": 1,
+  "note": "curious and teasing, sizing up a fresh bowler",
+  "text": "Captain ne naya hathiyaar nikaala hai!",
+  "say": "Captain ने नया हथियार निकाला है!"
+ },
+ {
+  "id": "newBowler_04",
+  "moment": "newBowler",
+  "prio": 1,
+  "note": "curious and teasing, sizing up a fresh bowler",
+  "text": "Naya bowler aaya hai, aur batsman ne bhi kamar kas li!",
+  "say": "नया bowler आया है, और batsman ने भी कमर कस ली!"
+ },
+ {
+  "id": "newBowler_05",
+  "moment": "newBowler",
+  "prio": 1,
+  "note": "curious and teasing, sizing up a fresh bowler",
+  "text": "Ab aayega asli imtehaan... naye haathon mein gend!",
+  "say": "अब आएगा असली इम्तिहान... नए हाथों में गेंद!"
+ },
+ {
+  "id": "bowlerBack_01",
+  "moment": "bowlerBack",
+  "prio": 1,
+  "note": "knowing, like greeting an old friend",
+  "text": "Yeh phir aa gaya! Pichhli baar ka hisaab baaki hai!",
+  "say": "ये फिर आ गया! पिछली बार का हिसाब बाकी है!"
+ },
+ {
+  "id": "bowlerBack_02",
+  "moment": "bowlerBack",
+  "prio": 1,
+  "note": "knowing, like greeting an old friend",
+  "text": "Purana khiladi, naya over! Dekhte hain ab kya karta hai!",
+  "say": "पुराना खिलाड़ी, नया over! देखते हैं अब क्या करता है!"
+ },
+ {
+  "id": "bowlerBack_03",
+  "moment": "bowlerBack",
+  "prio": 1,
+  "note": "knowing, like greeting an old friend",
+  "text": "Wapas aaya hai gendbaaz, nayi soch ke saath!",
+  "say": "वापस आया है गेंदबाज़, नई सोच के साथ!"
+ },
+ {
+  "id": "bowlerOnFire_01",
+  "moment": "bowlerOnFire",
+  "prio": 2,
+  "note": "thrilled and a little scary, this bowler is dangerous",
+  "text": "Saavdhaan! Yeh woh gendbaaz hai jisne pehle hi do wicket le liye hain!",
+  "say": "सावधान! ये वो गेंदबाज़ है जिसने पहले ही दो wicket ले लिए हैं!"
+ },
+ {
+  "id": "bowlerOnFire_02",
+  "moment": "bowlerOnFire",
+  "prio": 2,
+  "note": "thrilled and a little scary, this bowler is dangerous",
+  "text": "Aag lagi hui hai iski gend mein! Batsman, sambhal ke!",
+  "say": "आग लगी हुई है इसकी गेंद में! Batsman, संभल के!"
+ },
+ {
+  "id": "bowlerOnFire_03",
+  "moment": "bowlerOnFire",
+  "prio": 2,
+  "note": "thrilled and a little scary, this bowler is dangerous",
+  "text": "Yeh aadmi aaj shikaar pe nikla hai, guru!",
+  "say": "ये आदमी आज शिकार पे निकला है, गुरु!"
+ },
+ {
+  "id": "bowlerOnFire_04",
+  "moment": "bowlerOnFire",
+  "prio": 2,
+  "note": "thrilled and a little scary, this bowler is dangerous",
+  "text": "Wicket ki bhookh iski aankhon mein saaf dikh rahi hai!",
+  "say": "Wicket की भूख इसकी आँखों में साफ़ दिख रही है!"
+ },
+ {
+  "id": "bowlerExpensive_01",
+  "moment": "bowlerExpensive",
+  "prio": 1,
+  "note": "teasing with sympathy, laughing gently",
+  "text": "Pichhle over mein isne run aise baante jaise shaadi mein mithaai!",
+  "say": "पिछले over में इसने run ऐसे बाँटे जैसे शादी में मिठाई!"
+ },
+ {
+  "id": "bowlerExpensive_02",
+  "moment": "bowlerExpensive",
+  "prio": 1,
+  "note": "teasing with sympathy, laughing gently",
+  "text": "Bechaara! Pichhli baar toh pitaai ho gayi thi, ab badla lega?",
+  "say": "बेचारा! पिछली बार तो पिटाई हो गई थी, अब बदला लेगा?"
+ },
+ {
+  "id": "bowlerExpensive_03",
+  "moment": "bowlerExpensive",
+  "prio": 1,
+  "note": "teasing with sympathy, laughing gently",
+  "text": "Is gendbaaz ki jeb se run aise gire jaise chhed waali balti se paani!",
+  "say": "इस गेंदबाज़ की जेब से run ऐसे गिरे जैसे छेद वाली बाल्टी से पानी!"
+ },
+ {
+  "id": "bowlerExpensive_04",
+  "moment": "bowlerExpensive",
+  "prio": 1,
+  "note": "teasing with sympathy, laughing gently",
+  "text": "Captain ne phir bharosa kiya hai... ab izzat bachaani hai!",
+  "say": "Captain ने फिर भरोसा किया है... अब इज़्ज़त बचानी है!"
+ },
+ {
+  "id": "batterSet_01",
+  "moment": "batterSet",
+  "prio": 2,
+  "note": "admiring, building a big crescendo",
+  "text": "Yeh batsman aaj gend ko football ki tarah dekh raha hai!",
+  "say": "ये batsman आज गेंद को football की तरह देख रहा है!"
+ },
+ {
+  "id": "batterSet_02",
+  "moment": "batterSet",
+  "prio": 2,
+  "note": "admiring, building a big crescendo",
+  "text": "Tees ke paar! Aaj iska din hai, guru, aaj iska din hai!",
+  "say": "तीस के पार! आज इसका दिन है, गुरु, आज इसका दिन है!"
+ },
+ {
+  "id": "batterSet_03",
+  "moment": "batterSet",
+  "prio": 2,
+  "note": "admiring, building a big crescendo",
+  "text": "Jam gaya hai yeh! Jaise purane bargad ki jadein!",
+  "say": "जम गया है ये! जैसे पुराने बरगद की जड़ें!"
+ },
+ {
+  "id": "batterSet_04",
+  "moment": "batterSet",
+  "prio": 2,
+  "note": "admiring, building a big crescendo",
+  "text": "Bowler kuch bhi daale, yeh sabko mithaai bana raha hai!",
+  "say": "Bowler कुछ भी डाले, ये सबको मिठाई बना रहा है!"
+ },
+ {
+  "id": "batterSet_05",
+  "moment": "batterSet",
+  "prio": 2,
+  "note": "admiring, building a big crescendo",
+  "text": "Is khiladi ki aankh mein aaj baaz ki nazar hai!",
+  "say": "इस खिलाड़ी की आँख में आज बाज़ की नज़र है!"
+ },
+ {
+  "id": "batterStruggling_01",
+  "moment": "batterStruggling",
+  "prio": 1,
+  "note": "gently mocking, then encouraging",
+  "text": "Bechaare ka bat aaj ruthi hui biwi ki tarah baat nahi kar raha!",
+  "say": "बेचारे का bat आज रूठी हुई बीवी की तरह बात नहीं कर रहा!"
+ },
+ {
+  "id": "batterStruggling_02",
+  "moment": "batterStruggling",
+  "prio": 1,
+  "note": "gently mocking, then encouraging",
+  "text": "Run nahi aa rahe, guru! Dil chhota mat karo, ek shot sab badal dega!",
+  "say": "Run नहीं आ रहे, गुरु! दिल छोटा मत करो, एक shot सब बदल देगा!"
+ },
+ {
+  "id": "batterStruggling_03",
+  "moment": "batterStruggling",
+  "prio": 1,
+  "note": "gently mocking, then encouraging",
+  "text": "Gend dhoondh raha hai, gend chhup rahi hai!",
+  "say": "गेंद ढूँढ रहा है, गेंद छुप रही है!"
+ },
+ {
+  "id": "batterStruggling_04",
+  "moment": "batterStruggling",
+  "prio": 1,
+  "note": "gently mocking, then encouraging",
+  "text": "Itni gendein, itne kam run... kuch toh karo, mere bhai!",
+  "say": "इतनी गेंदें, इतने कम run... कुछ तो करो, मेरे भाई!"
+ },
+ {
+  "id": "chaseStart_01",
+  "moment": "chaseStart",
+  "prio": 2,
+  "note": "dramatic and rousing, the chase is on",
+  "text": "Lakshya saamne hai, josh seene mein! Chase shuru!",
+  "say": "लक्ष्य सामने है, जोश सीने में! Chase शुरू!"
+ },
+ {
+  "id": "chaseStart_02",
+  "moment": "chaseStart",
+  "prio": 2,
+  "note": "dramatic and rousing, the chase is on",
+  "text": "Ab dekhenge kisme hai dum! Target ka peechha shuru!",
+  "say": "अब देखेंगे किसमें है दम! Target का पीछा शुरू!"
+ },
+ {
+  "id": "chaseStart_03",
+  "moment": "chaseStart",
+  "prio": 2,
+  "note": "dramatic and rousing, the chase is on",
+  "text": "Pehli paari khatam, kahaani ka asli mod ab aayega!",
+  "say": "पहली पारी ख़त्म, कहानी का असली मोड़ अब आएगा!"
+ },
+ {
+  "id": "chaseStart_04",
+  "moment": "chaseStart",
+  "prio": 2,
+  "note": "dramatic and rousing, the chase is on",
+  "text": "Run chahiye, himmat chahiye, aur thoda sa jigra! Chalo!",
+  "say": "Run चाहिए, हिम्मत चाहिए, और थोड़ा सा जिगरा! चलो!"
+ },
+ {
+  "id": "fanCam_01",
+  "moment": "fanCam",
+  "prio": 2,
+  "note": "laughing out loud, delighted by the crazy fans",
+  "text": "Arre yeh dekho! Poori body pe rang, aur dil mein team!",
+  "say": "अरे ये देखो! पूरी body पे रंग, और दिल में team!"
+ },
+ {
+  "id": "fanCam_02",
+  "moment": "fanCam",
+  "prio": 2,
+  "note": "laughing out loud, delighted by the crazy fans",
+  "text": "Inko sardi nahi lagti, guru, inko sirf cricket lagta hai!",
+  "say": "इनको सर्दी नहीं लगती, गुरु, इनको सिर्फ़ cricket लगता है!"
+ },
+ {
+  "id": "fanCam_03",
+  "moment": "fanCam",
+  "prio": 2,
+  "note": "laughing out loud, delighted by the crazy fans",
+  "text": "Shirt utaari, jhanda uthaaya... asli fan yahi hai!",
+  "say": "Shirt उतारी, झंडा उठाया... असली fan यही है!"
+ },
+ {
+  "id": "fanCam_04",
+  "moment": "fanCam",
+  "prio": 2,
+  "note": "laughing out loud, delighted by the crazy fans",
+  "text": "Oye hoye! Pet pe score likha hai, dil pe naam!",
+  "say": "ओए होए! पेट पे score लिखा है, दिल पे नाम!"
+ },
+ {
+  "id": "fanCam_05",
+  "moment": "fanCam",
+  "prio": 2,
+  "note": "laughing out loud, delighted by the crazy fans",
+  "text": "Camera dekh ke aise naache jaise baraat mein dulhe ka bhai!",
+  "say": "Camera देख के ऐसे नाचे जैसे बारात में दूल्हे का भाई!"
+ },
+ {
+  "id": "cheerCam_01",
+  "moment": "cheerCam",
+  "prio": 1,
+  "note": "cheeky and delighted",
+  "text": "Aur yeh dekhiye, cheerleaders ka special number!",
+  "say": "और ये देखिए, cheerleaders का special number!"
+ },
+ {
+  "id": "cheerCam_02",
+  "moment": "cheerCam",
+  "prio": 1,
+  "note": "cheeky and delighted",
+  "text": "Chhakka pada, aur stage pe dhamaal!",
+  "say": "छक्का पड़ा, और stage पे धमाल!"
+ },
+ {
+  "id": "cheerCam_03",
+  "moment": "cheerCam",
+  "prio": 1,
+  "note": "cheeky and delighted",
+  "text": "Is shot pe toh poora stadium naach utha!",
+  "say": "इस shot पे तो पूरा stadium नाच उठा!"
  }
 ]

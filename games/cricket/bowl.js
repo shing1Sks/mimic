@@ -59,11 +59,15 @@
     PACE: { A: 8, B: 1.45, MIN: 13.9, MAX: 44 },
     SPIN: { K: 8, MIN_TWIST: 7, MAX: 300, SIDE: 0.62, TOP: 0.78, SCRAMBLE: 120 },
     SEAM: { FULL: 25 * Math.PI / 180, LOST: 70 * Math.PI / 180 },
-    // visible option BOWLING CONTROL: metres of length per second of key timing off DT_IDEAL,
-    // and the share of the arm's heading error that reaches the ball. Session 2's key timing
-    // scattered +-80 ms and its line +-15 deg round the player's own habit: NORMAL then misses the
-    // spot by ~0.8 m either way, PRO by ~2 m.
-    GAIN: { EASY: { len: 5, line: 0.1 }, NORMAL: { len: 10, line: 0.2 }, PRO: { len: 25, line: 1 } },
+    // visible option BOWLING CONTROL. The marker says where the ball pitches; the action only
+    // costs a small miss (2026-11-14 rework: 7 of 9 real balls had come out full tosses when the
+    // timing and the arm's heading set the length and line outright). len: metres per second of
+    // key timing off the player's habit; line: metres per radian of the arm off their line;
+    // pace: the spread (m, 1 sd) of a flat-out 44 m/s ball, by (pace/44)^3; cap: the most it misses.
+    GAIN: { EASY: { len: 2, line: 0.75, pace: 0.1, cap: 0.5 }, NORMAL: { len: 4, line: 1.5, pace: 0.2, cap: 1.0 }, PRO: { len: 8, line: 3, pace: 0.35, cap: 1.8 } },
+    // aiming by tilt from the settled stance: metres of line / length per radian, a dead zone for
+    // the hand's tremor, and the strip the marker stays inside (yorker to bouncer, on the cut pitch)
+    AIM: { LINE: 2.2, LENGTH: 11, DEAD: 0.045, X: 1.0, LEN: [0.3, 11] },
     FROM_Z: -18.45,
   };
 
@@ -260,8 +264,12 @@
     const g = o.gain || BOWL.GAIN.NORMAL, rng = o.rng || Math.random;
     const sx = o.view === 'bowler' ? -1 : 1;   // screen right in world x
     const from = { x: 0.34 * (o.arm || 1) * sx, y: rel.pace > 30 ? 2.2 : 2.05, z: BOWL.FROM_Z };
-    const lenAdj = clamp(g.len * (rel.lenErr || 0), -4, 4);
-    const target = { x: aim.x, z: -clamp(aim.len + lenAdj, -1.5, 13) };
+    const gauss = () => { let u = 0, v = 0; while (!u) u = rng(); while (!v) v = rng(); return clamp(Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v), -2.5, 2.5); };
+    // the miss: timing and arm line against the player's habit, and the spread of bowling flat out
+    const cap = g.cap != null ? g.cap : 1, flat = Math.pow(clamp((rel.pace || 0) / BOWL.PACE.MAX, 0, 1), 3) * (g.pace || 0);
+    const lenAdj = clamp(g.len * (rel.lenErr || 0) + gauss() * flat, -cap, cap);
+    const lineAdj = clamp(g.line * (rel.az || 0) + gauss() * flat * 0.6, -cap * 0.6, cap * 0.6);   // screen right +
+    const target = { x: aim.x + lineAdj * sx, z: -clamp(aim.len + lenAdj, -1.5, 13) };
     const dx = target.x - from.x, dz = target.z - from.z, dl = Math.hypot(dx, dz) || 1;
     const d = { x: dx / dl, y: 0, z: dz / dl };
     const top = cross({ x: 0, y: 1, z: 0 }, d);      // overspin axis: the ball's top rolls forward
@@ -271,9 +279,8 @@
       : { x: -18 * top.x, y: 0, z: -18 * top.z };      // a seamer's natural backspin
     const swing = (rel.swing || 0) * sx;
     const upright = rel.spin > 0 ? 0 : 1 - Math.min(1, Math.abs(swing) * 0.6);
-    const gauss = () => { let u = 0, v = 0; while (!u) u = rng(); while (!v) v = rng(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
     const seamKick = clamp(gauss() * 0.35 * upright, -0.8, 0.8);
-    return { from, speed: rel.pace, target, aim: { x: aim.x, len: aim.len }, w, swing, seamKick, lenAdj, azAdj: g.line * (rel.az || 0) * sx, spinDir: rel.spin > 0 ? sgn : 0 };
+    return { from, speed: rel.pace, target, aim: { x: aim.x, len: aim.len }, w, swing, seamKick, lenAdj, lineAdj, azAdj: 0, spinDir: rel.spin > 0 ? sgn : 0 };
   }
 
   /** The ball as it leaves the hand: aim solved (with swing), then the release error added. */
@@ -302,6 +309,32 @@
     return tags;
   }
 
+  /**
+   * The aim marker from a tilt of the phone since it settled (q0, room frame), any grip: tipping it
+   * toward the screen (about the room's x axis) pitches it fuller, moving its top right or left
+   * moves the line. From the bowler's end screen right is world -x. base: { x, len } the start spot.
+   */
+  function tiltAim(q0, q, base) {
+    const A = BOWL.AIM, dq = mul(q, conj(q0)), rv = log(dq);
+    const f0 = rotate(q0, { x: 0, y: 0, z: -1 }), f = rotate(dq, f0);
+    // the top's sideways move (an upright phone rolled, a level one turned), as an angle
+    const side = Math.asin(clamp(f.x, -1, 1)) - Math.asin(clamp(f0.x, -1, 1));
+    const fwd = -rv.x;
+    const dz = a => Math.abs(a) <= A.DEAD ? 0 : a - Math.sign(a) * A.DEAD;
+    return { x: clamp(base.x - dz(side) * A.LINE, -A.X, A.X), len: clamp(base.len - dz(fwd) * A.LENGTH, A.LEN[0], A.LEN[1]) };
+  }
+  /** Has the phone held still (within tol rad of its latest pose) for the last ms? */
+  function steady(samples, ms, tol) {
+    tol = tol || 0.06;
+    const n = samples.length;
+    if (n < 3) return false;
+    const last = samples[n - 1], t0 = last.t - ms;
+    if (samples[0].t > t0) return false;
+    const lc = conj(last.q);
+    for (let i = n - 1; i >= 0 && samples[i].t >= t0; i--) if (len(log(mul(samples[i].q, lc))) > tol) return false;
+    return true;
+  }
+
   /** Synthetic arm orientation (tests, mouse stand-in, CPU and fake phones): arm angle phi from
    * straight up (+ = forward toward the TV), swing plane heading yaw (+ = right), wrist roll rho
    * about the forearm (+ = clockwise from the bowler's view). Palm faces the TV at rho = 0. */
@@ -312,7 +345,7 @@
   }
 
   const api = { BOWL, mul, conj, norm, rotate, axisAngle, log, cross, dot, len, scale, clamp, wrapPi, decodePad, encodePad, mirrorV, mirrorQ,
-    fitOmega, pointVelocity, heading, seamSwing, paceFrom, spinFrom, findWhip, whipKnown, readRelease, median, seamNeutral, toDelivery, launch, describe, armQuat };
+    fitOmega, pointVelocity, heading, seamSwing, paceFrom, spinFrom, findWhip, whipKnown, readRelease, median, seamNeutral, toDelivery, launch, describe, armQuat, tiltAim, steady };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (root) { root.CK = root.CK || {}; root.CK.Bowl = api; }
 })(typeof window !== 'undefined' ? window : null);

@@ -202,6 +202,70 @@ Oye hoye! Kya maahaul hai! Aaj toh chhakke barsenge! | ओए होए! क्�
 Pads pehno, bat uthao, aur ho jao shuru! | Pads पहनो, bat उठाओ, और हो जाओ शुरू!
 ''')
 
+m('newBatter', 2, 'welcoming the new man in, warm but with a challenge in the voice', '''
+Naya khiladi aa raha hai, pads kas ke, dil mazboot karke! | नया खिलाड़ी आ रहा है, pads कस के, दिल मज़बूत करके!
+Agla batsman maidaan mein! Dekhte hain iske bat mein kitna dum hai! | अगला batsman मैदान में! देखते हैं इसके bat में कितना दम है!
+Chalo bhai, ab tumhari baari! Jahan woh chhod gaya, wahin se uthao! | चलो भाई, अब तुम्हारी बारी! जहाँ वो छोड़ गया, वहीं से उठाओ!
+Naya chehra, nayi umeed! Crease pe aao, sher! | नया चेहरा, नई उम्मीद! Crease पे आओ, शेर!
+Ek gaya, doosra aaya... cricket ki gaadi rukti nahi, guru! | एक गया, दूसरा आया... cricket की गाड़ी रुकती नहीं, गुरु!
+Naya batsman, aur bowler ki aankhon mein chamak! | नया batsman, और bowler की आँखों में चमक!
+''')
+m('newBowler', 1, 'curious and teasing, sizing up a fresh bowler', '''
+Naya gendbaaz, nayi chaal! Dekhte hain kya jaadu hai iski jholi mein! | नया गेंदबाज़, नई चाल! देखते हैं क्या जादू है इसकी झोली में!
+Gend badli haath mein, ab khel badlega! | गेंद बदली हाथ में, अब खेल बदलेगा!
+Captain ne naya hathiyaar nikaala hai! | Captain ने नया हथियार निकाला है!
+Naya bowler aaya hai, aur batsman ne bhi kamar kas li! | नया bowler आया है, और batsman ने भी कमर कस ली!
+Ab aayega asli imtehaan... naye haathon mein gend! | अब आएगा असली इम्तिहान... नए हाथों में गेंद!
+''')
+m('bowlerBack', 1, 'knowing, like greeting an old friend', '''
+Yeh phir aa gaya! Pichhli baar ka hisaab baaki hai! | ये फिर आ गया! पिछली बार का हिसाब बाकी है!
+Purana khiladi, naya over! Dekhte hain ab kya karta hai! | पुराना खिलाड़ी, नया over! देखते हैं अब क्या करता है!
+Wapas aaya hai gendbaaz, nayi soch ke saath! | वापस आया है गेंदबाज़, नई सोच के साथ!
+''')
+m('bowlerOnFire', 2, 'thrilled and a little scary, this bowler is dangerous', '''
+Saavdhaan! Yeh woh gendbaaz hai jisne pehle hi do wicket le liye hain! | सावधान! ये वो गेंदबाज़ है जिसने पहले ही दो wicket ले लिए हैं!
+Aag lagi hui hai iski gend mein! Batsman, sambhal ke! | आग लगी हुई है इसकी गेंद में! Batsman, संभल के!
+Yeh aadmi aaj shikaar pe nikla hai, guru! | ये आदमी आज शिकार पे निकला है, गुरु!
+Wicket ki bhookh iski aankhon mein saaf dikh rahi hai! | Wicket की भूख इसकी आँखों में साफ़ दिख रही है!
+''')
+m('bowlerExpensive', 1, 'teasing with sympathy, laughing gently', '''
+Pichhle over mein isne run aise baante jaise shaadi mein mithaai! | पिछले over में इसने run ऐसे बाँटे जैसे शादी में मिठाई!
+Bechaara! Pichhli baar toh pitaai ho gayi thi, ab badla lega? | बेचारा! पिछली बार तो पिटाई हो गई थी, अब बदला लेगा?
+Is gendbaaz ki jeb se run aise gire jaise chhed waali balti se paani! | इस गेंदबाज़ की जेब से run ऐसे गिरे जैसे छेद वाली बाल्टी से पानी!
+Captain ne phir bharosa kiya hai... ab izzat bachaani hai! | Captain ने फिर भरोसा किया है... अब इज़्ज़त बचानी है!
+''')
+m('batterSet', 2, 'admiring, building a big crescendo', '''
+Yeh batsman aaj gend ko football ki tarah dekh raha hai! | ये batsman आज गेंद को football की तरह देख रहा है!
+Tees ke paar! Aaj iska din hai, guru, aaj iska din hai! | तीस के पार! आज इसका दिन है, गुरु, आज इसका दिन है!
+Jam gaya hai yeh! Jaise purane bargad ki jadein! | जम गया है ये! जैसे पुराने बरगद की जड़ें!
+Bowler kuch bhi daale, yeh sabko mithaai bana raha hai! | Bowler कुछ भी डाले, ये सबको मिठाई बना रहा है!
+Is khiladi ki aankh mein aaj baaz ki nazar hai! | इस खिलाड़ी की आँख में आज बाज़ की नज़र है!
+''')
+m('batterStruggling', 1, 'gently mocking, then encouraging', '''
+Bechaare ka bat aaj ruthi hui biwi ki tarah baat nahi kar raha! | बेचारे का bat आज रूठी हुई बीवी की तरह बात नहीं कर रहा!
+Run nahi aa rahe, guru! Dil chhota mat karo, ek shot sab badal dega! | Run नहीं आ रहे, गुरु! दिल छोटा मत करो, एक shot सब बदल देगा!
+Gend dhoondh raha hai, gend chhup rahi hai! | गेंद ढूँढ रहा है, गेंद छुप रही है!
+Itni gendein, itne kam run... kuch toh karo, mere bhai! | इतनी गेंदें, इतने कम run... कुछ तो करो, मेरे भाई!
+''')
+m('chaseStart', 2, 'dramatic and rousing, the chase is on', '''
+Lakshya saamne hai, josh seene mein! Chase shuru! | लक्ष्य सामने है, जोश सीने में! Chase शुरू!
+Ab dekhenge kisme hai dum! Target ka peechha shuru! | अब देखेंगे किसमें है दम! Target का पीछा शुरू!
+Pehli paari khatam, kahaani ka asli mod ab aayega! | पहली पारी ख़त्म, कहानी का असली मोड़ अब आएगा!
+Run chahiye, himmat chahiye, aur thoda sa jigra! Chalo! | Run चाहिए, हिम्मत चाहिए, और थोड़ा सा जिगरा! चलो!
+''')
+m('fanCam', 2, 'laughing out loud, delighted by the crazy fans', '''
+Arre yeh dekho! Poori body pe rang, aur dil mein team! | अरे ये देखो! पूरी body पे रंग, और दिल में team!
+Inko sardi nahi lagti, guru, inko sirf cricket lagta hai! | इनको सर्दी नहीं लगती, गुरु, इनको सिर्फ़ cricket लगता है!
+Shirt utaari, jhanda uthaaya... asli fan yahi hai! | Shirt उतारी, झंडा उठाया... असली fan यही है!
+Oye hoye! Pet pe score likha hai, dil pe naam! | ओए होए! पेट पे score लिखा है, दिल पे नाम!
+Camera dekh ke aise naache jaise baraat mein dulhe ka bhai! | Camera देख के ऐसे नाचे जैसे बारात में दूल्हे का भाई!
+''')
+m('cheerCam', 1, 'cheeky and delighted', '''
+Aur yeh dekhiye, cheerleaders ka special number! | और ये देखिए, cheerleaders का special number!
+Chhakka pada, aur stage pe dhamaal! | छक्का पड़ा, और stage पे धमाल!
+Is shot pe toh poora stadium naach utha! | इस shot पे तो पूरा stadium नाच उठा!
+''')
+
 out = []
 for name, (prio, note, rows) in M.items():
     for i, (lat, dev) in enumerate(rows, 1):

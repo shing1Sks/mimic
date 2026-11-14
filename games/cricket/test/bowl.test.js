@@ -111,9 +111,11 @@ function real(i) {
   check('early / late key-ups still find the same whip', early.ok && late.ok && Math.abs(early.t - late.t) < 10, [early.t, late.t]);
   const bo = bowl({ peakW: 20 }), be = bowl({ peakW: 20, upOffset: -60 }), bl = bowl({ peakW: 20, upOffset: 60 });
   check('on time it pitches on the aimed spot (within 15 cm)', Math.abs(-bo.pitch.z - AIM.len) < 0.15, bo.pitch);
-  check('60 ms early pitches ~0.6 m fuller, 60 ms late ~0.6 m shorter (NORMAL)', Math.abs(-be.pitch.z - (AIM.len - 0.6)) < 0.2 && Math.abs(-bl.pitch.z - (AIM.len + 0.6)) < 0.2, [be.pitch.z, bl.pitch.z]);
+  check('60 ms early pitches ~0.25 m fuller, 60 ms late ~0.25 m shorter (NORMAL: a small miss, the marker rules)', Math.abs(be.pitch.z - bo.pitch.z - 0.24) < 0.08 && Math.abs(bo.pitch.z - bl.pitch.z - 0.24) < 0.08, [be.pitch.z, bo.pitch.z, bl.pitch.z]);
   const pe = bowl({ peakW: 20, upOffset: -60 }, AIM, B.BOWL.GAIN.PRO);
-  check('PRO 2.5x it (1.5 m fuller)', Math.abs(-pe.pitch.z - (AIM.len - 1.5)) < 0.25, pe.pitch);
+  check('PRO doubles it (~0.5 m fuller)', Math.abs(pe.pitch.z - bo.pitch.z - 0.48) < 0.12, pe.pitch);
+  const wild = bowl({ peakW: 20, upOffset: -250 });
+  check('a very early key misses by at most the NORMAL cap (1 m), never a full toss from a good length', -wild.pitch.z > AIM.len - 1.05 && -wild.pitch.z < AIM.len, wild.pitch);
   const under = SY.overarm({ peakW: 20 });
   // the same action with the whip low behind the hip (an underarm flick): arm angle -2.4..-0.6
   const flick = under.samples.map(s => ({ t: s.t, q: B.armQuat(-1.5 + 0.9 * Math.tanh((s.t - 1000) / 120), 0, 0), a: s.a }));
@@ -129,10 +131,49 @@ function real(i) {
   check('the phone rolled 25 deg in the fist does not move the line', Math.abs(deg(lean.az) - 10) < 1, deg(lean.az));
   const b = bowl({ peakW: 20, yaw: rad(10) }), s = bowl({ peakW: 20 });
   const off = b.end.p.x - s.end.p.x;
-  check('NORMAL control: 10 deg right lands 0.3-1.2 m right at the stumps', off > 0.3 && off < 1.2, off);
+  check('NORMAL control: an arm 10 deg off line misses the marker by 0.15-0.45 m', Math.abs(b.pitch.x - s.pitch.x) > 0.15 && Math.abs(b.pitch.x - s.pitch.x) < 0.45, b.pitch.x - s.pitch.x);
   const pro = bowl({ peakW: 20, yaw: rad(10) }, AIM, B.BOWL.GAIN.PRO);
-  check('PRO: 10 deg right is 10 deg right (>2.5 m)', pro.end.p.x - s.end.p.x > 2.5, pro.end.p.x - s.end.p.x);
+  check('PRO: twice the miss of NORMAL', Math.abs(pro.pitch.x - s.pitch.x) > 1.6 * Math.abs(b.pitch.x - s.pitch.x), [pro.pitch.x - s.pitch.x, b.pitch.x - s.pitch.x]);
+  const easy = bowl({ peakW: 20, yaw: rad(10) }, AIM, B.BOWL.GAIN.EASY);
+  check('EASY: half the miss', Math.abs(easy.pitch.x - s.pitch.x) < 0.6 * Math.abs(b.pitch.x - s.pitch.x));
+  check('off is still the same side: right arm line lands right of a straight one (screen terms kept)', Math.sign(b.pitch.x - s.pitch.x) === Math.sign(b.end.p.x - s.end.p.x));
   check('the ball travels toward the batter (+z) when the arm swings at the TV', b.end.p.z >= 0);
+}
+
+// --- the marker: where a clean action pitches it
+{
+  const spot = { x: -0.4, len: 3.2 };
+  const c = bowl({ peakW: 16 }, spot);
+  check('a clean, moderate action pitches within 20 cm of the marker', Math.hypot(c.pitch.x - spot.x, -c.pitch.z - spot.len) < 0.2, c.pitch);
+  // flat out costs accuracy: spread over many balls at max pace vs medium pace
+  const spread = w => { let s2 = 0; for (let k = 0; k < 40; k++) { let st = k * 7919 + 3; const r = B.toDelivery(rel({ peakW: w }), spot, { arm: 1, gain: B.BOWL.GAIN.NORMAL, rng: () => (st = (st * 16807) % 2147483647) / 2147483647 }); s2 += (r.target.z + spot.len) ** 2 + (r.target.x - spot.x) ** 2; } return Math.sqrt(s2 / 40); };
+  const fastS = spread(32), medS = spread(14);
+  check('bowling flat out spreads more than medium pace (pace costs accuracy)', fastS > 1.5 * medS && fastS < 0.5, [fastS, medS]);
+}
+
+// --- aiming by tilt, from the stance the phone settled in
+{
+  const stance = B.armQuat(0.3, 0, 0.4);   // phone in the bowling grip, arm cocked: the top points up-ish
+  const base = { x: 0.1, len: 5.8 };
+  const same = B.tiltAim(stance, stance, base);
+  check('no tilt: the marker stays on the start spot', Math.abs(same.x - base.x) < 1e-6 && Math.abs(same.len - base.len) < 1e-6, same);
+  const fwd = B.tiltAim(stance, B.mul(B.axisAngle(1, 0, 0, -0.25), stance), base);
+  check('tilt toward the screen: fuller (length down), line unchanged', fwd.len < base.len - 2 && Math.abs(fwd.x - base.x) < 0.1, fwd);
+  const back = B.tiltAim(stance, B.mul(B.axisAngle(1, 0, 0, 0.25), stance), base);
+  check('tilt back: shorter', back.len > base.len + 2, back);
+  const right = B.tiltAim(stance, B.mul(B.axisAngle(0, 0, 1, -0.2), stance), base);
+  check('tilt right: the marker moves right on screen (world -x from the bowler end)', right.x < base.x - 0.25 && Math.abs(right.len - base.len) < 0.6, right);
+  const flatPhone = B.armQuat(Math.PI / 2, 0, 0);  // top pointing at the screen: turning it right still moves the line
+  const yawR = B.tiltAim(flatPhone, B.mul(B.axisAngle(0, 1, 0, -0.2), flatPhone), base);
+  check('any grip: a phone pointing at the screen turned right moves the line right too', yawR.x < base.x - 0.25, yawR);
+  const tiny = B.tiltAim(stance, B.mul(B.axisAngle(1, 0, 0, -0.03), stance), base);
+  check('a hand tremor (under 2.5 deg) does not move the marker', Math.abs(tiny.len - base.len) < 1e-6, tiny);
+  const far = B.tiltAim(stance, B.mul(B.axisAngle(1, 0, 0, -1.4), stance), base), farB = B.tiltAim(stance, B.mul(B.axisAngle(1, 0, 0, 1.4), stance), base), farR = B.tiltAim(stance, B.mul(B.axisAngle(0, 0, 1, -1.4), stance), base);
+  check('the marker never leaves the pitch: yorker-to-bouncer, inside the cut strip', far.len >= B.BOWL.AIM.LEN[0] && farB.len <= B.BOWL.AIM.LEN[1] && Math.abs(farR.x) <= B.BOWL.AIM.X, [far.len, farB.len, farR.x]);
+  const smp = (fn, n) => Array.from({ length: n }, (_, i) => ({ t: i * 10, q: fn(i) }));
+  check('steady: a still phone is steady', B.steady(smp(() => stance, 40), 250));
+  check('steady: a phone still swinging is not', !B.steady(smp(i => B.mul(B.axisAngle(1, 0, 0, i * 0.02), stance), 40), 250));
+  check('steady: not enough samples yet is not steady', !B.steady(smp(() => stance, 5), 250));
 }
 
 // --- spin from the wrist

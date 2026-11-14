@@ -88,7 +88,7 @@
       }
       return line;
     }
-    return { load, moment, stop, get loaded() { return Object.keys(buffers).length; }, get lastStart() { return lastStart; } };
+    return { load, moment, stop, get loaded() { return Object.keys(buffers).length; }, get lastStart() { return lastStart; }, get speaking() { return !!src; } };
   }
 
   const api = { createScheduler, createPlayer };

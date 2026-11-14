@@ -105,3 +105,9 @@ body[data-mode="pad"] #ctl { padding: 0; }
 .rotate svg { width: 72px; height: 72px; animation: tilt 1.6s ease-in-out infinite; }
 .rotate p { color: var(--text); margin: 0; font-weight: 600; }
 @keyframes tilt { 50% { transform: rotate(-90deg); } }
+
+/* Android: the app (Bluetooth) plays smoother than the browser link */
+.appnote { display: block; padding: 10px 14px; border-radius: 12px; background: rgba(94, 230, 208, 0.08); border: 1px solid rgba(94, 230, 208, 0.3); color: inherit; text-decoration: none; font-size: 13.5px; line-height: 1.45; }
+.appnote[hidden] { display: none; }
+.appnote b, .appnote span { color: #5EE6D0; }
+.appnote span { font-weight: 700; white-space: nowrap; }

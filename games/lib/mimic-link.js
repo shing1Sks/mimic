@@ -384,6 +384,7 @@
 
   // ------------------------------------------------------------------ UI
   const C = { bg: '#0A0B0D', panel: '#17191E', raised: '#22252C', line: '#2C3038', text: '#E8EAEE', dim: '#8A909C', acc: '#5EE6D0', good: '#6FD39A', warn: '#F2B866' };
+  const APP_URL = 'https://mimic.shing.in/download/';   // the Android app: Bluetooth, the smoothest way to play
   const MODE_ACC = { wand: '#FFB454', grip: '#FF6B4A', pad: '#A68BFF', '': C.acc };
   const PHONE_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></svg>';
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -419,6 +420,11 @@
   .mml-list li.empty{background:transparent;border:1px dashed ${C.line};color:${C.dim}}
   .mml-list .ok{color:#7be08a;font-weight:700}
   .mml-count{margin:14px 0 -6px;font-size:12px;letter-spacing:.06em;color:${C.dim}}
+  .mml-app{display:block;margin:0 0 clamp(8px,1.8vh,14px);padding:9px 12px;border-radius:10px;background:rgba(94,230,208,.08);border:1px solid rgba(94,230,208,.3);color:${C.text};font-size:12.5px;line-height:1.45;text-align:left}
+  .mml-app b{color:${C.acc}}
+  .mml-app a{color:${C.acc};font-weight:700;text-decoration:none;white-space:nowrap}
+  .mml-app a:hover{text-decoration:underline}
+  .mml-app small{display:block;color:${C.dim};font-size:11.5px;margin-top:2px}
   .mml-tip{margin:clamp(8px,1.8vh,14px) 0 0;padding:8px 12px;border-radius:10px;background:rgba(242,184,102,.08);border:1px solid rgba(242,184,102,.25);color:${C.text};font-size:12.5px}
   .mml-tip b{color:${C.warn}} .mml-tip code{font:12px ui-monospace,Consolas,monospace;color:${C.text};background:rgba(255,255,255,.06);padding:1px 4px;border-radius:4px;word-break:break-all}
   .mml-x{all:unset;position:absolute;right:12px;top:10px;cursor:pointer;color:${C.dim};font-size:22px;line-height:1;padding:4px 8px;border-radius:8px}
@@ -485,6 +491,7 @@
     return `${closable ? '<button class="mml-x" aria-label="Close">×</button>' : ''}
       <h3>Play with your phone</h3>
       <p class="mml-sub">Scan with the camera. No app needed. Each phone is a player.</p>
+      <div class="mml-app"><b>Smoothest on Android: the Mimic app.</b> It connects over Bluetooth, perfectly in sync. <a href="${APP_URL}" target="_blank" rel="noopener">Get the app →</a><small>Playing in the browser? Keep the phone on the same Wi-Fi as this PC.</small></div>
       <div class="mml-qr">${qrSvg(u)}</div>
       <div class="mml-modes">${modeBtns}</div>
       <div class="mml-url">${esc(u)}</div>

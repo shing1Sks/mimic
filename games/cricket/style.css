@@ -252,3 +252,13 @@ h1 span { display: block; color: transparent; -webkit-text-stroke: 2px var(--gol
 .e-potm b { font-size: 22px; letter-spacing: 0.03em; margin-top: 2px; }
 .e-potm span { font-size: 12px; letter-spacing: 0.16em; opacity: 0.8; }
 @media (max-width: 640px) { #drs { right: 12px; width: 58vw; } #pcard { left: 12px; bottom: 96px; } }
+
+/* first person batting: the helmet's peak and grille, out of focus at the edges of the view */
+#visor { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.3s;
+  background:
+    linear-gradient(180deg, rgba(8, 10, 18, 0.9) 0%, rgba(8, 10, 18, 0.55) 5%, rgba(8, 10, 18, 0) 13%),
+    radial-gradient(ellipse 85% 75% at 50% 45%, rgba(0, 0, 0, 0) 62%, rgba(0, 0, 0, 0.5) 100%); }
+#visor::before, #visor::after { content: ""; position: absolute; left: -4%; right: -4%; height: 1.6vh; border-radius: 50%; background: rgba(28, 31, 40, 0.92); filter: blur(2.5px); }
+#visor::before { bottom: 9%; transform: perspective(400px) rotateX(18deg); }
+#visor::after { bottom: 1.5%; height: 2vh; }
+#visor.on { opacity: 1; }

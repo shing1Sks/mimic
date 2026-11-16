@@ -36,6 +36,8 @@
     hand1: { label: 'P2 PLAYS', vals: ['RIGHT-HANDED', 'LEFT-HANDED'], def: 0 },
     cpu: { label: 'COMPUTER', vals: ['CLUB', 'PRO'], def: 0 },
     replays: { label: 'REPLAYS', vals: ['ON', 'OFF'], def: 0 },
+    // first person: bat from behind the helmet grille, bowl from the bowler's eyes (big moments stay broadcast)
+    camera: { label: 'CAMERA', vals: ['BROADCAST', 'FIRST PERSON'], def: 0 },
     comm: { label: 'COMMENTARY', vals: ['ON', 'OFF'], def: 0 },
     commVol: { label: 'COMMENTARY VOLUME', vals: [1, 0.7, 0.4], def: 0 },
     sound: { label: 'SOUND', vals: ['ON', 'OFF'], def: 0 },
@@ -134,6 +136,16 @@
     x.fillStyle = g; x.fillRect(0, 0, 64, 64); const t = new T.CanvasTexture(c); return t; })(), transparent: true, depthWrite: false, blending: T.AdditiveBlending, toneMapped: false }));
   scene.add(halo); halo.visible = false;
   const batMesh = CK.makeBat(); scene.add(batMesh); batMesh.visible = false;
+  const gloves = new T.Group(); gloves.visible = false; batMesh.add(gloves);
+  {
+    const gm = new T.MeshStandardMaterial({ color: 0xf2f2ee, roughness: 0.75 }), pm = new T.MeshStandardMaterial({ color: 0x2b2f3a, roughness: 0.9 });
+    [-0.02, -0.135].forEach((z, i) => {
+      const g = new T.Mesh(new T.BoxGeometry(0.085, 0.075, 0.1), gm); g.position.set(0, 0.012, z); gloves.add(g);
+      const pad = new T.Mesh(new T.BoxGeometry(0.06, 0.012, 0.085), pm); pad.position.set(0, 0.052, z); gloves.add(pad);   // the finger rolls
+      if (i === 0) { const cuff = new T.Mesh(new T.CylinderGeometry(0.045, 0.045, 0.05, 10), gm); cuff.rotation.x = Math.PI / 2; cuff.position.set(0, 0.01, 0.055); gloves.add(cuff); }
+    });
+  }
+  const fp = () => opt('camera') === 'FIRST PERSON';
   // the ball's shadow: a soft dark disc on the ground, darker and tighter as it comes down
   const ballShadow = new T.Mesh(new T.CircleGeometry(0.09, 20), new T.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5, depthWrite: false }));
   ballShadow.rotation.x = -Math.PI / 2; ballShadow.renderOrder = 2; scene.add(ballShadow);
@@ -167,6 +179,16 @@
   const aimRing = new T.Mesh(new T.RingGeometry(0.3, 0.46, 40), new T.MeshBasicMaterial({ color: 0xffd36b, transparent: true, opacity: 0.85, toneMapped: false, depthWrite: false }));
   aimRing.rotation.x = -Math.PI / 2; aimRing.visible = false; scene.add(aimRing);
   const aimDot = new T.Mesh(new T.CircleGeometry(0.08, 16), aimRing.material); aimDot.rotation.x = -Math.PI / 2; aimRing.add(aimDot); aimDot.rotation.x = 0;
+  // from the bowler's own eyes the flat ring is nearly edge-on: a glowing arrow hangs over the spot instead
+  const aimPin = (() => {
+    const c = document.createElement('canvas'); c.width = 64; c.height = 96;
+    const g = c.getContext('2d'); g.fillStyle = '#fff'; g.shadowColor = '#fff'; g.shadowBlur = 10;
+    g.beginPath(); g.moveTo(10, 14); g.lineTo(54, 14); g.lineTo(32, 70); g.closePath(); g.fill();
+    g.fillRect(29, 74, 6, 16);
+    const t = new T.CanvasTexture(c); t.colorSpace = T.SRGBColorSpace;
+    const sp = new T.Sprite(new T.SpriteMaterial({ map: t, transparent: true, depthTest: false, toneMapped: false, sizeAttenuation: false }));
+    sp.scale.set(0.034, 0.051, 1); sp.renderOrder = 7; sp.visible = false; scene.add(sp); return sp;   // the same size on screen at any distance
+  })();
   const pitchMark = new T.Mesh(new T.CircleGeometry(0.11, 20), new T.MeshBasicMaterial({ color: 0x7fe6ff, transparent: true, opacity: 0.0, toneMapped: false, depthWrite: false }));
   pitchMark.rotation.x = -Math.PI / 2; pitchMark.position.y = 0.012; scene.add(pitchMark);
   const people = { ready: false, batter: null, nonStriker: null, bowler: null, fielders: [], umpire: null };
@@ -1558,11 +1580,12 @@
     if (G.walk && G.walk.t < G.walk.dur + 0.2) return ['walkout'];
     const sh = sharedShot();
     if (sh) return [sh];
-    const role = i => (inn().bowl === i ? 'bowl' : 'bat');
+    const v = r => (fp() ? 'fp' + r : r);
+    const role = i => v(inn().bowl === i ? 'bowl' : 'bat');
     if (G.kind === 'versus' && seats[0].kind !== 'cpu' && seats[1].kind !== 'cpu') return [role(0), role(1)];
-    if (bowlSeat().kind !== 'cpu') return ['bowl'];
-    if (G.phase === 'runup' && G.phaseT < (G.cutAt || 0) && !G.keyUp) return ['runup'];
-    return ['bat'];
+    if (bowlSeat().kind !== 'cpu') return [v('bowl')];
+    if (!fp() && G.phase === 'runup' && G.phaseT < (G.cutAt || 0) && !G.keyUp) return ['runup'];
+    return [v('bat')];
   }
   /** Where shot `shot` puts view state st. split: a half-width view. */
   function shotCam(shot, st, dt, F, split) {
@@ -1595,6 +1618,16 @@
       const B = G.bowler;
       _p.set(B.x + 1.2 * armSide(), 1.7, B.z + 6.5); _l.set(B.x, 1.45, B.z);
       setCamOn(st, _p, _l, 32, cut ? 1 : 1 - Math.exp(-dt * 4));
+    } else if (shot === 'fpbat') {
+      // the batter's eyes: just in front of the visor, following his feet, the bowler straight ahead
+      const b = F && F.batter ? F.batter : { x: -0.42 * side, z: -1.0 };
+      _p.set(b.x + 0.12 * side, 1.6, b.z - 0.16); _l.set(0.05 * side, 1.05, -14);
+      setCamOn(st, _p, _l, split ? 70 : 60, cut ? 1 : 1 - Math.exp(-dt * 14));
+    } else if (shot === 'fpbowl') {
+      // the bowler's eyes as he runs in, down the pitch at the batter; on through the follow-through
+      const B = G.bowler, bob = B.run > 0.3 ? Math.sin(performance.now() / 95) * 0.035 * B.run : 0;
+      _p.set(B.x * 0.9, 1.72 + bob, B.z + 0.28); _l.set(0, 0.55, -1.0);
+      setCamOn(st, _p, _l, split ? 56 : 48, cut || (G.phase === 'ready' && G.phaseT < 0.1) ? 1 : 1 - Math.exp(-dt * 10));
     } else if (shot === 'milestone') {
       // in close on the batter, bat raised: slowly round him
       const bx = -0.42 * side, a = 0.35 * side + (G.milestone ? G.milestone.t * 0.12 * side : 0);
@@ -1635,6 +1668,10 @@
     });
     G.camMode = plan.length > 1 ? 'split' : plan[0];
     $('hud').classList.toggle('split', plan.length > 1);
+    const fpb = plan.length === 1 && plan[0] === 'fpbat';
+    if (people.ready && !G.drs) people.batter.setOpacity(fpb ? 0 : 1);
+    gloves.visible = plan.includes('fpbat');
+    $('visor').classList.toggle('on', fpb);
     if (plan.length > 1) {
       [0, 1].forEach(i => { const t = $('half' + i); t.querySelector('b').textContent = seats[i].name; t.querySelector('span').textContent = plan[i] === 'bowl' ? 'BOWLING' : 'BATTING'; t.style.setProperty('--tc', tcol(i)); });
     }
@@ -1652,7 +1689,8 @@
     const keep = new Set();
     if (plan.includes('catch') || plan.includes('follow')) { if (o && o.by >= 0) keep.add(people.fielders[o.by]); }
     if (plan.some(s => s === 'celebrate' || s === 'runup' || s === 'bowl' || s === 'replay')) keep.add(people.bowler);
-    const views = plan.map((shot, i) => {
+    const views = plan.map((shot0, i) => {
+      const shot = shot0.replace(/^fp/, '');   // a first-person view keeps the same things clear as its broadcast one
       const focus = [];
       if (shot === 'bat' || shot === 'runup' || shot === 'bowl') focus.push({ x: -0.3 * side, y: 1.4, z: -1 }, { x: 0, y: 0.4, z: 0 }, { x: 0.3, y: 2.1, z: -18.6 }, { x: 0, y: 0.2, z: -9 });
       if (shot === 'runup' || shot === 'bowl') focus.push({ x: G.bowler.x, y: 1.3, z: G.bowler.z });
@@ -1882,7 +1920,7 @@
   function toTitle() {
     G.inGame = false; G.match = null; G.phase = 'idle'; G.paused = false; G.replay = null; G.ending = null; G.walk = null; G.cutaway = null; G.pendingWalk = false; G.drs = null; drsGroup.visible = false; $('drs').classList.remove('on');
     $('replay-bug').classList.remove('on');
-    ballMesh.visible = false; batMesh.visible = false; aimRing.visible = false; trail.clear();
+    ballMesh.visible = false; batMesh.visible = false; aimRing.visible = false; aimPin.visible = false; trail.clear();
     showScreen('title'); setPanel('main');
   }
   function setPaused(v, why) {
@@ -2146,9 +2184,14 @@
     // the aim spot
     const showAim = G.phase === 'ready' && !G.walk && bowlSeat().kind !== 'cpu' && opt('aim') === 'ON';
     aimRing.visible = showAim || (G.phase === 'runup' && bowlSeat().kind !== 'cpu' && opt('aim') === 'ON');
+    if (!aimRing.visible) aimPin.visible = false;
     if (aimRing.visible) {
       const a = G.phase === 'runup' ? G.aim : G.aimSm;
       aimRing.position.set(a.x, 0.015, -a.len);
+      const fpv = !!(G.views && G.views.includes('fpbowl'));
+      aimRing.scale.setScalar(fpv ? 2.2 : 1);   // seen from the bowler's own eyes, 25 m away
+      aimPin.visible = fpv;
+      if (fpv) { aimPin.position.set(a.x, 0.75 + Math.sin(now / 260) * 0.06, -a.len); aimPin.material.color.copy(aimRing.material.color); aimPin.material.opacity = Math.min(1, aimRing.material.opacity + 0.2); }
       // yellow and pulsing while it steers, grey until the phone settles, red once locked
       aimRing.material.color.setHex(G.phase === 'runup' ? 0xff3b30 : G.aimRef ? 0xffd36b : 0xb8b8b8);
       aimRing.material.opacity = G.phase === 'runup' ? 0.95 : G.aimRef ? 0.7 + 0.25 * Math.sin(now / 160) : 0.5;

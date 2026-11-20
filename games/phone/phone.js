@@ -177,8 +177,8 @@
   // ------------------------------------------------------------------ sending
   function flags() { return document.visibilityState === 'visible' ? 1 : 0; }
   /** reliable = through the ordered channel (button changes must arrive); otherwise the motion one. */
-  function sendState(reliable) {
-    const t = nowAbs();
+  function sendState(reliable, at) {
+    const t = at || nowAbs();
     let buf;
     if (S.mode === 'pad') buf = P.encodePad(++S.seq, t, S.pad, flags());
     else {
@@ -194,17 +194,26 @@
   }
 
   // ------------------------------------------------------------------ sensors
-  function onQuat(q, src) {
+  /**
+   * When the sensor was read (ms, timeOrigin + now), not when this page got round to handling it:
+   * readings handled in a burst keep their real spacing, and the game measures a swing's speed
+   * from that spacing. Falls back to now for a stamp that looks off.
+   */
+  function readAt(ts) {
+    const n = performance.now();
+    return typeof ts === 'number' && ts > n - 250 && ts <= n + 1 ? performance.timeOrigin + ts : performance.timeOrigin + n;
+  }
+  function onQuat(q, src, ts) {
     if (!S.playing || S.mode === 'pad') return;
     if (src === 'event' && S.sensor && performance.now() - S.sensorT < 300) return;  // the Sensor API is feeding
     if (src === 'sensor') S.sensorT = performance.now();
     S.q = q;
     if (S.centreNext) { S.ref = P.yawReference(q); S.centreNext = false; }
-    sendState(false);
+    sendState(false, readAt(ts));
   }
   addEventListener('deviceorientation', e => {
     if (e.alpha === null && e.beta === null) return;
-    onQuat(P.fromDeviceOrientation(e.alpha, e.beta, e.gamma), 'event');
+    onQuat(P.fromDeviceOrientation(e.alpha, e.beta, e.gamma), 'event', e.timeStamp);
   });
   addEventListener('devicemotion', e => {
     const a = e.acceleration;
@@ -216,7 +225,7 @@
     if (S.sensor || typeof RelativeOrientationSensor === 'undefined') return;
     try {
       const s = new RelativeOrientationSensor({ frequency: 120, referenceFrame: 'device' });
-      s.addEventListener('reading', () => { const v = s.quaternion; if (v) onQuat({ x: v[0], y: v[1], z: v[2], w: v[3] }, 'sensor'); });
+      s.addEventListener('reading', () => { const v = s.quaternion; if (v) onQuat({ x: v[0], y: v[1], z: v[2], w: v[3] }, 'sensor', s.timestamp); });
       s.addEventListener('error', () => { try { s.stop(); } catch (e) { /* */ } S.sensor = null; });
       s.start();
       S.sensor = s;

@@ -761,6 +761,8 @@
   }
   function feedTracker() {
     const inp = batSeat().input; if (!inp) return;
+    // a browser phone's swing is measured its own way (bat.js BAT.WEB); decided before the ball's first sample
+    if (!G.tracker.hist.length) G.tracker.o = inp.S.web ? BA.BAT.WEB : null;
     for (const s of inp.S.samples) if (s.t > G.fed) { BA.step(G.tracker, s); G.fed = s.t; }
   }
 

@@ -44,7 +44,19 @@
     PEAK_SHARE: 1.0,
   };
 
-  function tracker() { return { hist: [], cur: null, swings: [] }; }
+  /**
+   * A browser phone (QR) streams ~60 Hz, evenly stamped at capture; the app's Bluetooth reports come
+   * ~90 Hz in bunches (two often handled ~1 ms apart), and every number below was tuned on those.
+   * Speed from the last three samples spans ~22 ms over Bluetooth but ~33 ms from a browser, which
+   * flattened the swing's peak: replaying 138 recorded full swings as a 60 Hz browser stream lost a
+   * third of the bat speed at contact (half the big hits went). So a browser phone's speed is taken
+   * over a fixed time span instead of a sample count, and scaled by GAIN so the same swing measures
+   * what it measures over Bluetooth (calibrated on those replays). Bluetooth is unchanged.
+   */
+  const WEB = { SPAN_MS: 14, VEL_MS: 18, GAIN: 1.4 };
+  BAT.WEB = WEB;
+  /** o: BAT.WEB for a browser phone, else nothing (Bluetooth / mouse / synthetic). */
+  function tracker(o) { return { hist: [], cur: null, swings: [], o: o || null }; }
   const fwdOk = v => { const s = Math.hypot(v.x, v.y, v.z); return s > 1e-6 && v.z < 0.5 * s && !(v.y > 0.7 * s && v.z > 0); };
 
   /** One phone sample {t (ms), q}. Updates the current swing (fastest moment, start, end). */
@@ -54,16 +66,19 @@
     h.push({ t: s.t, q: s.q, p: B.rotate(s.q, { x: 0, y: 0, z: -BAT.L }) });
     while (h.length > 2 && h[h.length - 1].t - h[0].t > 1500) h.shift();
     if (h.length < 3) return tr;
-    const a = h[h.length - 3], c = h[h.length - 1], dt = (c.t - a.t) / 1000;
+    const o = tr.o, c = h[h.length - 1];
+    let ia = h.length - 3, im = h.length - 2;
+    if (o) { ia = h.length - 2; while (ia > 0 && c.t - h[ia].t < o.SPAN_MS) ia--; im = Math.round((ia + h.length - 1) / 2); }
+    const a = h[ia], dt = (c.t - a.t) / 1000;
     if (dt <= 0) return tr;
     const v = { x: (c.p.x - a.p.x) / dt, y: (c.p.y - a.p.y) / dt, z: (c.p.z - a.p.z) / dt };
-    const sp = fwdOk(v) ? Math.hypot(v.x, v.y, v.z) : 0, tm = h[h.length - 2].t;
+    const sp = (fwdOk(v) ? Math.hypot(v.x, v.y, v.z) : 0) * (o ? o.GAIN : 1), tm = h[im].t;
     tr.speed = sp;
     const cur = tr.cur;
     if (!cur) {
-      if (sp > BAT.V_PUSH) tr.cur = { t0: tm, peak: sp, tPeak: tm, qPeak: h[h.length - 2].q, ended: false, tEnd: null };
+      if (sp > BAT.V_PUSH) tr.cur = { t0: tm, peak: sp, tPeak: tm, qPeak: h[im].q, ended: false, tEnd: null };
     } else {
-      if (sp > cur.peak) { cur.peak = sp; cur.tPeak = tm; cur.qPeak = h[h.length - 2].q; }
+      if (sp > cur.peak) { cur.peak = sp; cur.tPeak = tm; cur.qPeak = h[im].q; }
       if ((tm - cur.t0 > 40 && sp < cur.peak * 0.45) || sp < BAT.V_PUSH * 0.7 || tm - cur.t0 > 700) {
         cur.ended = true; cur.tEnd = tm;
         tr.swings.push(cur); tr.cur = null;
@@ -108,7 +123,8 @@
     if (!h.length) return null;
     let near = h[0];
     for (const x of h) if (Math.abs(x.t - t) < Math.abs(near.t - t)) near = x;
-    const u = B.pointVelocity(h, t, BAT.L, 18) || { x: 0, y: 0, z: 0 };
+    const o = tr.o, g = o ? o.GAIN : 1, v = B.pointVelocity(h, t, BAT.L, o ? o.VEL_MS : 18);
+    const u = v ? { x: v.x * g, y: v.y * g, z: v.z * g } : { x: 0, y: 0, z: 0 };
     return { b: B.rotate(near.q, { x: 0, y: 0, z: -1 }), u, speed: Math.hypot(u.x, u.y, u.z) };
   }
 

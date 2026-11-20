@@ -35,7 +35,7 @@
    * role() -> 'bat' | 'bowl' | null tells the mouse stand-in what to imitate.
    */
   function create(kind, mc, role) {
-    const S = { samples: [], events: [], lastA: false, q: { x: 0, y: 0, z: 0, w: 1 }, a: false, hz: 0, on: false };
+    const S = { samples: [], events: [], lastA: false, q: { x: 0, y: 0, z: 0, w: 1 }, a: false, hz: 0, on: false, web: false };   // web: a browser phone (QR)
     let lastKey = '', lastWebT = -Infinity, nNew = 0, hzT = performance.now(), mLast = 0, mTwist = 0, mRho = 0;
     function push(s) {
       const ss = S.samples;
@@ -53,6 +53,7 @@
       if (!S.on) return;
       // a browser phone (mimic-link) hands over every sample stamped at capture: take them all, in order
       // (polling only the newest lost ~5% of them and kept the network's jitter in the timing)
+      S.web = !!p.__mimicWeb;
       if (p.__samples && p.__samples.length) {
         for (const w of p.__samples) {
           if (w.t <= lastWebT) continue;

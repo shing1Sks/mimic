@@ -162,5 +162,19 @@ function play(swing, tArr, o) {
   const L = v => Math.hypot(v.x, v.y, v.z);
   check('the boost is capped at 3x the contact speed', Math.abs(L(T.contactVelocity({ x: 0, y: 0.01, z: -0.5 }, 14, 'middle')) - 3 * Math.hypot(0.01, 0.5)) < 1e-9);
 }
+{
+  // a browser phone (QR) streams ~60 Hz: its tracker measures over a fixed time span, so the rate
+  // doesn't change the reading, and scales it to what the app's bunched Bluetooth stream reads for
+  // the same swing (the gain is calibrated on recorded swings, not here)
+  const peakOf = (o, hz) => {
+    const tr = T.tracker(o); let best = 0;
+    for (const s of SY.batSwing({ peakW: 18, tPeak: 1000, hz })) { T.step(tr, s); for (const w of tr.swings.concat(tr.cur ? [tr.cur] : [])) best = Math.max(best, w.peak); }
+    return best;
+  };
+  const w60 = peakOf(T.BAT.WEB, 60), w50 = peakOf(T.BAT.WEB, 50), w90 = peakOf(T.BAT.WEB, 90), legacy = peakOf(null, 60);
+  check('a browser swing reads the same at 50, 60 or 90 Hz', Math.abs(w50 / w90 - 1) < 0.08 && Math.abs(w60 / w90 - 1) < 0.08, { w50, w60, w90 });
+  check('...and BAT.WEB.GAIN above the three-sample rule', w60 > legacy * 1.25, { legacy, w60 });
+  check('a Bluetooth tracker is unchanged (no options)', T.tracker().o === null);
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

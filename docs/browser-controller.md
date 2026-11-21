@@ -159,9 +159,16 @@ Acceleration is gravity, computed from the orientation, plus `devicemotion`'s li
      address hides the sensors. With a USB cable:
      `adb reverse tcp:8765 tcp:8765`, then open `http://localhost:8765/phone/?room=<room>` on the
      phone (the panel shows this exact link).
-   - Over Wi-Fi with `--lan`, scan the QR. Pad works. Grip and Wand need https.
+   - Over Wi-Fi with `--https`: the server also serves https on port+1 (self-signed certificate for this
+     PC's Wi-Fi address, made once into `tools/.cert/`) and the QR points the phone there. Keep the game on
+     `http://127.0.0.1:8765` and scan. The phone warns about the certificate once: Advanced, then Proceed.
+     Grip, Wand and Pad all work.
+   - Over Wi-Fi with only `--lan`, Pad works. Grip and Wand need https.
+4. On the dev server, the phone page records itself: every reading, packet sent and control message goes to
+   `recordings/<game session>/phone-<id>-<time>.ndjson`, beside the game's own recording. `games/lab/`
+   (Swing Lab) reads a Bluetooth phone and a browser phone at once through the cricket bat maths.
 
-Tests: `node games/lib/test/mimic-link.test.js` (maths, packets, gamepad merging, the wrapper with
+Tests: `python games/lib/test/qr-lab.e2e.py` (the Wi-Fi https flow and its recordings). `node games/lib/test/mimic-link.test.js` (maths, packets, gamepad merging, the wrapper with
 `mimic.js`, the mailbox over HTTP). `python games/lib/test/mimic-link.e2e.py` (Chromium: a game page
 and emulated phones connected over WebRTC).
 

@@ -11,7 +11,7 @@ Also the dev signaling mailbox for the browser controller (games/lib/mimic-link.
   GET  /ice                                          -> {iceServers} (STUN only here; the site adds TURN)
 Held in memory only; the contract is in docs/browser-controller.md.
 
-Usage: python tools/serve.py [port] [--lan] [--https]
+Usage: python tools/serve.py [port] [--lan] [--https] [--public URL]
   --lan    listen on every interface (0.0.0.0) so a phone on the same Wi-Fi can open the pages
            (by default only this PC can: 127.0.0.1, or a USB phone through `adb reverse`).
   --https  also serve https on port+1 on every interface, with a self-signed certificate for this
@@ -19,8 +19,13 @@ Usage: python tools/serve.py [port] [--lan] [--https]
            secure page, so this is how a phone on the same Wi-Fi plays Grip/Wand from the QR: the
            game stays on http://127.0.0.1:<port> (recorded as usual) and its QR points the phone at
            https://<wifi address>:<port+1>/phone/. The phone shows a certificate warning once
-           (Advanced -> Proceed). Both servers share one signaling mailbox and one recordings folder."""
-import functools, http.server, ipaddress, json, os, re, socket, ssl, sys, threading, time
+           (Advanced -> Proceed). Both servers share one signaling mailbox and one recordings folder.
+  --public URL  a tunnel to this server (e.g. `ngrok http 8765`) for a phone on ANOTHER network (4G,
+           a friend's Wi-Fi): the QR points the phone at URL/phone/, and /ice hands out the site's
+           TURN credentials (fetched from ICE_FROM) so a phone that can't meet the game directly
+           goes through the relay. Recordings still land here. Anyone with the URL reaches this
+           server while the tunnel runs: run it only for a test session."""
+import functools, http.server, ipaddress, json, os, re, socket, ssl, sys, threading, time, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, '..', 'games'))
@@ -28,6 +33,24 @@ REC = os.path.abspath(os.path.join(HERE, '..', 'recordings'))
 SAFE = re.compile(r'^[A-Za-z0-9._-]{1,80}$')
 SIG_ID = re.compile(r'^[A-Za-z0-9_-]{1,40}$')
 REC_LOCK = threading.Lock()
+ICE_FROM = 'https://mimic.shing.in/ice'   # the site's /ice (Cloudflare TURN), used with --public
+STUN = [{'urls': 'stun:stun.l.google.com:19302'}]
+_ice = {'until': 0, 'list': None}
+
+
+def site_ice():
+    """The site's ICE servers (with TURN), cached for an hour; STUN only if it can't be reached."""
+    if _ice['list'] and _ice['until'] > time.time():
+        return _ice['list'], True
+    try:
+        with urllib.request.urlopen(urllib.request.Request(ICE_FROM, headers={'User-Agent': 'mimic-dev-server'}), timeout=5) as r:
+            j = json.load(r)
+        if j.get('turn') and j.get('iceServers'):
+            _ice.update(list=j['iceServers'], until=time.time() + 3600)
+            return j['iceServers'], True
+    except Exception as e:
+        print('[ice] site TURN unavailable:', e, flush=True)
+    return STUN, False
 
 
 class Mailbox:
@@ -105,6 +128,7 @@ class Server(http.server.ThreadingHTTPServer):
     request_queue_size = 256
     daemon_threads = True
     https_port = None   # set on every server when --https runs, so /signal-info can point phones at it
+    public_url = None   # --public: the tunnel's address, for phones on another network
 
     def handle_error(self, request, client_address):
         # a phone that refuses the self-signed certificate drops the connection mid-handshake: not news
@@ -193,12 +217,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         path, _, query = self.path.partition('?')
-        if path == '/ice':   # the site serves TURN credentials here; on this LAN server STUN is enough
-            return self._json(200, {'iceServers': [{'urls': 'stun:stun.l.google.com:19302'}], 'turn': False})
+        if path == '/ice':   # STUN is enough on this Wi-Fi; through a tunnel (--public) the site's TURN too
+            if self.server.public_url:
+                lst, turn = site_ice()
+                return self._json(200, {'iceServers': lst, 'turn': turn})
+            return self._json(200, {'iceServers': STUN, 'turn': False})
         if path == '/signal-info':
             host = self.server.server_address[0]
             return self._json(200, {'lan': lan_ip(), 'port': self.server.server_address[1], 'lan_bound': host != '127.0.0.1',
-                                    'https_port': self.server.https_port})
+                                    'https_port': self.server.https_port, 'public': self.server.public_url})
         if path.startswith('/signal/'):
             q = dict(p.partition('=')[::2] for p in query.split('&') if p)
             try:
@@ -241,7 +268,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 
 if __name__ == '__main__':
-    args = [a for a in sys.argv[1:] if not a.startswith('--')]
+    pub_i = sys.argv.index('--public') + 1 if '--public' in sys.argv else -1
+    args = [a for i, a in enumerate(sys.argv) if i and not a.startswith('--') and i != pub_i]
     port = int(args[0]) if args else 8765
     host = '0.0.0.0' if '--lan' in sys.argv else '127.0.0.1'
     lan = f' and http://{lan_ip()}:{port} (LAN)' if host == '0.0.0.0' else ''
@@ -252,5 +280,12 @@ if __name__ == '__main__':
         twin = https_server(port + 1, *ensure_cert(ip), handler)
         threading.Thread(target=twin.serve_forever, daemon=True).start()
         lan += f' and https://{ip}:{port + 1} (phones on this Wi-Fi; accept the certificate once)'
+    if '--public' in sys.argv:
+        i = sys.argv.index('--public')
+        url = sys.argv[i + 1].rstrip('/') if i + 1 < len(sys.argv) else ''
+        if not re.match(r'^https://[A-Za-z0-9.-]+(:\d+)?$', url):
+            raise SystemExit('--public needs the tunnel https address, e.g. --public https://abc.ngrok-free.app')
+        Server.public_url = url
+        lan += f' and {url} (phones on any network, through the tunnel)'
     print(f'serving {ROOT} on http://127.0.0.1:{port}{lan} (recordings -> {REC})', flush=True)
     Server((host, port), handler).serve_forever()

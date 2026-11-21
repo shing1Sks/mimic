@@ -377,6 +377,8 @@
   function phoneBase() {
     if (cfg.phone) return cfg.phone;
     if (!httpPage) return 'http://localhost:8765/phone/';
+    // a tunnel to the dev server (serve.py --public): a phone on another network comes in through it
+    if (info && info.public && sameOriginSignal) return info.public + '/phone/';
     // the dev server's https twin (serve.py --https): a phone on this Wi-Fi gets its sensors there
     if (info && info.https_port && info.lan && sameOriginSignal) return `https://${info.lan}:${info.https_port}/phone/`;
     if (info && info.lan_bound && info.lan) return `${location.protocol}//${info.lan}:${location.port || (location.protocol === 'https:' ? 443 : 80)}/phone/`;
@@ -397,7 +399,8 @@
       const sigDefault = phoneOrigin + '/signal';
       const sig = sameOriginSignal ? location.origin + '/signal' : cfg.signal;
       // the phone page served by the same server (any host name) finds /signal by itself
-      if (!(sameOriginSignal && !cfg.phone) && sig !== sigDefault) u += '&sig=' + encodeURIComponent(sig);
+      // (through a tunnel the phone reaches this server's mailbox at its own origin too)
+      if (!(sameOriginSignal && !cfg.phone) && sig !== sigDefault && !(info && info.public && base.startsWith(info.public))) u += '&sig=' + encodeURIComponent(sig);
     } catch (e) { /* keep it short */ }
     return u;
   }
@@ -505,7 +508,9 @@
     const modeBtns = [['', 'Any'], ['grip', 'Grip'], ['wand', 'Wand'], ['pad', 'Pad']]
       .map(([m, l]) => `<button data-m="${m}" class="${m === (mode || '') ? 'on' : ''}" style="--a:${MODE_ACC[m]}">${l}</button>`).join('');
     let tip = '';
-    if (info && info.https_port && /^https:/.test(phoneBase())) {
+    if (info && info.public && phoneBase().startsWith(info.public)) {
+      tip = `<div class="mml-tip"><b>Online test link:</b> works from any network. If the phone shows a tunnel warning page, tap <b>Visit Site</b> once.</div>`;
+    } else if (info && info.https_port && /^https:/.test(phoneBase())) {
       tip = `<div class="mml-tip"><b>Dev Wi-Fi:</b> the phone warns about the certificate once. Tap <b>Advanced → Proceed</b>.</div>`;
     } else if (isDevHttp()) {
       tip = `<div class="mml-tip"><b>No HTTPS:</b> over Wi-Fi only <b>Pad</b> works. For Grip / Wand, plug in by USB, run

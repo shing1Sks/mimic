@@ -262,3 +262,43 @@ h1 span { display: block; color: transparent; -webkit-text-stroke: 2px var(--gol
 #visor::before { bottom: 9%; transform: perspective(400px) rotateX(18deg); }
 #visor::after { bottom: 1.5%; height: 2vh; }
 #visor.on { opacity: 1; }
+
+/* ---- the how-to before an innings (demo.js) ---- */
+#demo { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; background: rgba(6, 4, 18, 0.62); backdrop-filter: blur(5px); opacity: 0; transition: opacity 0.25s; cursor: pointer; }
+#demo.on { opacity: 1; }
+#demo[hidden] { display: none; }
+.demo-wrap { display: grid; gap: 14px; width: min(760px, calc(100vw - 32px)); }
+.demo-wrap.two { width: min(1180px, calc(100vw - 32px)); grid-template-columns: 1fr 1fr; }
+.demo-wrap.two .demo-skip { grid-column: 1 / -1; }
+.demo-pane { background: var(--panel-2); border: 1px solid var(--line); border-radius: 16px; padding: 18px 22px 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+.demo-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+.demo-kick { font-family: var(--display); letter-spacing: 0.32em; font-size: 13px; color: var(--gold); }
+.demo-who { font-family: var(--display); letter-spacing: 0.12em; font-size: 13px; color: var(--muted); }
+.demo-body { display: grid; grid-template-columns: minmax(200px, 300px) 1fr; gap: 22px; align-items: center; }
+.demo-wrap.two .demo-body { grid-template-columns: minmax(170px, 240px) 1fr; }
+.demo-art { width: 100%; aspect-ratio: 6 / 5; background: radial-gradient(120% 90% at 50% 100%, #1d3a2a 0%, #101527 70%); border-radius: 12px; border: 1px solid var(--line); }
+.demo-copy h3 { font-family: var(--display); font-style: italic; font-size: clamp(22px, 3.6svh, 30px); margin: 0 0 8px; letter-spacing: 0.02em; }
+.demo-copy p { margin: 0; color: #e6e0fb; font-size: clamp(14px, 2svh, 16px); line-height: 1.5; min-height: 4.5em; }
+.demo-copy p b { color: var(--gold); }
+.demo-dots { display: flex; gap: 6px; margin-top: 14px; }
+.demo-dots i { width: 26px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.14); overflow: hidden; position: relative; }
+.demo-dots i.done { background: var(--gold); }
+.demo-dots i.now::after { content: ''; position: absolute; inset: 0; background: var(--gold); transform-origin: left; animation: demo-fill 3.4s linear forwards; }
+@keyframes demo-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.demo-skip { text-align: center; color: var(--muted); font-size: 13px; letter-spacing: 0.04em; }
+@media (max-width: 900px) { .demo-wrap.two { grid-template-columns: 1fr; } .demo-body { grid-template-columns: 1fr; } .demo-art { max-height: 30svh; } }
+/* the art (demo.js animates it with SVG's own animation) */
+.demo-art .skin { fill: #d9a273; } .demo-art .skin-d { fill: #c08a5c; } .demo-art .sleeve { fill: #2d6cdf; }
+.demo-art .ph-body { fill: #1b1e2b; stroke: #8a92ad; stroke-width: 1.5; } .demo-art .ph-screen { fill: #2fd3c3; opacity: 0.35; } .demo-art .ph-cam { fill: #3a4058; } .demo-art .ph-key { fill: #8a92ad; }
+.demo-art .ph-key.on { fill: var(--gold); }
+.demo-art .bat-handle { fill: #2a2a2a; } .demo-art .bat-blade { fill: #e8cf9a; stroke: #b89558; stroke-width: 1.5; } .demo-art .bat-toe { fill: #d4b57a; }
+.demo-art .pitch { fill: #c9b07a; opacity: 0.85; } .demo-art .crease { fill: #fff; opacity: 0.8; }
+.demo-art .ring { fill: none; stroke: #2ee6ff; stroke-width: 2.5; }
+.demo-art .ball { fill: #f4f1e8; }
+.demo-art .tag text, .demo-art .hint-t { font: 700 9px Bahnschrift, "Segoe UI", sans-serif; letter-spacing: 0.18em; fill: var(--gold); }
+.demo-art .hint-t { text-anchor: middle; fill: #e6e0fb; }
+.demo-art .tag path, .demo-art .arc { stroke: var(--gold); stroke-width: 1.5; fill: none; }
+.demo-art .v-t { font: 700 9px Bahnschrift, "Segoe UI", sans-serif; letter-spacing: 0.12em; fill: #f6f3ff; text-anchor: middle; }
+.demo-art .v-s { font: 500 8.5px Bahnschrift, "Segoe UI", sans-serif; fill: var(--muted); text-anchor: middle; }
+.demo-art .runner circle { fill: var(--gold); animation: runner 0.9s infinite; } .demo-art .runner circle:nth-child(2) { animation-delay: 0.15s; } .demo-art .runner circle:nth-child(3) { animation-delay: 0.3s; }
+@keyframes runner { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }

@@ -36,6 +36,8 @@
     hand1: { label: 'P2 PLAYS', vals: ['RIGHT-HANDED', 'LEFT-HANDED'], def: 0 },
     cpu: { label: 'COMPUTER', vals: ['CLUB', 'PRO'], def: 0 },
     replays: { label: 'REPLAYS', vals: ['ON', 'OFF'], def: 0 },
+    // the how-to (CK.Demo) before each innings a phone bats or bowls in
+    howto: { label: 'HOW-TO BEFORE PLAY', vals: ['ON', 'OFF'], def: 0 },
     // first person: bat from behind the helmet grille, bowl from the bowler's eyes (big moments stay broadcast)
     camera: { label: 'CAMERA', vals: ['BROADCAST', 'FIRST PERSON'], def: 0 },
     comm: { label: 'COMMENTARY', vals: ['ON', 'OFF'], def: 0 },
@@ -188,20 +190,19 @@
   // the aim spot: a bright ring with a dark halo under it (it reads on the pale strip and the grass
   // alike) and a ripple running out of it, drawn just above the pitch and never lost in it
   const aimMat = o => new T.MeshBasicMaterial(Object.assign({ transparent: true, toneMapped: false, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8 }, o));
-  const aimRing = new T.Mesh(new T.RingGeometry(0.3, 0.46, 48), aimMat({ color: 0xffd36b, opacity: 0.85 }));
+  const aimRing = new T.Mesh(new T.RingGeometry(0.37, 0.45, 64), aimMat({ color: 0xffd36b, opacity: 0.85 }));
   aimRing.rotation.x = -Math.PI / 2; aimRing.visible = false; aimRing.renderOrder = 6; scene.add(aimRing);
-  const aimDot = new T.Mesh(new T.CircleGeometry(0.08, 16), aimRing.material); aimDot.renderOrder = 6; aimRing.add(aimDot);
-  const aimHalo = new T.Mesh(new T.RingGeometry(0.24, 0.53, 48), aimMat({ color: 0x000000, opacity: 0.4 })); aimHalo.renderOrder = 5; aimRing.add(aimHalo);
-  const aimWave = new T.Mesh(new T.RingGeometry(0.43, 0.5, 48), aimMat({ color: 0xffd36b, opacity: 0 })); aimWave.renderOrder = 6; aimRing.add(aimWave);
+  const aimDot = new T.Mesh(new T.CircleGeometry(0.055, 20), aimRing.material); aimDot.renderOrder = 6; aimRing.add(aimDot);
+  const aimHalo = new T.Mesh(new T.RingGeometry(0.33, 0.5, 64), aimMat({ color: 0x000000, opacity: 0.3 })); aimHalo.renderOrder = 5; aimRing.add(aimHalo);
+  const aimWave = new T.Mesh(new T.RingGeometry(0.44, 0.47, 64), aimMat({ color: 0xffd36b, opacity: 0 })); aimWave.renderOrder = 6; aimRing.add(aimWave);
   // from the bowler's own eyes the flat ring is nearly edge-on: a glowing arrow hangs over the spot instead
   const aimPin = (() => {
     const c = document.createElement('canvas'); c.width = 64; c.height = 96;
-    const g = c.getContext('2d'); g.fillStyle = '#fff'; g.shadowColor = '#fff'; g.shadowBlur = 10;
-    g.beginPath(); g.moveTo(10, 14); g.lineTo(54, 14); g.lineTo(32, 70); g.closePath(); g.fill();
-    g.fillRect(29, 74, 6, 16);
+    const g = c.getContext('2d'); g.strokeStyle = '#fff'; g.shadowColor = 'rgba(0,0,0,0.6)'; g.shadowBlur = 6; g.lineWidth = 9; g.lineCap = 'round'; g.lineJoin = 'round';
+    g.beginPath(); g.moveTo(14, 30); g.lineTo(32, 52); g.lineTo(50, 30); g.stroke();   // a slim chevron over the spot
     const t = new T.CanvasTexture(c); t.colorSpace = T.SRGBColorSpace;
     const sp = new T.Sprite(new T.SpriteMaterial({ map: t, transparent: true, depthTest: false, toneMapped: false, sizeAttenuation: false }));
-    sp.scale.set(0.034, 0.051, 1); sp.renderOrder = 7; sp.visible = false; scene.add(sp); return sp;   // the same size on screen at any distance
+    sp.scale.set(0.026, 0.039, 1); sp.renderOrder = 7; sp.visible = false; scene.add(sp); return sp;   // the same size on screen at any distance
   })();
   const pitchMark = new T.Mesh(new T.CircleGeometry(0.11, 20), new T.MeshBasicMaterial({ color: 0x7fe6ff, transparent: true, opacity: 0.0, toneMapped: false, depthWrite: false }));
   pitchMark.rotation.x = -Math.PI / 2; pitchMark.position.y = 0.012; scene.add(pitchMark);
@@ -340,6 +341,7 @@
     newBall(true);
     banner(kind === 'versus' ? `${G.match.names[inn().bat]} BATS` : kind === 'nets-bowl' ? 'YOU BOWL' : 'YOU BAT', `${overs} OVER${overs > 1 ? 'S' : ''} · ${wk} WICKET${wk > 1 ? 'S' : ''}`, 'neutral', 2.2);
     walkOut('start');
+    howTo();
     updateScorebug();
     AU.resume();
   }
@@ -1087,7 +1089,17 @@
     showScreen('break');
     G.cpuStyle = 'pace';
   }
-  function continueAfterBreak() { showScreen(null); paintTeams(); newBall(true); banner(`${G.match.names[inn().bat]} BATS`, MA.need(G.match).text, 'neutral', 2); walkOut('chase'); }
+  function continueAfterBreak() { showScreen(null); paintTeams(); newBall(true); banner(`${G.match.names[inn().bat]} BATS`, MA.need(G.match).text, 'neutral', 2); walkOut('chase'); howTo(); }
+  /** The how-to for each phone about to bat or bowl this innings (skippable; play waits for it). */
+  function howTo() {
+    if (opt('howto') !== 'ON' || !CK.Demo) return;
+    const roles = [];
+    const add = (s, role) => { if (s && s.kind === 'phone') roles.push({ role, who: G.kind === 'versus' ? s.name : '', keys: { a: keyA(s.mc), centre: keyC(s.mc) } }); };
+    add(bowlSeat(), 'bowl'); add(batSeat(), 'bat');
+    if (!roles.length) return;
+    G.demo = true; seats.forEach(s => s.input && s.input.drain());
+    CK.Demo.show(roles, () => { G.demo = false; seats.forEach(s => s.input && s.input.drain()); });
+  }
   /**
    * The striker walks out to the middle: at the start of each innings and after a wicket. The first
    * ball waits for him and for Paaji's line (so the welcome is never cut off); HOLD skips it.
@@ -1297,11 +1309,16 @@
     B.phase === 'run' ? (B.run = Math.min(1, B.run + dt * 3)) : (B.run = Math.max(0, B.run - dt * 2.5));
     const sw = -side;   // world x of the bowling arm's side
     const markZ = runSig()[1], creaseZ = BO.BOWL.FROM_Z - 0.75, cx = sw * 0.55;
+    B.y = 0; B.lean = 0;
     if (B.phase === 'mark') { B.x = sw * 1.2; B.z = markZ; }
     else if (B.phase === 'run') {
-      const k = clamp(G.phaseT / runT(), 0, 1), e = k * (2 - k);
+      // a run-up that builds (it used to slow down into the crease), a bound into the delivery stride,
+      // then planted and coiled at the crease until the arm comes over
+      const T0 = runT(), k = clamp(G.phaseT / T0, 0, 1), e = k * k * (1.6 - 0.6 * k);
       B.x = lerp(sw * 1.2, cx, e); B.z = lerp(markZ, creaseZ, e);
-      if (k >= 1) B.run = Math.max(0.2, B.run - dt * 4);
+      const bound = clamp((G.phaseT - (T0 - 0.34)) / 0.34, 0, 1);
+      if (bound > 0 && bound < 1) { B.y = 0.3 * Math.sin(Math.PI * bound); B.lean = -0.22 * Math.sin(Math.PI * bound * 0.5); }
+      if (k >= 1) { B.run = Math.max(0, B.run - dt * 6); B.lean = -0.16; B.coil = true; }
     } else if (B.phase === 'follow') {
       B.relT += dt;
       const bp = G.bowlerPlan;
@@ -1322,7 +1339,9 @@
     else r = halfTurn(BO.rotate(seat.input.S.q, { x: 0, y: 0, z: -1 }));
     const arm = side > 0 ? 'right' : 'left';
     const cel = G.celebrate && G.celebrate.t > 0 ? Math.min(1, G.celebrate.t * 4) : 0;
-    const st = { x: B.x, z: B.z, facing: damp(B, 'faceSm', B.fielding ? B.face : 0, 10, dt, true), run: B.run, crouch: 0, armDir: r, arm, lean: B.phase === 'follow' && !B.fielding ? 0.25 * (1 - cel) : 0, cel };
+    // through the crease he folds forward over the front leg, easing up as he runs on
+    const fl = B.phase === 'follow' && !B.fielding ? (0.12 + 0.35 * Math.exp(-B.relT * 3.5)) * (1 - cel) : B.lean || 0;
+    const st = { x: B.x, z: B.z, y: B.y || 0, facing: damp(B, 'faceSm', B.fielding ? B.face : 0, 10, dt, true), run: B.run, crouch: B.coil && B.phase === 'run' ? 0.25 : 0, armDir: r, arm, lean: damp(B, 'leanSm', fl, 14, dt), cel };
     let plan = B.fielding;
     if (plan && plan.t != null && plan.act === 'low' && Math.abs(G.t - plan.t) < 0.45) st.crouch = 0.9;
     if (plan && plan.t != null && (plan.act === 'dive' || plan.act === 'leap')) { const ap = CK.Anim.actionPose({ kind: plan.act, side: plan.side || 1, lift: plan.lift || 0 }, G.t - plan.t); st.y = ap.y; st.roll = ap.roll; if (ap.roll) st.facing = B.faceSm = plan.face; }
@@ -2093,6 +2112,7 @@
     refreshFocus();
   }
   function toTitle() {
+    if (G.demo && CK.Demo) CK.Demo.close();
     G.inGame = false; G.match = null; G.phase = 'idle'; G.paused = false; G.replay = null; G.ending = null; G.walk = null; G.cutaway = null; G.pendingWalk = false; G.drs = null; drsGroup.visible = false; $('drs').classList.remove('on');
     $('replay-bug').classList.remove('on');
     ballMesh.visible = false; batMesh.visible = false; aimRing.visible = false; aimPin.visible = false; trail.clear();
@@ -2195,6 +2215,7 @@
   addEventListener('keydown', e => {
     AU.resume();
     if (G.screen === 'lobby') return;
+    if (G.demo && CK.Demo && (e.key === ' ' || e.key === 'Enter' || e.key === 'Escape')) { CK.Demo.close(); e.preventDefault(); return; }
     if (e.key === 'Escape') { if (G.inGame && G.screen === 'game') setPaused(true); else if (G.paused) setPaused(false); else menuBack(); return; }
     if (e.key === 'm' || e.key === 'M') { settings.sound = settings.sound ? 0 : 1; saveSettings(); refreshOpts(); return; }
     const m = activeMenu(); if (!m) return;
@@ -2294,6 +2315,7 @@
         const c = s.mc;
         if (s.kind !== 'phone' || !c) continue;
         if (c !== mc) c.update();
+        if (G.demo) { if (['a', 'b', 'one', 'two', 'center'].some(k => c.pressed(k))) CK.Demo.close(); continue; }
         if (c.pressed('b')) { setPaused(true); return; }
         if (c.pressed('center')) toast(s.name + ': forward set');
       }
@@ -2364,19 +2386,20 @@
       aimRing.position.set(a.x, 0.015, -a.len);
       const fpv = !!(G.views && G.views.includes('fpbowl'));
       // it breathes while it steers, holds still and red once locked; a ripple runs out of it all the time
-      const locked = G.phase === 'runup', beat = 0.5 + 0.5 * Math.sin(now / 150);
-      aimRing.scale.setScalar((fpv ? 2.2 : 1.7) * (locked ? 1 : 1 + 0.14 * beat));   // 20-25 m from either camera
+      // sleek: a thin ring that breathes gently while it steers, a soft ripple now and then, still once locked
+      const locked = G.phase === 'runup', beat = 0.5 + 0.5 * Math.sin(now / 320);
+      aimRing.scale.setScalar((fpv ? 2.1 : 1.55) * (locked ? 0.92 : 1 + 0.045 * beat));   // 20-25 m from either camera
       // an arrow hangs over the spot in every view (the same size on screen at any distance): the
       // ring alone was lost on the pale strip from behind the bowler
       aimPin.visible = true;
-      aimPin.position.set(a.x, (fpv ? 0.75 : 0.55) + Math.sin(now / 260) * 0.06, -a.len); aimPin.material.color.copy(aimRing.material.color); aimPin.material.opacity = Math.min(1, aimRing.material.opacity + 0.2);
+      aimPin.position.set(a.x, (fpv ? 0.7 : 0.5) + (locked ? 0 : Math.sin(now / 420) * 0.04), -a.len); aimPin.material.color.copy(aimRing.material.color); aimPin.material.opacity = Math.min(1, aimRing.material.opacity + 0.2);
       // cyan while it steers, white until the phone settles (hold still), red once locked
       const col = locked ? 0xff3b30 : G.aimRef ? 0x2ee6ff : 0xffffff;
       aimRing.material.color.setHex(col);
-      aimRing.material.opacity = locked ? 1 : 0.8 + 0.2 * beat;
-      const per = locked ? 520 : G.aimRef ? 900 : 1300, k = (now % per) / per;
-      aimWave.scale.setScalar(1 + 1.4 * k); aimWave.material.color.setHex(col); aimWave.material.opacity = 0.85 * (1 - k) * (1 - k);
-      aimHalo.material.opacity = 0.45 + 0.15 * beat;
+      aimRing.material.opacity = locked ? 0.95 : 0.82 + 0.12 * beat;
+      const per = 1700, k = (now % per) / per;
+      aimWave.scale.setScalar(1 + 0.9 * k); aimWave.material.color.setHex(col); aimWave.material.opacity = locked ? 0 : 0.45 * (1 - k) * (1 - k);
+      aimHalo.material.opacity = 0.32;
     }
     if (G.phase === 'flight' || G.phase === 'hit') {
       if (G.hold) { judgeContact(now); if (G.hold && now - G.contact.tArr > lagMs() + (webBat() ? 900 : 400)) { G.hold = false; beaten('miss'); } }
@@ -2416,7 +2439,7 @@
       const oc = G.outcome;
       if (G.phase === 'hit' && oc && oc.type === 'caught' && G.t > oc.t - 0.4 && G.t < oc.t + 0.25) ts = 0.3;
       const sdt = rdt * ts;
-      if (G.inGame && !G.paused && G.screen === 'game' && G.phase !== 'over') gameFrame(sdt, now);
+      if (G.inGame && !G.paused && !G.demo && G.screen === 'game' && G.phase !== 'over') gameFrame(sdt, now);
       if (G.inGame && G.match && people.ready) { F = liveFrame(G.paused ? 0 : sdt); applyFrame(F, G.paused ? 0 : sdt); snapshot(F, G.paused ? 0 : sdt); }
       dustFrame(sdt);
       landRing.material.opacity = G.phase === 'hit' && G.landAt && G.ball && G.ballOn && !G.ball.bounces ? 0.55 + 0.35 * Math.sin(now / 120) : Math.max(0, landRing.material.opacity - rdt * 2);

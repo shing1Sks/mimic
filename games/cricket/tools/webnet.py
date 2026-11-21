@@ -23,7 +23,7 @@ def run(b, name, delay, jitter):
     errs = []
     pg.on('pageerror', lambda e: errs.append(str(e)[:300]))
     pg.add_init_script(INIT)
-    pg.add_init_script("try { localStorage.setItem('willowlight.settings', JSON.stringify({ lag: 2 })); } catch (e) {}")
+    pg.add_init_script("try { localStorage.setItem('willowlight.settings', JSON.stringify({ lag: 2, howto: 1 })); } catch (e) {}")
     pg.goto(URL)
     pg.wait_for_function("window.__cricket && __cricket.people.ready", timeout=60000)
     pg.evaluate("__phones[1].on = false; __phones[0].timing = 0.02")

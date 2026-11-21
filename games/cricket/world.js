@@ -472,7 +472,7 @@
     const flagU = flags(scene, st.base);
     const cards = placards(scene, st.base);
     // big screens: one over each sight screen, so the batter's view and the bowler's both see one
-    const screens = [bigScreen(scene, 0, 16, CZ - RB - 20, 0), bigScreen(scene, 0, 16, CZ + RB + 20, Math.PI)];
+    const screens = [bigScreen(scene, 0, 13.5, CZ - RB - 20, 0), bigScreen(scene, 0, 13.5, CZ + RB + 20, Math.PI)];   // (lower: from behind the bowler its top was cut off)
     // LED boards and the rope: flash through the colours on a big moment
     const flash = { t: 0, rope: 0 };
     bd.flash = (s, rope) => { flash.t = s || 2.4; if (rope) flash.rope = s || 2.4; };

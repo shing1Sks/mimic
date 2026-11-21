@@ -51,3 +51,6 @@ cloudflare-keys*
 # commentary renders: scratch and the Pro takes kept for a later upgrade
 tools/commentary/.work/
 tools/commentary/.pro-clips/
+
+# dev server https certificate (tools/serve.py --https), made per machine
+tools/.cert/

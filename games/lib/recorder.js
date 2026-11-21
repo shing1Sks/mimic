@@ -144,7 +144,7 @@
   addEventListener('keydown', e => { if (e.code === 'F8') { e.preventDefault(); session ? stop() : start(); } }, true);
   addEventListener('pagehide', () => { if (session) { log({ k: 'pagehide' }); flushLog(); } });
   window.MimicRec = {
-    start, stop, get active() { return !!session; },
+    start, stop, get active() { return !!session; }, get session() { return session; },
     /** Games may report what happened: MimicRec.event('hit', {power: .8}). */
     event(name, data) { log(Object.assign({ k: 'ev', name }, data || {})); },
   };

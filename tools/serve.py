@@ -11,16 +11,23 @@ Also the dev signaling mailbox for the browser controller (games/lib/mimic-link.
   GET  /ice                                          -> {iceServers} (STUN only here; the site adds TURN)
 Held in memory only; the contract is in docs/browser-controller.md.
 
-Usage: python tools/serve.py [port] [--lan]
-  --lan  listen on every interface (0.0.0.0) so a phone on the same Wi-Fi can open the pages
-         (by default only this PC can: 127.0.0.1, or a USB phone through `adb reverse`)."""
-import functools, http.server, json, os, re, socket, sys, threading, time
+Usage: python tools/serve.py [port] [--lan] [--https]
+  --lan    listen on every interface (0.0.0.0) so a phone on the same Wi-Fi can open the pages
+           (by default only this PC can: 127.0.0.1, or a USB phone through `adb reverse`).
+  --https  also serve https on port+1 on every interface, with a self-signed certificate for this
+           PC's Wi-Fi address (made once, tools/.cert/). A phone only hands motion sensors to a
+           secure page, so this is how a phone on the same Wi-Fi plays Grip/Wand from the QR: the
+           game stays on http://127.0.0.1:<port> (recorded as usual) and its QR points the phone at
+           https://<wifi address>:<port+1>/phone/. The phone shows a certificate warning once
+           (Advanced -> Proceed). Both servers share one signaling mailbox and one recordings folder."""
+import functools, http.server, ipaddress, json, os, re, socket, ssl, sys, threading, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, '..', 'games'))
 REC = os.path.abspath(os.path.join(HERE, '..', 'recordings'))
 SAFE = re.compile(r'^[A-Za-z0-9._-]{1,80}$')
 SIG_ID = re.compile(r'^[A-Za-z0-9_-]{1,40}$')
+REC_LOCK = threading.Lock()
 
 
 class Mailbox:
@@ -97,6 +104,59 @@ def lan_ip():
 class Server(http.server.ThreadingHTTPServer):
     request_queue_size = 256
     daemon_threads = True
+    https_port = None   # set on every server when --https runs, so /signal-info can point phones at it
+
+    def handle_error(self, request, client_address):
+        # a phone that refuses the self-signed certificate drops the connection mid-handshake: not news
+        if isinstance(sys.exc_info()[1], (ssl.SSLError, ConnectionError, TimeoutError)):
+            return
+        super().handle_error(request, client_address)
+
+
+CERT_DIR = os.path.join(HERE, '.cert')
+
+
+def ensure_cert(lan):
+    """A self-signed certificate naming this PC's Wi-Fi address (and localhost). Remade when the
+    address changes (another network). Returns (cert path, key path)."""
+    crt, key = os.path.join(CERT_DIR, 'dev.crt'), os.path.join(CERT_DIR, 'dev.key')
+    want = sorted({'127.0.0.1'} | ({lan} if lan else set()))
+    stamp = os.path.join(CERT_DIR, 'ips.txt')
+    if os.path.exists(crt) and os.path.exists(key) and os.path.exists(stamp) and open(stamp).read().split() == want:
+        return crt, key
+    import datetime
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
+    k = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'Mimic dev server')])
+    now = datetime.datetime.now(datetime.timezone.utc)
+    san = [x509.DNSName('localhost')] + [x509.IPAddress(ipaddress.ip_address(a)) for a in want]
+    cert = (x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(k.public_key())
+            .serial_number(x509.random_serial_number()).not_valid_before(now - datetime.timedelta(days=1))
+            .not_valid_after(now + datetime.timedelta(days=825))
+            .add_extension(x509.SubjectAlternativeName(san), critical=False)
+            .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+            .sign(k, hashes.SHA256()))
+    os.makedirs(CERT_DIR, exist_ok=True)
+    with open(key, 'wb') as f:
+        f.write(k.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.TraditionalOpenSSL, serialization.NoEncryption()))
+    with open(crt, 'wb') as f:
+        f.write(cert.public_bytes(serialization.Encoding.PEM))
+    with open(stamp, 'w') as f:
+        f.write(' '.join(want))
+    return crt, key
+
+
+def https_server(port, crt, key, handler):
+    """The https twin, on every interface. The TLS handshake runs in each request's own thread (not
+    in accept), so a phone sitting on the certificate warning never stalls everyone else."""
+    srv = Server(('0.0.0.0', port), handler)
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.load_cert_chain(crt, key)
+    srv.socket = ctx.wrap_socket(srv.socket, server_side=True, do_handshake_on_connect=False)
+    return srv
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -137,7 +197,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self._json(200, {'iceServers': [{'urls': 'stun:stun.l.google.com:19302'}], 'turn': False})
         if path == '/signal-info':
             host = self.server.server_address[0]
-            return self._json(200, {'lan': lan_ip(), 'port': self.server.server_address[1], 'lan_bound': host != '127.0.0.1'})
+            return self._json(200, {'lan': lan_ip(), 'port': self.server.server_address[1], 'lan_bound': host != '127.0.0.1',
+                                    'https_port': self.server.https_port})
         if path.startswith('/signal/'):
             q = dict(p.partition('=')[::2] for p in query.split('&') if p)
             try:
@@ -172,8 +233,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         body = self.rfile.read(n)
         folder = os.path.join(REC, parts[1])
         os.makedirs(folder, exist_ok=True)
-        with open(os.path.join(folder, parts[2]), 'ab' if 'append=1' in query else 'wb') as f:
-            f.write(body)
+        with REC_LOCK:   # appends from parallel requests (game + phone, overlapping flushes) never interleave
+            with open(os.path.join(folder, parts[2]), 'ab' if 'append=1' in query else 'wb') as f:
+                f.write(body)
         self.send_response(204)
         self.end_headers()
 
@@ -183,5 +245,12 @@ if __name__ == '__main__':
     port = int(args[0]) if args else 8765
     host = '0.0.0.0' if '--lan' in sys.argv else '127.0.0.1'
     lan = f' and http://{lan_ip()}:{port} (LAN)' if host == '0.0.0.0' else ''
+    handler = functools.partial(Handler, directory=ROOT)
+    if '--https' in sys.argv:
+        ip = lan_ip()
+        Server.https_port = port + 1
+        twin = https_server(port + 1, *ensure_cert(ip), handler)
+        threading.Thread(target=twin.serve_forever, daemon=True).start()
+        lan += f' and https://{ip}:{port + 1} (phones on this Wi-Fi; accept the certificate once)'
     print(f'serving {ROOT} on http://127.0.0.1:{port}{lan} (recordings -> {REC})', flush=True)
-    Server((host, port), functools.partial(Handler, directory=ROOT)).serve_forever()
+    Server((host, port), handler).serve_forever()

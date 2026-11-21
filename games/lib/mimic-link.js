@@ -287,6 +287,7 @@
           p.offset = p.offset === null || rtt < p.bestRtt ? off : p.offset * 0.8 + off * 0.2;
           p.bestRtt = Math.min(p.bestRtt, rtt);
         }
+        if (global.MimicRec && MimicRec.active) MimicRec.event('link.pong', { id: p.id, pc: +m.pc.toFixed(2), ph: m.ph, rtt: +rtt.toFixed(2), off: p.offset === null ? null : +p.offset.toFixed(2) });
       }
     };
   }
@@ -310,6 +311,8 @@
     p.ts = now();
     // on the page's clock at capture (once the clock offset is known), else at arrival
     p.stampT = p.offset !== null ? p.tl.stamp(d.t - p.offset - timeOrigin(), p.ts) : p.ts;
+    // recorded sessions keep every packet's phone time, arrival and stamp: the timeline can be redone offline
+    if (global.MimicRec && MimicRec.active) MimicRec.event('link.pkt', { id: p.id, seq: d.seq, kind: d.kind, cap: +d.t.toFixed(2), arr: +p.ts.toFixed(2), st: +p.stampT.toFixed(2), off: p.offset === null ? null : +p.offset.toFixed(2), b: d.buttons, ax: d.axes });
     if (d.kind === P().KIND.MOTION) {
       p.axes = d.axes; p.buttons = d.buttons;
       p.hist.push({ t: p.stampT, axes: d.axes, buttons: d.buttons });
@@ -370,6 +373,8 @@
   function phoneBase() {
     if (cfg.phone) return cfg.phone;
     if (!httpPage) return 'http://localhost:8765/phone/';
+    // the dev server's https twin (serve.py --https): a phone on this Wi-Fi gets its sensors there
+    if (info && info.https_port && info.lan && sameOriginSignal) return `https://${info.lan}:${info.https_port}/phone/`;
     if (info && info.lan_bound && info.lan) return `${location.protocol}//${info.lan}:${location.port || (location.protocol === 'https:' ? 443 : 80)}/phone/`;
     // the phone page sits beside lib/: /phone/ on the dev server, /play/phone/ on the site
     const host = location.hostname === '127.0.0.1' ? 'localhost' : location.hostname;
@@ -380,6 +385,9 @@
     ensureRoom();
     const base = phoneBase();
     let u = base + '?room=' + room + (mode ? '&mode=' + mode : '');
+    // a recorded local session: the phone files its own log beside the game's (recordings/<session>/)
+    const rs = global.MimicRec && MimicRec.session;
+    if (rs && info && info.lan && sameOriginSignal) u += '&rec=' + encodeURIComponent(rs);
     try {
       const phoneOrigin = new URL(base).origin;
       const sigDefault = phoneOrigin + '/signal';
@@ -493,7 +501,9 @@
     const modeBtns = [['', 'Any'], ['grip', 'Grip'], ['wand', 'Wand'], ['pad', 'Pad']]
       .map(([m, l]) => `<button data-m="${m}" class="${m === (mode || '') ? 'on' : ''}" style="--a:${MODE_ACC[m]}">${l}</button>`).join('');
     let tip = '';
-    if (isDevHttp()) {
+    if (info && info.https_port && /^https:/.test(phoneBase())) {
+      tip = `<div class="mml-tip"><b>Dev Wi-Fi:</b> the phone warns about the certificate once. Tap <b>Advanced → Proceed</b>.</div>`;
+    } else if (isDevHttp()) {
       tip = `<div class="mml-tip"><b>No HTTPS:</b> over Wi-Fi only <b>Pad</b> works. For Grip / Wand, plug in by USB, run
         <code>adb reverse tcp:${(httpPage && location.port) || 8765} tcp:${(httpPage && location.port) || 8765}</code> and open
         <code>${esc(usbUrl(mode))}</code>.${info && !info.lan_bound ? ' Wi-Fi scan needs the server started with <code>--lan</code>.' : ''}</div>`;

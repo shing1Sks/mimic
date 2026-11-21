@@ -176,9 +176,14 @@
   }
   const ballQ = new T.Quaternion(), _dq = new T.Quaternion(), _ax = new T.Vector3();
   const cpuBat = { q: BA.batQuat(0, 0, 'vertical') };
-  const aimRing = new T.Mesh(new T.RingGeometry(0.3, 0.46, 40), new T.MeshBasicMaterial({ color: 0xffd36b, transparent: true, opacity: 0.85, toneMapped: false, depthWrite: false }));
-  aimRing.rotation.x = -Math.PI / 2; aimRing.visible = false; scene.add(aimRing);
-  const aimDot = new T.Mesh(new T.CircleGeometry(0.08, 16), aimRing.material); aimDot.rotation.x = -Math.PI / 2; aimRing.add(aimDot); aimDot.rotation.x = 0;
+  // the aim spot: a bright ring with a dark halo under it (it reads on the pale strip and the grass
+  // alike) and a ripple running out of it, drawn just above the pitch and never lost in it
+  const aimMat = o => new T.MeshBasicMaterial(Object.assign({ transparent: true, toneMapped: false, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8 }, o));
+  const aimRing = new T.Mesh(new T.RingGeometry(0.3, 0.46, 48), aimMat({ color: 0xffd36b, opacity: 0.85 }));
+  aimRing.rotation.x = -Math.PI / 2; aimRing.visible = false; aimRing.renderOrder = 6; scene.add(aimRing);
+  const aimDot = new T.Mesh(new T.CircleGeometry(0.08, 16), aimRing.material); aimDot.renderOrder = 6; aimRing.add(aimDot);
+  const aimHalo = new T.Mesh(new T.RingGeometry(0.24, 0.53, 48), aimMat({ color: 0x000000, opacity: 0.4 })); aimHalo.renderOrder = 5; aimRing.add(aimHalo);
+  const aimWave = new T.Mesh(new T.RingGeometry(0.43, 0.5, 48), aimMat({ color: 0xffd36b, opacity: 0 })); aimWave.renderOrder = 6; aimRing.add(aimWave);
   // from the bowler's own eyes the flat ring is nearly edge-on: a glowing arrow hangs over the spot instead
   const aimPin = (() => {
     const c = document.createElement('canvas'); c.width = 64; c.height = 96;
@@ -295,7 +300,7 @@
   const G = {
     screen: 'title', inGame: false, paused: false, kind: null, match: null, phase: 'idle', t: 0, phaseT: 0,
     ball: null, ballOn: false, del: null, rel: null, path: null, contact: null, outcome: null, hold: false,
-    aim: { x: 0.1, len: 6 }, aimSm: { x: 0.1, len: 6 }, cpuPlan: null, cpuDel: null, tracker: BA.tracker(), fed: 0,
+    aim: { x: 0.1, len: 6 }, aimSm: { x: 0.1, len: 6 }, aimHist: [], cpuPlan: null, cpuDel: null, tracker: BA.tracker(), fed: 0,
     result: null, banner: null, replay: null, frames: [], shake: 0, slow: 1, lastTags: [], nets: null,
     stumpsFall: null, bowler: { x: 1.4, z: -31, run: 0, phase: 'mark' }, runs: null, fielderPlan: null,
   };
@@ -519,7 +524,7 @@
     G.phase = 'ready'; G.phaseT = 0; G.ball = null; G.ballOn = false; G.contact = null; G.outcome = null; G.hold = false;
     G.del = null; G.rel = null; G.path = null; G.cpuPlan = null; G.frames = []; G.stumpsFall = null; G.runs = null; G.fielderPlan = null;
     G.slow = 1; G.tracker = BA.tracker(); G.fed = 0;
-    G.celebrate = null; G.batCheer = 0; G.eventFrame = null; G.cutAt = 0; G.keyUp = 0; G.aimRef = null; G.stepT = 0; G.landAt = null; G.tsT = 0;
+    G.celebrate = null; G.batCheer = 0; G.eventFrame = null; G.cutAt = 0; G.keyUp = 0; G.aimRef = null; G.aimHeld = false; G.aimHist = []; G.stepT = 0; G.landAt = null; G.tsT = 0;
     G.bowler = { x: armSide() * 1.5, z: -31.5, run: 0, phase: 'mark', relT: 0 };
     ballMesh.visible = false; trail.clear(); trail.push({ x: 0, y: -5, z: 0 }, false);
     resetStumps();
@@ -563,10 +568,21 @@
       if (opt('aim') === 'ON') {
         // the marker starts on a good length; once the phone settles in the stance, tilting it from
         // there steers it (any grip: only the change counts, so the phone pointing up is fine)
-        if (!G.aimRef) { Object.assign(G.aimSm, defaultAim()); if (G.phaseT > 0.3 && BO.steady(inp.S.samples, 250, 0.06)) { G.aimRef = inp.S.q; G.aimBase = defaultAim(); } }
-        // a big quick move (bringing the phone up from the follow-through) is not aiming: settle again
-        else if (!BO.steady(inp.S.samples, 150, 0.35)) G.aimRef = null;
+        // (recorded 2026-11-22: a hand never held 0.06 rad for 250 ms on 1 ball in 3, so the marker sat
+        // grey on its start spot; 0.12 rad for 200 ms settles within half a second on all 14)
+        if (!G.aimRef) { if (!G.aimHeld) Object.assign(G.aimSm, defaultAim()); if (G.phaseT > 0.3 && BO.steady(inp.S.samples, 200, 0.12)) { G.aimRef = inp.S.q; G.aimBase = { x: G.aimSm.x, len: G.aimSm.len }; prompts(); } }
+        // a big quick move (bringing the phone up from the follow-through) is not aiming: the marker
+        // stays where it was and steers again from there once the phone settles (it used to jump back
+        // to the start, which looked stuck)
+        else if (!BO.steady(inp.S.samples, 150, 0.6)) {
+          // ...and goes back to where it was before the move began
+          const back = G.aimHist.find(h => h.t >= now - 220) || G.aimHist[0];
+          if (back) { G.aimSm.x = back.x; G.aimSm.len = back.len; }
+          G.aimRef = null; G.aimHeld = true; prompts();
+        }
         else { const a = BO.tiltAim(G.aimRef, inp.S.q, G.aimBase); G.aimSm.x = lerp(G.aimSm.x, a.x, 0.3); G.aimSm.len = lerp(G.aimSm.len, a.len, 0.3); }
+        G.aimHist.push({ t: now, x: G.aimSm.x, len: G.aimSm.len });
+        while (G.aimHist.length && G.aimHist[0].t < now - 400) G.aimHist.shift();
       } else Object.assign(G.aimSm, defaultAim());
     } else if (G.phase === 'runup') {
       if (!G.keyUp) for (const e of ev) if (e.kind === 'release') { G.keyUp = e.t; G.cutAt = 0; break; }
@@ -2197,12 +2213,20 @@
       const a = G.phase === 'runup' ? G.aim : G.aimSm;
       aimRing.position.set(a.x, 0.015, -a.len);
       const fpv = !!(G.views && G.views.includes('fpbowl'));
-      aimRing.scale.setScalar(fpv ? 2.2 : 1);   // seen from the bowler's own eyes, 25 m away
-      aimPin.visible = fpv;
-      if (fpv) { aimPin.position.set(a.x, 0.75 + Math.sin(now / 260) * 0.06, -a.len); aimPin.material.color.copy(aimRing.material.color); aimPin.material.opacity = Math.min(1, aimRing.material.opacity + 0.2); }
-      // yellow and pulsing while it steers, grey until the phone settles, red once locked
-      aimRing.material.color.setHex(G.phase === 'runup' ? 0xff3b30 : G.aimRef ? 0xffd36b : 0xb8b8b8);
-      aimRing.material.opacity = G.phase === 'runup' ? 0.95 : G.aimRef ? 0.7 + 0.25 * Math.sin(now / 160) : 0.5;
+      // it breathes while it steers, holds still and red once locked; a ripple runs out of it all the time
+      const locked = G.phase === 'runup', beat = 0.5 + 0.5 * Math.sin(now / 150);
+      aimRing.scale.setScalar((fpv ? 2.2 : 1.7) * (locked ? 1 : 1 + 0.14 * beat));   // 20-25 m from either camera
+      // an arrow hangs over the spot in every view (the same size on screen at any distance): the
+      // ring alone was lost on the pale strip from behind the bowler
+      aimPin.visible = true;
+      aimPin.position.set(a.x, (fpv ? 0.75 : 0.55) + Math.sin(now / 260) * 0.06, -a.len); aimPin.material.color.copy(aimRing.material.color); aimPin.material.opacity = Math.min(1, aimRing.material.opacity + 0.2);
+      // cyan while it steers, white until the phone settles (hold still), red once locked
+      const col = locked ? 0xff3b30 : G.aimRef ? 0x2ee6ff : 0xffffff;
+      aimRing.material.color.setHex(col);
+      aimRing.material.opacity = locked ? 1 : 0.8 + 0.2 * beat;
+      const per = locked ? 520 : G.aimRef ? 900 : 1300, k = (now % per) / per;
+      aimWave.scale.setScalar(1 + 1.4 * k); aimWave.material.color.setHex(col); aimWave.material.opacity = 0.85 * (1 - k) * (1 - k);
+      aimHalo.material.opacity = 0.45 + 0.15 * beat;
     }
     if (G.phase === 'flight' || G.phase === 'hit') {
       if (G.hold) { judgeContact(now); if (G.hold && now - G.contact.tArr > lagMs() + (webBat() ? 900 : 400)) { G.hold = false; beaten('miss'); } }

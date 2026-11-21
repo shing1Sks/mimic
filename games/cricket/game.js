@@ -545,7 +545,9 @@
     resetStumps();
     const prevField = G.field;
     G.field = FI.setField(bowlKind(), batSide());
-    if (prevField) G.field.forEach((f, i) => { const q = prevField[i]; if (q && q.cur) { f.cur = q.cur; f.face = q.face; f.faceSm = q.faceSm; f.runSm = q.runSm; f.crouchSm = q.crouchSm; } });
+    // everyone back on his mark under the cut to the next ball (visual review: fielders were still jogging
+    // back through the bowler's view); the walk-in as the bowler runs up starts from there
+    if (prevField) G.field.forEach((f, i) => { const q = prevField[i]; if (q && q.cur) { f.cur = { x: f.x, z: f.z }; f.faceSm = Math.atan2(-f.x, -f.z - 1); f.runSm = 0; f.crouchSm = q.crouchSm; } });
     hud.speedOff();
     castPlayers();
     prompts();

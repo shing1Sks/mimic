@@ -218,10 +218,10 @@ function real(i) {
 // --- variations from the hand: the slower ball (hand turned over) and the cutter (twist, fast arm)
 {
   const ref = rel({ peakW: 22 }).alpha, plain = rel({ peakW: 22 }, { seamRef: ref });
-  const over = rel({ peakW: 22, rho0: rad(160) }, { seamRef: ref }), half = rel({ peakW: 22, rho0: rad(45) }, { seamRef: ref });
-  check('hand turned right over (back of the hand): a slower ball, ~3/4 of the pace, no swing', over.slower && Math.abs(over.pace / plain.pace - B.BOWL.SLOWER.PACE) < 0.02 && over.swing === 0, [over.slower, over.pace / plain.pace]);
+  const over = rel({ peakW: 22, rho0: rad(78) }, { seamRef: ref }), half = rel({ peakW: 22, rho0: rad(45) }, { seamRef: ref });
+  check('hand turned over ~80 deg (as real attempts did): a slower ball, ~3/4 of the pace, no swing', over.slower && Math.abs(over.pace / plain.pace - B.BOWL.SLOWER.PACE) < 0.02 && over.swing === 0, [over.slower, over.pace / plain.pace]);
   check('...a wrist turned 45 deg is still swing, not a slower ball', !half.slower && half.swing !== 0, [half.slower, half.swing]);
-  check('...not on the first ball (the natural grip is not known yet)', !rel({ peakW: 22, rho0: rad(160) }).slower);
+  check('...not on the first ball (the natural grip is not known yet)', !rel({ peakW: 22, rho0: rad(78) }).slower);
   const sb = bowlRel(over, { x: 0, len: 5 }), pb = bowlRel(plain, { x: 0, len: 5 });
   check('...it still pitches on the aim, looping up slower', sb.pitch && Math.abs(-sb.pitch.z - 5) < 0.6 && sb.d.speed < pb.d.speed, sb.pitch && -sb.pitch.z);
   check('...the batter reads SLOWER BALL', B.describe({ pitch: sb.pitch, heightAtBat: 0.6 }, sb.d, 1).includes('SLOWER BALL'));

@@ -106,5 +106,29 @@ check('left-handed batter: the field is mirrored (slip on the other side)', F.se
   F.MISHAP.leaveIt = keep;
   check('leave-it pairs are two fielders (never the bowler)', n > 0 && bad === 0, [n, bad]);
 }
+{
+  // the ball and the fielder are one world: whoever is given the ball has his body within arm's reach
+  // of it at that moment, on his own planned run (the animation plays that same plan back)
+  const seed = n => { let s = n; return () => (s = (s * 16807) % 2147483647) / 2147483647; };
+  const pick = seed(5), rng = seed(17);
+  let n = 0, far = [], tooFast = 0;
+  const moved = field.map((f, i) => Object.assign({}, f, { cur: { x: f.x + (i % 3 - 1) * 4, z: f.z + (i % 2 ? 3 : -3) } }));   // some still walking back
+  for (let i = 0; i < 1500; i++) {
+    const r = F.resolve(hit(8 + pick() * 32, -180 + pick() * 360, -10 + pick() * 55), moved, { rng, bowler: { x: -1.5, z: -15 } });
+    const c = r.contact;
+    if (!c || c.kind === 'leave' || c.kind === 'miss') continue;
+    const plan = r.by === -1 ? r.bowlerPlan : r.plans[r.by];
+    const m = F.motionAt(plan, c.t), d = Math.hypot(m.x - c.at.x, m.z - c.at.z);
+    n++;
+    if (d > F.F.REACH + 0.05) far.push([c.kind, plan.act, +d.toFixed(2)]);
+    // and he never ran faster than a sprint to get there
+    for (let t = plan.t0; t < c.t; t += 0.05) { const a = F.motionAt(plan, t), b = F.motionAt(plan, t + 0.05); if (Math.hypot(b.x - a.x, b.z - a.z) / 0.05 > F.F.RUN * 1.05 && plan.act !== 'dive') tooFast++; }
+  }
+  check('every catch / stop / drop / fumble: the ball within his reach on his own run (from where he really stood)', n > 300 && far.length === 0, { n, far: far.slice(0, 5) });
+  check('...and nobody outruns a sprint to get there', tooFast === 0, tooFast);
+  const pickups = [];
+  for (let i = 0; i < 400; i++) { const r = F.resolve(hit(10 + pick() * 20, -180 + pick() * 360, 15 + pick() * 40), field, { rng: never }); if (r.contact && r.contact.kind === 'drop') pickups.push(r); }
+  check('a dropped catch is gathered later, where the ball fell (not where it was dropped)', pickups.length > 5 && pickups.every(r => r.t > r.contact.t + 0.3), pickups.length);
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

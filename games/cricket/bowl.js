@@ -37,7 +37,8 @@
  *   slower   the hand turned right over at the whip (the back of the hand toward the batter, the
  *            palm more than SLOWER.SEAM off its natural angle): a back-of-the-hand slower ball,
  *            SLOWER.PACE of the arm's pace, so it loops up and dips. 50 recorded balls never
- *            strayed more than 0.8 rad from the natural grip without meaning to.
+ *            strayed more than 0.8 rad from the natural grip without meaning to; real attempts
+ *            turned it 75-83 deg (a wrist doesn't turn a full half turn at speed).
  *   cutter   a hard twist (CUT.TWIST) with a fast arm (hand at CUT.HAND or more): the fingers roll down
  *            the side of the ball instead, so it keeps its pace and moves off the seam (CUT.KICK
  *            m/s sideways at the bounce) the way the twist turns, instead of spinning. Recorded
@@ -68,8 +69,9 @@
     SPIN: { K: 8, MIN_TWIST: 7, MAX: 300, SIDE: 0.62, TOP: 0.78, SCRAMBLE: 120 },
     SEAM: { FULL: 25 * Math.PI / 180, LOST: 70 * Math.PI / 180 },
     // variations (see the header): the palm this far off the natural grip is the back of the hand
-    // (only once the grip is known from an earlier ball: phones sit in the fist every which way)
-    SLOWER: { SEAM: 2.0, PACE: 0.74 },
+    // (only once the grip is known from an earlier ball: phones sit in the fist every which way).
+    // Recorded 2026-11-22: three real attempts turned the hand 75-83 deg; ordinary balls stay under 0.8 rad
+    SLOWER: { SEAM: 1.1, PACE: 0.74 },
     // a cutter needs a deliberate twist: fast arms twist 8-16 rad/s on their own (session 2), meant ones 19-20
     CUT: { HAND: 18, TWIST: 17, KICK: 1.0, PACE: 0.94 },
     // visible option BOWLING CONTROL. The marker says where the ball pitches; the action only

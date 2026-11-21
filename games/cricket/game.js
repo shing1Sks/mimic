@@ -522,6 +522,7 @@
     if (G.att) G.att.ball++;
     if (G.match && G.match.overs > 1 && inn() && inn().balls === (G.match.overs - 1) * 6 && inn().cur.length === 0) paaji('lastOver');
     G.phase = 'ready'; G.phaseT = 0; G.ball = null; G.ballOn = false; G.contact = null; G.outcome = null; G.hold = false;
+    G.umpireOut = 0; G.ballHeldBy = null; G.throwBall = null; G.stroke = null; G.juggleT = null; G.grip = null; G.holdPt = null; G.bowlerPlan = null;
     G.del = null; G.rel = null; G.path = null; G.cpuPlan = null; G.frames = []; G.stumpsFall = null; G.runs = null; G.fielderPlan = null;
     G.slow = 1; G.tracker = BA.tracker(); G.fed = 0;
     G.celebrate = null; G.batCheer = 0; G.eventFrame = null; G.cutAt = 0; G.keyUp = 0; G.aimRef = null; G.aimHeld = false; G.aimHist = []; G.stepT = 0; G.landAt = null; G.tsT = 0;
@@ -643,7 +644,7 @@
     logEvent('delivery', { bowler: inn().bowl, kind: bowlSeat().kind, kmh: del.speed * 3.6, aim: del.aim, target: { x: del.target.x, len: -del.target.z }, pitch: pr.pitch && { x: pr.pitch.x, len: -pr.pitch.z },
       atStumps: { x: atS.x, y: atS.y }, swing: del.swing, spinDir: del.spinDir, spin: rel.spin, tags: G.lastTags });
     G.phase = 'flight'; G.phaseT = 0; G.ballOn = true; G.t = 0;
-    G.bowler.phase = 'follow'; G.bowler.relT = 0;
+    G.bowler.phase = 'follow'; G.bowler.relT = 0; G.bowler.relFrom = { x: G.bowler.x, z: G.bowler.z }; G.bowler.fielding = null;
     ballMesh.visible = true; trail.clear();
     SFX.release(del.speed);
     hud.speed(del.speed * 3.6, G.lastTags, G.delCard);
@@ -818,7 +819,8 @@
         if (at.x * side > 0.95 || at.x * side < -0.5 || at.y > 1.9) c.wide = true;
       }
     }
-    if (p.z > 11 && !c.kept) { c.kept = true; keeperTakes(); }
+    const kp = G.field[0] && (G.field[0].cur || G.field[0]);
+    if (!c.kept && kp && p.z >= kp.z - 0.4) { c.kept = true; keeperTakes(); }
   }
   function padHit(at) {
     SFX.thud(PH.len(G.ball.v), true);
@@ -858,7 +860,7 @@
   function keeperTakes() {
     const c = G.contact;
     SFX.glove();
-    G.ballOn = false; ballMesh.visible = false;
+    holdBall(0);
     if (c.wide) { endBallSoon(1.2, { runs: 0, extra: 'wd' }, 'TOO WIDE', 'WIDE'); paaji('wide'); return; }
     endBallSoon(1.0, { runs: 0, extra: noBall() ? 'nb' : null }, c.how === 'leave' ? 'WELL LEFT' : 'PAST THE EDGE', c.how === 'leave' ? 'LEFT ALONE' : 'BEATEN');
   }
@@ -888,7 +890,8 @@
     G.eventFrame = G.frames.length;
     if (sh.playedOn) { G.outcome = { type: 'playedon' }; logShot(sw, sh); return; }
     const flight = PH.run(G.ball, { tMax: 14, every: 3 }).samples;
-    const bowlerAt = { x: G.bowler.x, z: G.bowler.z };
+    G.bowler.relAtHit = G.bowler.relT || 0;
+    const bowlerAt = followAt(G.bowler.relAtHit + FI.F.BOWLER_REACT);
     G.outcome = FI.resolve(flight, G.field, { rng, bowler: bowlerAt });
     G.outcome.flight = flight;
     const land = flight.find((x, i) => i && !x.air);
@@ -920,8 +923,18 @@
       return;
     }
     if (o.done) return;
+    const c = o.contact;
+    if (c && !c.done && G.t >= c.t && o.type !== 'caught') {
+      // his hands on it (or not): a drop or a fumble knocks it away for real (field.js worked out where)
+      c.done = true;
+      if (o.deflect) { G.ball = PH.ball(o.deflect.p, o.deflect.v, {}); G.ballOn = true; SFX.glove(); }
+      const mk = o.mishap && o.mishap.kind;
+      if (mk === 'leaveIt') { banner('LEFT IT!', 'TWO FIELDERS, NOBODY TAKES IT', 'neutral', 1.6); crowdReact('ooh'); attitude('mishap', o.by); paaji('misfield'); }
+      else if (mk === 'fumble') { banner('FUMBLE!', fname(o).toUpperCase() + ' · EXTRA RUN', 'neutral', 1.4); crowdReact('ooh'); attitude('mishap', o.by); paaji('misfield'); }
+      else if (c.kind === 'drop') { attitude('drop', o.by); banner('DROPPED!', dropName(o.dropped[0]).toUpperCase() + ' PUTS IT DOWN', 'neutral', 1.6); crowdReact('ooh'); paaji('dropped'); }
+    }
     if (o.type === 'caught' && G.t >= o.t) {
-      o.done = true; G.ballOn = false; holdBall(o.by);
+      o.done = true; holdBall(o.by); SFX.glove();
       if (o.mishap && o.mishap.kind === 'juggle') { G.juggleT = G.t; crowdReact('ooh'); }
       if (noBall()) { banner('NO BALL', 'CAUGHT, BUT IT WAS A NO BALL', 'neutral', 1.8); endBallSoon(1.8, { runs: 0, extra: 'nb' }); return; }
       const bc = bowlSeat().mc; if (bc && bowlSeat().kind === 'phone') bc.rumble(0.8, 140, 3);
@@ -944,12 +957,8 @@
     }
     if (o.type === 'runs' && G.t >= o.t && !o.picked) {
       o.picked = true; holdBall(o.by);
-      const mk = o.mishap && o.mishap.kind;
-      if (mk === 'leaveIt') { banner('LEFT IT!', 'TWO FIELDERS, NOBODY TAKES IT', 'neutral', 1.6); crowdReact('ooh'); attitude('mishap', o.by); paaji('misfield'); }
-      else if (mk === 'fumble') { banner('FUMBLE!', fname(o).toUpperCase() + ' · EXTRA RUN', 'neutral', 1.4); crowdReact('ooh'); attitude('mishap', o.by); paaji('misfield'); }
-      else if (o.dropped && o.dropped.length) { attitude('drop', o.by); banner('DROPPED!', dropName(o.dropped[0]).toUpperCase() + ' PUTS IT DOWN', 'neutral', 1.6); crowdReact('ooh'); paaji('dropped'); }
-      const throwT = Math.max(0.5, o.back - o.t - FI.F.GATHER), fumbleT = mk === 'fumble' ? 0.9 : 0;   // a fumble: he gathers it again
-      G.throwBall = { t0: G.t + FI.F.GATHER + fumbleT, dur: throwT, from: null, to: nearerEnd(o.at) };
+      // gathered: up, set, and in to the man at the stumps (none needed when he is at them himself)
+      if (o.receiver !== null && o.receiver !== undefined) G.throwBall = { t0: o.t + FI.F.GATHER, dur: Math.max(0.5, o.back - o.t - FI.F.GATHER), by: o.by, rec: o.receiver, from: null, to: null };
     }
     if (o.type === 'runs' && o.picked && !o.endQueued) {
       const runsDone = o.runs ? FI.F.RUN1 + (o.runs - 1) * FI.F.RUNN : 0;
@@ -961,8 +970,10 @@
     }
   }
   const carryOf = o => { const f = o.flight, s = f.find((x, i) => i && !x.air) || f[f.length - 1]; return Math.hypot(s.x, s.z - Z_CONTACT); };
-  const nearerEnd = at => (Math.hypot(at.x, at.z) < Math.hypot(at.x, at.z + PH.PITCH.L) ? { x: 0, y: 0.8, z: 0.4 } : { x: 0, y: 0.8, z: -PH.PITCH.L - 0.4 });
-  function holdBall(by) { G.ballHeldBy = by; G.ballOn = false; G.ball.v = { x: 0, y: 0, z: 0 }; }
+  function holdBall(by) {
+    G.grip = { from: { x: G.ball.p.x, y: G.ball.p.y, z: G.ball.p.z }, t: clock() };   // from where it really is
+    G.ballHeldBy = by; G.ballOn = false; G.ball.v = { x: 0, y: 0, z: 0 };
+  }
 
   // ---------------------------------------------------------------------------------
   // Wickets, the end of a ball
@@ -1135,34 +1146,27 @@
   // ---------------------------------------------------------------------------------
   // Fielders and the bowler's body
   function planFielding(o) {
-    const plans = G.field.map(f => ({ x: f.x, z: f.z, tx: f.x, tz: f.z, sp: 0, start: FI.F.REACT }));
-    const ballDir = o.flight && o.flight.length > 4 ? o.flight[Math.min(o.flight.length - 1, 30)] : null;
-    if (o.type === 'caught' && o.at && o.by >= 0 && G.field[o.by]) {
-      // leap, dive or a plain take (CK.Anim), judged from where he stood, facing the batter
-      const f = G.field[o.by], face = Math.atan2(-f.x, -0.5 - f.z);
-      o.action = Object.assign(CK.Anim.fieldAction({ x: f.x, z: f.z, face }, o.at, FI.F.RUN * Math.max(0, o.t - FI.F.REACT)), { face });
-    }
-    const mis = o.mishap;
-    if (mis && mis.kind === 'leaveIt' && o.at && plans[mis.with]) {
-      const p2 = plans[mis.with], d2 = Math.hypot(o.at.x - p2.x, o.at.z - p2.z);
-      p2.tx = o.at.x + 0.9; p2.tz = o.at.z + 0.4; p2.sp = d2 / Math.max(0.25, o.t - FI.F.REACT);
-    }
-    plans.forEach((p, i) => {
-      if (i === mis?.with && mis.kind === 'leaveIt') return;
-      if (i === o.by && o.at) { const d = Math.hypot(o.at.x - p.x, o.at.z - p.z), tAt = mis && mis.kind === 'misfield4' ? mis.missT : o.t; p.tx = o.at.x; p.tz = o.at.z; p.sp = d / Math.max(0.25, tAt - FI.F.REACT); }
-      else if (ballDir && i !== 0) {
-        const d = Math.hypot(ballDir.x - p.x, ballDir.z - p.z);
-        if (d < 30) { p.tx = p.x + (ballDir.x - p.x) * 0.35; p.tz = p.z + (ballDir.z - p.z) * 0.35; p.sp = 4; }
-      }
-    });
-    if ((o.type === 'four' || o.type === 'six') && o.flight) {
-      // the nearest outfielder chases it to the rope
-      const end = o.flight.find(s => PH.fromCentre(s) > PH.FIELD.R) || o.flight[o.flight.length - 1];
-      let bi = 1, bd = 1e9;
-      plans.forEach((p, i) => { if (!i || (mis && mis.kind === 'misfield4' && i === o.by)) return; const d = Math.hypot(end.x - p.x, end.z - p.z); if (d < bd) { bd = d; bi = i; } });
-      plans[bi].tx = end.x * 0.95; plans[bi].tz = PH.FIELD.CZ + (end.z - PH.FIELD.CZ) * 0.95; plans[bi].sp = 7;
-    }
-    G.fielderPlan = plans;
+    // field.js planned every fielder's run (and the bowler's): who takes it, and how, from where they stood
+    G.fielderPlan = o.plans ? o.plans.slice() : null;
+    G.bowlerPlan = o.bowlerPlan || null;
+    o.receiver = null;
+    if (o.type !== 'runs' || !o.at || o.by === null || o.by === undefined) return;
+    // the throw goes to the nearer end: the keeper comes up to the stumps, or the bowler goes to his
+    const dBat = Math.hypot(o.at.x, o.at.z), dBowl = Math.hypot(o.at.x, o.at.z + PH.PITCH.L);
+    if (Math.min(dBat, dBowl) < 5) return;   // he is at the stumps already
+    let rec = dBat <= dBowl ? 0 : -1;
+    if (rec === o.by) rec = rec === 0 ? -1 : 0;
+    const spot = rec === 0 ? { x: 0.35 * batSide(), z: 0.75 } : { x: 0.45 * armSide(), z: -PH.PITCH.L - 0.7 };
+    const t0 = 0.9, from = rec === 0 ? (G.field[0].cur || G.field[0]) : followAt(G.bowler.relAtHit + t0);
+    const plan = { sx: from.x, sz: from.z, t0, vmax: 6, tx: spot.x, tz: spot.z, face0: Math.atan2(o.at.x - from.x, o.at.z - from.z), face: Math.atan2(o.at.x - spot.x, o.at.z - spot.z), act: 'receive' };
+    if (rec === 0) G.fielderPlan[0] = plan; else G.bowlerPlan = plan;
+    o.receiver = rec;
+  }
+  /** The bowler's follow-through, relT s after the release, from where he let go. */
+  function followAt(relT) {
+    const B = G.bowler, sw = -armSide(), from = B.relFrom || { x: sw * 0.55, z: BO.BOWL.FROM_Z - 0.75 };
+    const k = clamp(relT / 1.1, 0, 1), e = k * (2 - k);
+    return { x: lerp(from.x, sw * 2.6, e), z: lerp(from.z, -14.5, e), k };
   }
 
   // ---------------------------------------------------------------------------------
@@ -1264,9 +1268,15 @@
       if (k >= 1) B.run = Math.max(0.2, B.run - dt * 4);
     } else if (B.phase === 'follow') {
       B.relT += dt;
-      const k = clamp(B.relT / 1.1, 0, 1), e = k * (2 - k);
-      B.x = lerp(cx, sw * 2.6, e); B.z = lerp(creaseZ, -14.5, e);
-      B.run = (1 - k) * 0.8;
+      const bp = G.bowlerPlan;
+      if (G.phase === 'hit' && bp && bp.act !== 'drift' && G.t >= bp.t0) {
+        // he's in the play: his run from field.js (it starts where the follow-through had got to)
+        const m = FI.motionAt(bp, G.t);
+        B.x = m.x; B.z = m.z; B.run = m.run; B.face = m.facing; B.fielding = bp.next && G.t >= bp.next.t0 ? bp.next : bp;
+      } else {
+        const f = followAt(B.relT);
+        B.x = f.x; B.z = f.z; B.run = (1 - f.k) * 0.8; B.face = 0;
+      }
     }
     // the bowling arm: the phone's own direction, the room turned half round into the ground
     let r;
@@ -1275,7 +1285,13 @@
     else r = halfTurn(BO.rotate(seat.input.S.q, { x: 0, y: 0, z: -1 }));
     const arm = side > 0 ? 'right' : 'left';
     const cel = G.celebrate && G.celebrate.t > 0 ? Math.min(1, G.celebrate.t * 4) : 0;
-    return { x: B.x, z: B.z, facing: 0, run: B.run, crouch: 0, armDir: r, arm, lean: B.phase === 'follow' ? 0.25 * (1 - cel) : 0, cel };
+    const st = { x: B.x, z: B.z, facing: damp(B, 'faceSm', B.fielding ? B.face : 0, 10, dt, true), run: B.run, crouch: 0, armDir: r, arm, lean: B.phase === 'follow' && !B.fielding ? 0.25 * (1 - cel) : 0, cel };
+    let plan = B.fielding;
+    if (plan && plan.t != null && plan.act === 'low' && Math.abs(G.t - plan.t) < 0.45) st.crouch = 0.9;
+    if (plan && plan.t != null && (plan.act === 'dive' || plan.act === 'leap')) { const ap = CK.Anim.actionPose({ kind: plan.act, side: plan.side || 1, lift: plan.lift || 0 }, G.t - plan.t); st.y = ap.y; st.roll = ap.roll; if (ap.roll) st.facing = B.faceSm = plan.face; }
+    const fa = (B.fielding || G.ballHeldBy === -1 || (G.throwBall && G.throwBall.rec === -1)) && !cel ? fieldArms(-1, st, plan) : null;
+    if (fa) st.fieldArms = fa;
+    return st;
   }
   function cpuArmDir() {
     const B = G.bowler;
@@ -1301,41 +1317,96 @@
     const sweep = s.dir < 0 ? 1 : -1;
     cpuBat.q = s.cross ? BA.batQuat(th * 0.9, s.dir + sweep * Math.PI / 2, 'flat', 0.1, sweep) : BA.batQuat(th, s.dir, 'vertical');
   }
+  // damped pose numbers (facing the short way round), so a fielder never snaps from one pose to the next
+  function damp(o, key, target, rate, dt, angle) {
+    if (o[key] === undefined || !(dt > 0)) { if (o[key] === undefined) o[key] = target; return o[key]; }
+    o[key] += (angle ? BO.wrapPi(target - o[key]) : target - o[key]) * (1 - Math.exp(-rate * dt));
+    return o[key];
+  }
+  const clock = () => performance.now() / 1000;
+  /** Where whoever has the ball carries it: from where he took it, up into his hands at his chest. */
+  function holdPoint(body) {
+    const fw = CK.Anim.forwardOf(body.facing), chest = { x: body.x + fw.x * 0.3, y: 1.12 - 0.5 * (body.crouch || 0) + (body.y || 0), z: body.z + fw.z * 0.3 };
+    const h = G.grip;
+    if (!h) return chest;
+    const k = clamp((clock() - h.t) / 0.3, 0, 1), e = k * k * (3 - 2 * k);
+    return { x: lerp(h.from.x, chest.x, e), y: lerp(h.from.y, chest.y, e), z: lerp(h.from.z, chest.z, e) };
+  }
+  /** The throw in the air at game time t (null before it leaves his hand). */
+  function throwPos(t) {
+    const th = G.throwBall;
+    if (!th || !th.from || t < th.t0) return null;
+    const k = clamp((t - th.t0) / th.dur, 0, 1);
+    return { x: lerp(th.from.x, th.to.x, k), y: lerp(th.from.y, th.to.y, k) + Math.sin(k * Math.PI) * Math.min(9, th.dur * 3.5), z: lerp(th.from.z, th.to.z, k), k };
+  }
+  const pair = (c, facing) => { const pr = CK.Anim.handPair(c, facing, 0.07); return { left: { hand: pr.left }, right: { hand: pr.right } }; };
+  /** Arms for fielder idx (-1: the bowler) this frame: reaching for the ball, holding it, throwing it, taking the throw. */
+  function fieldArms(idx, body, plan) {
+    const th = G.throwBall;
+    if (G.ballHeldBy === idx) {
+      G.holdPt = holdPoint(body);
+      if (th && th.by === idx && G.t >= th.t0 - 0.35) {
+        if (G.t >= th.t0 + 0.3) return null;
+        // wind up behind the head, then the arm comes through
+        const r = CK.Anim.rightOf(body.facing), fw = CK.Anim.forwardOf(body.facing), k = clamp((G.t - (th.t0 - 0.35)) / 0.35, 0, 1);
+        const right = G.t < th.t0 ? { x: body.x + r.x * 0.3 - fw.x * 0.35 * k, y: 1.55 + 0.4 * k, z: body.z + r.z * 0.3 - fw.z * 0.35 * k }
+          : { x: body.x + r.x * 0.15 + fw.x * 0.62, y: 1.25, z: body.z + r.z * 0.15 + fw.z * 0.62 };
+        if (G.t < th.t0) G.holdPt = right;
+        return { right: { hand: right }, left: { hand: { x: body.x - r.x * 0.25 + fw.x * 0.5, y: 1.45, z: body.z - r.z * 0.25 + fw.z * 0.5 } } };
+      }
+      return pair(G.holdPt, body.facing);
+    }
+    // the throw coming in: hands up to it
+    if (th && th.rec === idx) { const b = throwPos(G.t); if (b && b.k > 0.55) return pair(b, body.facing); }
+    // the last half second before he takes it: hands to the ball (the real one), never through his body
+    if (plan && plan.t != null && G.ballOn && G.ball && plan.act !== 'leave' && plan.act !== 'chase') {
+      const dtc = G.t - plan.t, b = G.ball.p;
+      if (dtc > -0.5 && dtc < 0.08 && Math.hypot(b.x - body.x, b.z - body.z) < 3.4) return pair({ x: b.x, y: clamp(b.y, 0.06, 3.1), z: b.z }, body.facing);
+    }
+    return null;
+  }
+  /** The keeper as a ball goes past the bat: across to its line, gloves up to it. */
+  function keeperTrack(f, st, dt) {
+    const b = G.ball;
+    if (!b || !G.ballOn || b.v.z <= 0 || b.p.z < -3) return;
+    const dz = Math.max(0.1, f.z - b.p.z), x = clamp(b.p.x + b.v.x * dz / b.v.z, f.x - 2.2, f.x + 2.2);
+    f.cur.x = lerp(f.cur.x, x, 1 - Math.exp(-dt * 8)); st.x = f.cur.x;
+    if (f.z - b.p.z < 5) {
+      const y = clamp(b.p.y + b.v.y * dz / b.v.z, 0.15, 1.9);
+      st.crouch = 0.45; st.arms = pair({ x, y, z: f.z - 0.35 }, Math.PI);
+    }
+  }
   function fielderStates(dt) {
     const plans = G.fielderPlan;
     return G.field.map((f, i) => {
-      const P = plans && plans[i];
       if (!f.cur) f.cur = { x: f.x, z: f.z };
-      if (P && G.phase === 'hit' && G.t > P.start && P.sp > 0) {
-        const dx = P.tx - f.cur.x, dz = P.tz - f.cur.z, d = Math.hypot(dx, dz), step = Math.min(d, P.sp * dt);
-        if (d > 0.05) { f.cur.x += dx / d * step; f.cur.z += dz / d * step; }
-        f.face = d > 0.3 ? Math.atan2(dx, dz) : f.face;
-        f.run = d > 0.3 ? clamp(P.sp / 7, 0.4, 1) : 0;
-      } else if (G.phase === 'ready' || G.phase === 'runup' || G.phase === 'between') {
-        const dx = f.x - f.cur.x, dz = f.z - f.cur.z, d = Math.hypot(dx, dz), step = Math.min(d, (d > 4 ? 10 : 6) * dt);   // back to the mark before the next ball
-        if (d > 0.05) { f.cur.x += dx / d * step; f.cur.z += dz / d * step; }
-        if (d > 0.6) f.face = Math.atan2(dx, dz);
-        f.run = d > 0.6 ? 0.85 : Math.max(0, (f.run || 0) - dt * 3);
-      } else f.run = Math.max(0, (f.run || 0) - dt * 3);
-      const ballP = G.ball ? G.ball.p : null;
-      const face = f.run > 0.2 ? f.face : Math.atan2(-f.cur.x, -f.cur.z - 1);
-      const st = { x: f.cur.x, z: f.cur.z, facing: f.keeper && G.phase !== 'hit' ? Math.PI : face, run: f.run || 0, crouch: f.keeper ? (G.phase === 'hit' ? 0.2 : 0.85) : (G.phase === 'flight' ? 0.3 : 0.1) };
-      if (ballP && G.phase === 'hit' && G.outcome && G.outcome.by === i) {
-        const d = Math.hypot(ballP.x - f.cur.x, ballP.z - f.cur.z);
-        const held = G.ballHeldBy === i, act = G.outcome.action;
-        if (act) {
-          const ap = CK.Anim.actionPose(act, G.t - G.outcome.t);
-          st.y = (st.y || 0) + ap.y; st.roll = ap.roll;
-          if (ap.roll) { st.facing = act.face; st.run = 0; }
+      const P = plans && plans[i];
+      let face, run, crouch = f.keeper ? (G.phase === 'hit' ? 0.2 : 0.85) : (G.phase === 'flight' ? 0.3 : 0.1), y = 0, roll = 0, plan = null;
+      if (P && G.phase === 'hit') {
+        // his run, from field.js: the same plan that decided he gets there
+        const m = FI.motionAt(P, G.t);
+        plan = P.next && G.t >= P.next.t0 ? P.next : P;
+        f.cur.x = m.x; f.cur.z = m.z; face = m.facing; run = m.run;
+        if (plan.t != null) {
+          const dtc = G.t - plan.t;
+          if (plan.act === 'dive' || plan.act === 'leap') { const ap = CK.Anim.actionPose({ kind: plan.act, side: plan.side || 1, lift: plan.lift || 0 }, dtc); y = ap.y; roll = ap.roll; }
+          if (plan.act === 'low' && dtc > -0.45 && dtc < FI.F.GATHER * 0.5) crouch = 0.95;          // down to it, and up with it
+          else if (plan.act === 'take' && Math.abs(dtc) < 0.4) crouch = 0.3;
         }
-        if (d < 3 || held) {
-          if (!held && d > 0.2 && !st.roll) st.facing = Math.atan2(ballP.x - f.cur.x, ballP.z - f.cur.z);   // turn to the ball (not mid-dive)
-          const fw = CK.Anim.forwardOf(st.facing);
-          const at = held ? { x: f.cur.x + fw.x * 0.28, y: 1.1, z: f.cur.z + fw.z * 0.28 } : { x: ballP.x, y: clamp(ballP.y, 0.2, 2.9), z: ballP.z };
-          const pr = CK.Anim.handPair(at, st.facing, 0.07);   // his left hand on his left, whichever way he faces
-          st.arms = { left: { hand: pr.left }, right: { hand: pr.right } };
-        }
-      }
+      } else if (G.phase === 'ready' || G.phase === 'runup' || G.phase === 'between' || G.phase === 'flight' || G.phase === 'void') {
+        // back to his mark (walking in as the bowler runs up)
+        const dx = f.x - f.cur.x, dz = f.z - f.cur.z, d = Math.hypot(dx, dz), step = Math.min(d, (d > 4 ? 9 : 5) * dt);
+        if (d > 0.05) { f.cur.x += dx / d * step; f.cur.z += dz / d * step; }
+        run = d > 0.6 ? clamp(d / 6, 0.5, 1) : 0;
+        face = d > 0.6 ? Math.atan2(dx, dz) : Math.atan2(-f.cur.x, -f.cur.z - 1);
+        if (d > 1.5) crouch = 0.1;
+      } else { run = 0; face = Math.atan2(-f.cur.x, -f.cur.z - 1); }
+      if (f.keeper && G.phase !== 'hit') face = Math.PI;
+      // damped, so nothing snaps (a dive keeps its exact line)
+      const st = { x: f.cur.x, z: f.cur.z, facing: roll ? (f.faceSm = face) : damp(f, 'faceSm', face, 10, dt, true), run: damp(f, 'runSm', run, 9, dt), crouch: damp(f, 'crouchSm', crouch, 9, dt), y, roll };
+      if (f.keeper && G.phase === 'flight') keeperTrack(f, st, dt);
+      const arms = fieldArms(i, st, plan);
+      if (arms) st.arms = arms;
       const g = G.gesture && performance.now() < G.gesture.until && G.phase !== 'runup' ? G.gesture : null;
       if (g && !st.arms && G.ballHeldBy !== i) {
         const who = g.who === 'fielder' && g.by === i ? g.gesture : g.gesture === 'appeal' && f.keeper ? 'appeal' : null;
@@ -1345,8 +1416,8 @@
           const bx = G.bowler.x + Math.sin(i * 2.1) * 1.6, bz = G.bowler.z + Math.cos(i * 2.1) * 1.6;
           const dx = bx - f.cur.x, dz = bz - f.cur.z, d = Math.hypot(dx, dz);
           if (d < 32) {
-            if (d > 0.6) { const step = Math.min(d, 6.5 * dt); f.cur.x += dx / d * step; f.cur.z += dz / d * step; st.x = f.cur.x; st.z = f.cur.z; st.facing = Math.atan2(dx, dz); st.run = 1; }
-            else { st.facing = Math.atan2(G.bowler.x - f.cur.x, G.bowler.z - f.cur.z); const h = CK.Anim.gestureHands('cheer', st); st.arms = { left: { hand: h.left }, right: { hand: h.right } }; st.run = 0; }
+            if (d > 0.6) { const step = Math.min(d, 6.5 * dt); f.cur.x += dx / d * step; f.cur.z += dz / d * step; st.x = f.cur.x; st.z = f.cur.z; st.facing = damp(f, 'faceSm', Math.atan2(dx, dz), 10, dt, true); st.run = damp(f, 'runSm', 1, 9, dt); }
+            else { st.facing = damp(f, 'faceSm', Math.atan2(G.bowler.x - f.cur.x, G.bowler.z - f.cur.z), 10, dt, true); const h = CK.Anim.gestureHands('cheer', st); st.arms = { left: { hand: h.left }, right: { hand: h.right } }; st.run = damp(f, 'runSm', 0, 9, dt); }
           }
         }
       }
@@ -1362,16 +1433,24 @@
     const ns = { x: aside * 2.6, z: -PH.PITCH.L - 1.2, facing: 0, run: 0, crouch: 0.1 };
     const rp = G.runs && G.phase === 'hit' ? runProgress() : null;
     if (rp) { ns.z = -2 - (PH.PITCH.L - 1.2) - rp.z; ns.run = rp.dir ? 1 : 0; ns.facing = rp.dir > 0 ? Math.PI : 0; ns.x = -0.9 * side; }
+    // the throw leaves his hand: from where his hand is, to where the man at the stumps will be
+    const th = G.throwBall;
+    if (th && G.t >= th.t0 && !th.from) {
+      th.from = G.holdPt || { x: 0, y: 1.2, z: -10 };
+      const rp2 = th.rec === 0 ? G.fielderPlan && G.fielderPlan[0] : G.bowlerPlan;
+      const m = rp2 ? FI.motionAt(rp2, th.t0 + th.dur) : { x: 0, z: 0.5, facing: 0 }, fw = CK.Anim.forwardOf(m.facing);
+      th.to = { x: m.x + fw.x * 0.3, y: 1.25, z: m.z + fw.z * 0.3 };
+    }
+    const bowler = bowlerState(dt), fielders = fielderStates(dt);
     let ballP = G.ball && (G.ballOn || G.phase === 'hit') ? { x: G.ball.p.x, y: G.ball.p.y, z: G.ball.p.z } : null;
-    if (G.ballHeldBy !== undefined && G.ballHeldBy !== null && G.field[G.ballHeldBy]) {
-      const f = G.field[G.ballHeldBy].cur || G.field[G.ballHeldBy], fw = CK.Anim.forwardOf(G.field[G.ballHeldBy].face || 0);
-      ballP = { x: f.x + fw.x * 0.28, y: 1.12, z: f.z + fw.z * 0.28 };   // in his hands, in front of him
+    if (G.ballHeldBy !== undefined && G.ballHeldBy !== null && G.holdPt) {
+      ballP = { x: G.holdPt.x, y: G.holdPt.y, z: G.holdPt.z };   // in his hands
       if (G.juggleT !== undefined && G.juggleT !== null && G.t - G.juggleT < 0.75) ballP.y += 0.55 * Math.sin(Math.PI * (G.t - G.juggleT) / 0.75);   // juggled, then held
-      const th = G.throwBall;
-      if (th && G.t >= th.t0) {
-        const k = clamp((G.t - th.t0) / th.dur, 0, 1);
-        if (!th.from) th.from = ballP;
-        ballP = { x: lerp(th.from.x, th.to.x, k), y: lerp(th.from.y, th.to.y, k) + Math.sin(k * Math.PI) * Math.min(9, th.dur * 3.5), z: lerp(th.from.z, th.to.z, k) };
+      const tp = throwPos(G.t);
+      if (tp) {
+        ballP = { x: tp.x, y: tp.y, z: tp.z };
+        // the throw arrives: in the hands of the man at the stumps
+        if (tp.k >= 1) { G.grip = { from: { x: tp.x, y: tp.y, z: tp.z }, t: clock() }; G.ballHeldBy = th.rec; G.throwBall = null; SFX.glove(); }
       }
     }
     if (G.phase === 'ready' || G.phase === 'runup') ballP = null;
@@ -1381,7 +1460,7 @@
       _ax.set(wl > 1 ? w.x : 1, wl > 1 ? w.y : 0, wl > 1 ? w.z : 0).normalize();
       ballQ.premultiply(_dq.setFromAxisAngle(_ax, vis * dt));
     }
-    return { batter: b.st, bat: b.bat, bowler: bowlerState(dt), ns, fielders: fielderStates(dt), ball: ballP, ballQ: ballP ? [ballQ.x, ballQ.y, ballQ.z, ballQ.w] : null,
+    return { batter: b.st, bat: b.bat, bowler, ns, fielders, ball: ballP, ballQ: ballP ? [ballQ.x, ballQ.y, ballQ.z, ballQ.w] : null,
       umpire: { x: aside * 1.35, z: -PH.PITCH.L - 2.4, facing: 0, run: 0, crouch: 0.15, out: G.umpireOut || 0 } };
   }
   function applyFrame(F, dt) {
@@ -1394,14 +1473,14 @@
     // a gesture (send-off, appeal) takes his arms once the celebration has had its moment
     const bg = gestureOn('bowler'), gh = bg && (!bw.cel || G.celebrate.t > 1.0) ? CK.Anim.gestureHands(bg.gesture, bw) : null;
     const sc = celebrationPose(bw);
-    const bArms = gh ? { left: { hand: gh.left }, right: { hand: gh.right } } : bw.cel ? sc.arms : null;
+    const bArms = gh ? { left: { hand: gh.left }, right: { hand: gh.right } } : bw.cel ? sc.arms : bw.fieldArms || null;
     if (gh) bw.cel = bw.cel || 1;   // keep the phone's arm out of it
-    CK.poseAthlete(A, { x: bw.x, z: bw.z, facing: bw.facing + (bw.cel && !gh ? sc.spin : 0), run: bw.run, crouch: bw.crouch, lean: bw.lean + (bw.cel && !gh ? sc.lean : 0), y: bw.cel && !gh ? sc.y * bw.cel : 0, arms: bArms }, dt);
+    CK.poseAthlete(A, { x: bw.x, z: bw.z, facing: bw.facing + (bw.cel && !gh ? sc.spin : 0), run: bw.run, crouch: bw.crouch, lean: bw.lean + (bw.cel && !gh ? sc.lean : 0), y: (bw.cel && !gh ? sc.y * bw.cel : 0) + (bw.y || 0), roll: bw.roll || 0, arms: bArms }, dt);
     const sh = CK.boneWorld(A, bw.arm === 'left' ? 'UpperArmL' : 'UpperArmR', new T.Vector3());
     const r = bw.armDir;
     const hand = { x: sh.x + r.x * 0.66, y: sh.y + r.y * 0.66, z: sh.z + r.z * 0.66 };
     const armB = A.B.arms[bw.arm];
-    if (!bw.cel) {
+    if (!bw.cel && !bw.fieldArms) {
       CK.aimBone(armB.upper, armB.lower, { x: sh.x + r.x * 0.32 - 0.02, y: sh.y + r.y * 0.32 - 0.03, z: sh.z + r.z * 0.32 + 0.04 });
       CK.aimBone(armB.lower, armB.palm, hand);
     }
@@ -2241,7 +2320,7 @@
     stumpsFrame(dt);
     if (G.umpireOut) G.umpireOut += dt;
     if (pitchMark.material.opacity > 0 && G.phase !== 'flight') pitchMark.material.opacity = Math.max(0, pitchMark.material.opacity - dt * 0.4);
-    if (G.phase === 'ready' && G.phaseT < dt * 1.5) { G.umpireOut = 0; G.ballHeldBy = null; G.throwBall = null; G.stroke = null; G.juggleT = null; }
+
   }
   function frame(now) {
     requestAnimationFrame(frame);

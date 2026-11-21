@@ -175,6 +175,16 @@ function play(swing, tArr, o) {
   check('a browser swing reads the same at 50, 60 or 90 Hz', Math.abs(w50 / w90 - 1) < 0.08 && Math.abs(w60 / w90 - 1) < 0.08, { w50, w60, w90 });
   check('...and BAT.WEB.GAIN above the three-sample rule', w60 > legacy * 1.25, { legacy, w60 });
   check('a Bluetooth tracker is unchanged (no options)', T.tracker().o === null);
+  // the peak's time, over every phase of the 60 Hz samples against the swing: no lean either way
+  const errs = [];
+  for (let i = 0; i < 40; i++) {
+    const tr = T.tracker(T.BAT.WEB);
+    for (const s of SY.batSwing({ peakW: 18, tPeak: 1000, hz: 60, t0: 300 + i * 16.67 / 40 })) T.step(tr, s);
+    const j = T.judge(tr, 1000, 3000, 1);
+    errs.push(j.status === 'ready' ? j.e * 1000 : 999);
+  }
+  const mean = errs.reduce((a, b) => a + b, 0) / errs.length;
+  check('a 60 Hz browser swing is timed without a lean (mean within 2 ms, every one within 9)', Math.abs(mean) < 2 && errs.every(e => Math.abs(e) < 9), { mean, worst: Math.max(...errs.map(Math.abs)) });
 }
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

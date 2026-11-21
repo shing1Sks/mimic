@@ -59,8 +59,11 @@
           if (w.t <= lastWebT) continue;
           lastWebT = w.t;
           const wx = w.axes.map(v => v / 32767), wa = !!(w.buttons & 1);
-          push({ t: w.t, q: Bo.decodePad(wx), a: wa, acc: [wx[3], wx[4], wx[5]] });
-          if (window.MimicRec && MimicRec.active) MimicRec.event('m', { slot: mc.slot, st: +w.t.toFixed(2), ax: wx.map(v => +v.toFixed(5)), a: wa, web: 1 });
+          // timed at the capture itself (w.cap), so a slower network (a relay) does not make every
+          // swing read late; bat.js BAT.WEB.LEAD_MS puts back the delay the timing was tuned with
+          const t = w.cap != null ? w.cap : w.t;
+          push({ t, q: Bo.decodePad(wx), a: wa, acc: [wx[3], wx[4], wx[5]] });
+          if (window.MimicRec && MimicRec.active) MimicRec.event('m', { slot: mc.slot, st: +t.toFixed(2), stamp: +w.t.toFixed(2), ax: wx.map(v => +v.toFixed(5)), a: wa, web: 1 });
         }
         return;
       }

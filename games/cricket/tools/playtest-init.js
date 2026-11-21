@@ -46,8 +46,26 @@
       P.pad.axes = ints.map(v => v / 32767);
       P.pad.buttons = P.buttons.map(b => ({ pressed: b, touched: b, value: b ? 1 : 0 }));
       P.pad.timestamp = now;
+      if (P.net) webStream(now, ints);
       return P.pad;
     };
+    // a browser phone (QR, mimic-link): set P.net = { delay, jitter } (ms). It captures at 60 Hz and
+    // its samples arrive delay + up to jitter ms later, stamped as mimic-link does ({ t, cap })
+    let lastCap = -Infinity; const inFlight = [];
+    function webStream(now, ints) {
+      P.pad.__mimicWeb = true; P.pad.id = 'Mimic Web Android (Vendor: 038f Product: 1200)';
+      if (now - lastCap >= 16.6) {
+        lastCap = now;
+        const bits = P.buttons.reduce((m, b, i) => m | (b ? 1 << i : 0), 0);
+        inFlight.push({ cap: now, at: now + P.net.delay + Math.random() * (P.net.jitter || 0), axes: ints.slice(), buttons: bits });
+      }
+      const hist = P.pad.__samples || (P.pad.__samples = []);
+      while (inFlight.length && inFlight[0].at <= now) {
+        const w = inFlight.shift();
+        hist.push({ t: w.cap + P.net.delay, cap: w.cap, axes: w.axes, buttons: w.buttons });
+      }
+      if (hist.length > 48) hist.splice(0, hist.length - 48);
+    }
     /** Point to aim, hold HOLD, run in, arm over the top; let go at the ideal moment + noise. */
     P.bowl = function (o) {
       o = Object.assign({ peakW: 20, yaw: 0, rho0: 0, twist: 0, upOffset: 0, aimElev: -15, aimHead: 0, runMs: 1100 }, o);
@@ -113,7 +131,8 @@
         const h = G.path.heightAtBat, x = G.path.atContact.x;
         const tArr = performance.now() + (G.path.atContact.t - G.t) * 1000;
         // no Bluetooth here: be as late as the game's SWING DELAY FIX expects a real phone to be
-        const tPeak = tArr + [0, 30, 60, 90, 120][T.settings.lag] + gauss() * P.timing * 1000;
+        // (a browser phone is timed at capture: it expects BAT.WEB.LEAD_MS less of it)
+        const tPeak = tArr + [0, 30, 60, 90, 120][T.settings.lag] - (P.net ? CK.Bat.BAT.WEB.LEAD_MS : 0) + gauss() * P.timing * 1000;
         if (Math.abs(x) > 0.75 && Math.random() < 0.6) return;               // leave it
         if (h > 0.95) P.swing({ tPeak, plane: 'flat', sweep: 1, peakW: 15 + Math.random() * 4, dir: gauss() * 0.3 });
         else P.swing({ tPeak, dir: (x > 0.15 ? 0.5 : x < -0.1 ? -0.4 : 0) + gauss() * 0.25, thetaPeak: Math.random() < P.lofted ? 0.35 : 0, peakW: 14 + Math.random() * 7 });

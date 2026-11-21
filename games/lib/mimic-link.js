@@ -312,10 +312,14 @@
     // on the page's clock at capture (once the clock offset is known), else at arrival
     p.stampT = p.offset !== null ? p.tl.stamp(d.t - p.offset - timeOrigin(), p.ts) : p.ts;
     // recorded sessions keep every packet's phone time, arrival and stamp: the timeline can be redone offline
-    if (global.MimicRec && MimicRec.active) MimicRec.event('link.pkt', { id: p.id, seq: d.seq, kind: d.kind, cap: +d.t.toFixed(2), arr: +p.ts.toFixed(2), st: +p.stampT.toFixed(2), off: p.offset === null ? null : +p.offset.toFixed(2), b: d.buttons, ax: d.axes });
+    // the moment of capture itself: the stamp less the link's one-way floor (half the best ping). The
+    // stamp keeps the network's floor in it (a relay's 60+ ms too); a game that times the player's
+    // movement against the screen reads `cap`, which is the same on any network
+    const cap = p.offset !== null && p.bestRtt < Infinity ? p.stampT - p.bestRtt / 2 : null;
+    if (global.MimicRec && MimicRec.active) MimicRec.event('link.pkt', { id: p.id, seq: d.seq, kind: d.kind, cap: +d.t.toFixed(2), arr: +p.ts.toFixed(2), st: +p.stampT.toFixed(2), cp: cap === null ? null : +cap.toFixed(2), off: p.offset === null ? null : +p.offset.toFixed(2), b: d.buttons, ax: d.axes });
     if (d.kind === P().KIND.MOTION) {
       p.axes = d.axes; p.buttons = d.buttons;
-      p.hist.push({ t: p.stampT, axes: d.axes, buttons: d.buttons });
+      p.hist.push({ t: p.stampT, cap, axes: d.axes, buttons: d.buttons });
       if (p.hist.length > 48) p.hist.splice(0, p.hist.length - 48);
     }
     else p.pad = d.pad;

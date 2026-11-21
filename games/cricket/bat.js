@@ -52,8 +52,17 @@
    * third of the bat speed at contact (half the big hits went). So a browser phone's speed is taken
    * over a fixed time span instead of a sample count, and scaled by GAIN so the same swing measures
    * what it measures over Bluetooth (calibrated on those replays). Bluetooth is unchanged.
+   *
+   * Timing: a Bluetooth report reaches the browser some way after the movement, and the timing
+   * windows and the SWING DELAY FIX default were set on those reports. A browser phone's samples
+   * are timed at capture (on any network), so the same swing read early against the same windows:
+   * the first local QR match (2026-11-22, 9 shots) had a median timing of -68 ms against -21 ms
+   * over 300+ Bluetooth shots (34 ms earlier against spin, 45 against pace), and 4 of 9 shots were
+   * edges. Read at capture and at the middle of the span (both earlier, by ~10 ms) that is ~44 / 55
+   * ms. LEAD_MS is taken off a browser phone's swing delay (a first estimate: refine it as more
+   * QR matches are recorded).
    */
-  const WEB = { SPAN_MS: 14, VEL_MS: 18, GAIN: 1.4 };
+  const WEB = { SPAN_MS: 14, VEL_MS: 18, GAIN: 1.4, LEAD_MS: 50 };
   BAT.WEB = WEB;
   /** o: BAT.WEB for a browser phone, else nothing (Bluetooth / mouse / synthetic). */
   function tracker(o) { return { hist: [], cur: null, swings: [], o: o || null }; }
@@ -72,7 +81,9 @@
     const a = h[ia], dt = (c.t - a.t) / 1000;
     if (dt <= 0) return tr;
     const v = { x: (c.p.x - a.p.x) / dt, y: (c.p.y - a.p.y) / dt, z: (c.p.z - a.p.z) / dt };
-    const sp = (fwdOk(v) ? Math.hypot(v.x, v.y, v.z) : 0) * (o ? o.GAIN : 1), tm = h[im].t;
+    // a browser phone's speed is timed at the middle of its span (two 60 Hz samples have no middle
+    // sample: the newer one read the peak half a sample, 8 ms, late)
+    const sp = (fwdOk(v) ? Math.hypot(v.x, v.y, v.z) : 0) * (o ? o.GAIN : 1), tm = o ? (a.t + c.t) / 2 : h[im].t;
     tr.speed = sp;
     const cur = tr.cur;
     if (!cur) {

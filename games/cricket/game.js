@@ -738,13 +738,19 @@
     // peaked), the ball goes on in slow motion at the bat
     G.hold = true;
   }
-  const lagMs = () => (batSeat().kind === 'phone' ? opt('lag') : Math.min(30, opt('lag')));
+  const webBat = () => { const inp = batSeat().input; return !!(inp && inp.S.web); };
+  // a browser phone is timed at capture: it needs less of the swing delay than Bluetooth (bat.js BAT.WEB.LEAD_MS)
+  const lagMs = () => (batSeat().kind === 'phone' ? opt('lag') - (webBat() ? BA.BAT.WEB.LEAD_MS : 0) : Math.min(30, opt('lag')));
   /** Human batter: decide once the swing's samples are in, or keep waiting while it speeds up. */
   function judgeContact(now) {
     feedTracker();
     const tA = G.contact.tArr + lagMs();
-    if (now < tA) return;
-    const j = BA.judge(G.tracker, tA, now, timingK());
+    // a browser phone's samples come over the network, timed when they were captured: judge on
+    // their clock (what has arrived so far), so a slow or stalled link waits for the swing instead
+    // of calling it a leave
+    const seen = webBat() ? Math.min(now, batSeat().input.lastT()) : now;
+    if (seen < tA) return;
+    const j = BA.judge(G.tracker, tA, seen, timingK());
     if (j.status === 'pending') return;
     G.hold = false;
     if (j.status === 'none') { beaten('leave'); return; }
@@ -2199,7 +2205,7 @@
       aimRing.material.opacity = G.phase === 'runup' ? 0.95 : G.aimRef ? 0.7 + 0.25 * Math.sin(now / 160) : 0.5;
     }
     if (G.phase === 'flight' || G.phase === 'hit') {
-      if (G.hold) { judgeContact(now); if (G.hold && now - G.contact.tArr > lagMs() + 400) { G.hold = false; beaten('miss'); } }
+      if (G.hold) { judgeContact(now); if (G.hold && now - G.contact.tArr > lagMs() + (webBat() ? 900 : 400)) { G.hold = false; beaten('miss'); } }
       if (G.ballOn) flightStep(dt * (G.hold ? 0.12 : G.slow), now); else if (G.phase === 'hit') G.t += dt;
       if (G.phase === 'hit') hitTimers();
       feedTracker();

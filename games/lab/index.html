@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Swing Lab</title>
+<!--
+  Swing Lab: the same swings measured from a Bluetooth phone (the Mimic app) and a browser phone (QR)
+  at once, through the cricket bat's own maths (games/cricket/bat.js), so the browser path can be
+  checked against the app on real swings instead of replays.
+
+  How: on the phone, open the Mimic app in Grip (connected to this PC over Bluetooth) and the QR
+  page in split screen, Chrome focused, both in Grip. Swing. Each Bluetooth swing is paired with
+  the browser swing nearest in time. Either phone alone works too (one column stays empty).
+
+  Recorded like every local play (games/lib/recorder.js -> recordings/lab-<time>/): every raw
+  sample of each pad ('m'), every browser packet ('link.pkt', 'link.pong'), every swing ('lab.swing').
+  The phone page files its own log into the same folder.
+-->
+<style>
+:root { --bg:#0b0c0f; --panel:#15171c; --line:#262a32; --text:#e8eaee; --dim:#8a909c; --bt:#7aa8ff; --web:#5ee6d0; --old:#f2b866; --bad:#ff7a7a; --good:#6fd39a; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; }
+header { display:flex; align-items:baseline; gap:16px; padding:18px 24px 6px; }
+h1 { margin:0; font-size:20px; letter-spacing:.02em; }
+header p { margin:0; color:var(--dim); }
+main { display:grid; grid-template-columns: 300px 1fr; gap:18px; padding:12px 24px 24px; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+.card h2 { margin:0 0 10px; font-size:12px; text-transform:uppercase; letter-spacing:.12em; color:var(--dim); font-weight:600; }
+#pads .pad { display:flex; align-items:center; gap:10px; padding:8px 0; border-top:1px solid var(--line); }
+#pads .pad:first-of-type { border-top:0; }
+.dot { width:10px; height:10px; border-radius:50%; flex:none; }
+.pad b { font-weight:600; }
+.pad small { color:var(--dim); display:block; }
+#none { color:var(--dim); }
+canvas { width:100%; height:220px; display:block; }
+.legend { display:flex; gap:16px; color:var(--dim); font-size:12px; margin-top:6px; flex-wrap:wrap; }
+.legend i { display:inline-block; width:14px; height:3px; vertical-align:middle; margin-right:6px; border-radius:2px; }
+.stats { display:grid; grid-template-columns:repeat(5, 1fr); gap:10px; margin-bottom:12px; }
+.stat { background:#101216; border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+.stat .v { font-size:22px; font-weight:650; font-variant-numeric:tabular-nums; }
+.stat .l { color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.08em; }
+table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+th, td { text-align:right; padding:5px 8px; border-bottom:1px solid var(--line); }
+th { color:var(--dim); font-weight:600; font-size:12px; }
+th:first-child, td:first-child { text-align:left; }
+td.bad { color:var(--bad); } td.good { color:var(--good); }
+.tablewrap { max-height:46vh; overflow:auto; }
+.right { display:flex; flex-direction:column; gap:18px; min-width:0; }
+.howto { color:var(--dim); font-size:13px; }
+.howto ol { padding-left:18px; margin:6px 0 0; }
+button { background:#22252c; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:6px 12px; font:inherit; cursor:pointer; }
+button:hover { border-color:#3a3f4a; }
+.row { display:flex; gap:8px; align-items:center; margin-top:10px; }
+</style>
+</head>
+<body>
+<header><h1>Swing Lab</h1><p>Bluetooth and browser, the same swings, through the cricket bat's maths.</p></header>
+<main>
+  <div style="display:flex;flex-direction:column;gap:18px">
+    <div class="card"><h2>Join from the browser</h2><div data-mimic-join="grip" data-size="200"></div></div>
+    <div class="card"><h2>Controllers</h2><div id="pads"><div id="none">No phone yet.</div></div>
+      <div class="row"><button id="centre">Re-centre both</button><button id="clear">Clear table</button></div></div>
+    <div class="card howto"><h2>Paired test</h2>
+      <ol>
+        <li>Mimic app in <b>Grip</b>, connected to this PC.</li>
+        <li>Scan the QR. Open the page in <b>split screen</b> with the app, Chrome on top and focused, and pick <b>Grip</b>.</li>
+        <li>Hold the phone like a bat. Do 10 soft pushes, 10 normal drives and 10 of your hardest swings, pausing between each.</li>
+      </ol>
+      Everything is recorded to <code>recordings/lab-…</code>.
+    </div>
+  </div>
+  <div class="right">
+    <div class="card"><h2>Bat speed at the sweet spot (m/s), last 3 s</h2><canvas id="trace" width="1200" height="220"></canvas>
+      <div class="legend"><span><i style="background:var(--bt)"></i>Bluetooth</span><span><i style="background:var(--web)"></i>Browser (as the game reads it now)</span><span><i style="background:var(--old)"></i>Browser (old reading)</span><span>Dashed lines: push 1.4, full shot 6</span></div></div>
+    <div class="card"><h2>Swings</h2>
+      <div class="stats">
+        <div class="stat"><div class="v" id="sN">0</div><div class="l">paired swings</div></div>
+        <div class="stat"><div class="v" id="sR">–</div><div class="l">browser / BT speed</div></div>
+        <div class="stat"><div class="v" id="sO">–</div><div class="l">old reading / BT</div></div>
+        <div class="stat"><div class="v" id="sT">–</div><div class="l">browser peak later by</div></div>
+        <div class="stat"><div class="v" id="sM">0</div><div class="l">browser missed</div></div>
+      </div>
+      <div class="tablewrap"><table><thead><tr><th>#</th><th>BT peak</th><th>Browser</th><th>Old</th><th>Ratio</th><th>Δt (ms)</th><th>BT class</th><th>Browser class</th><th>Blade pitch Δ</th></tr></thead><tbody id="rows"></tbody></table></div>
+    </div>
+  </div>
+</main>
+<script src="../lib/mimic.js"></script>
+<script src="../lib/mimic-link.js"></script>
+<script src="../lib/recorder.js"></script>
+<script src="../cricket/phys.js"></script>
+<script src="../cricket/bowl.js"></script>
+<script src="../cricket/bat.js"></script>
+<script>
+(function () {
+  'use strict';
+  const Bo = CK.Bowl, Ba = CK.Bat, BAT = Ba.BAT;
+  const $ = id => document.getElementById(id);
+  const rec = (name, data) => { try { if (window.MimicRec && MimicRec.active) MimicRec.event(name, data); } catch (e) { /* optional */ } };
+  const isMotion = p => !!p && p.connected !== false && p.axes.length >= 6 && (p.buttons.length === 12 || (/mimic/i.test(p.id) && p.buttons.length < 16));
+  const live = p => !(p.axes[0] === 0 && p.axes[1] === 0 && p.axes[2] === 0 && p.axes[5] === 0);
+  const cls = v => (v >= BAT.V_SWING ? 'full' : v >= BAT.V_PUSH ? 'push' : 'none');
+  const med = a => { if (!a.length) return NaN; const s = a.slice().sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+
+  // one entry per gamepad index: its samples, the trackers that read them, the swings they found
+  const P = new Map();
+  function entry(p) {
+    let e = P.get(p.index);
+    const web = !!p.__mimicWeb;
+    if (!e || e.id !== p.id || e.web !== web) {
+      e = { id: p.id, web, lastT: 0, lastKey: '', trace: [], hz: 0, n: 0, nT: performance.now(),
+        tr: Ba.tracker(web ? BAT.WEB : null), old: web ? Ba.tracker(null) : null, seen: new WeakSet(), swings: [], oldSwings: [] };
+      P.set(p.index, e);
+      rec('lab.pad', { i: p.index, id: p.id, web });
+    }
+    return e;
+  }
+  function feed(e, i, s, ax, web) {
+    e.n++;
+    Ba.step(e.tr, s);
+    if (e.old) Ba.step(e.old, s);
+    e.trace.push({ t: s.t, v: e.tr.speed || 0, o: e.old ? e.old.speed || 0 : null, pitch: Bo.rotate(s.q, { x: 0, y: 0, z: -1 }).y });
+    while (e.trace.length && e.trace[0].t < s.t - 3500) e.trace.shift();
+    rec('m', { slot: i, st: +s.t.toFixed(2), ax: ax.map(v => +v.toFixed(5)), a: !!s.a, web: web ? 1 : 0 });
+    for (const sw of e.tr.swings) if (!e.seen.has(sw)) { e.seen.add(sw); e.swings.push(sw); onSwing(e, sw, false); }
+    if (e.old) for (const sw of e.old.swings) if (!e.seen.has(sw)) { e.seen.add(sw); e.oldSwings.push(sw); }
+  }
+  function poll() {
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    for (const p of pads) {
+      if (!isMotion(p) || !live(p)) continue;
+      const e = entry(p);
+      if (p.__samples && p.__samples.length) {
+        for (const w of p.__samples) {
+          if (w.t <= e.lastT) continue;
+          e.lastT = w.t;
+          const ax = w.axes.map(v => v / 32767);
+          feed(e, p.index, { t: w.t, q: Bo.decodePad(ax), a: !!(w.buttons & 1) }, ax, true);
+        }
+        continue;
+      }
+      const ax = Array.from(p.axes), key = ax.join(',');
+      if (key === e.lastKey) continue;
+      e.lastKey = key;
+      const now = performance.now();
+      let t = p.timestamp;
+      if (!(t > 0) || Math.abs(t - now) > 1000) t = now;
+      if (t <= e.lastT) t = e.lastT + 0.5;
+      e.lastT = t;
+      feed(e, p.index, { t, q: Bo.decodePad(ax), a: !!(p.buttons[0] && p.buttons[0].pressed) }, ax, false);
+    }
+  }
+  setInterval(poll, 4);
+
+  // ------------------------------------------------------------------ pairing
+  const rows = [];
+  const pending = [];
+  function onSwing(e, sw) { pending.push({ e, sw, at: performance.now() }); }
+  function settle() {
+    const now = performance.now();
+    while (pending.length && now - pending[0].at > 350) {
+      const { e, sw } = pending.shift();
+      const others = Array.from(P.values()).filter(x => x !== e);
+      if (!e.web) {
+        // a Bluetooth swing: pair it with the browser swing nearest in time (both readings)
+        const w = others.find(x => x.web);
+        const near = (list) => list.filter(s => Math.abs(s.tPeak - sw.tPeak) < 200).sort((a, b) => b.peak - a.peak)[0] || null;
+        const ws = w ? near(w.swings) : null, wo = w ? near(w.oldSwings) : null;
+        const pitchAt = (x, t) => { let best = null; for (const s of x.trace) if (!best || Math.abs(s.t - t) < Math.abs(best.t - t)) best = s; return best ? best.pitch : NaN; };
+        const row = { n: rows.length + 1, bt: sw.peak, web: ws ? ws.peak : 0, old: wo ? wo.peak : 0, dt: ws ? ws.tPeak - sw.tPeak : null, hasWeb: !!w,
+          dPitch: w ? pitchAt(w, sw.tPeak) - pitchAt(e, sw.tPeak) : NaN, tBt: sw.tPeak };
+        rows.push(row);
+        rec('lab.swing', { n: row.n, bt: +row.bt.toFixed(3), web: +row.web.toFixed(3), old: +row.old.toFixed(3), dt: row.dt === null ? null : +row.dt.toFixed(1),
+          tBt: +sw.tPeak.toFixed(2), tWeb: ws ? +ws.tPeak.toFixed(2) : null, t0Bt: +sw.t0.toFixed(2), tEndBt: +sw.tEnd.toFixed(2), dPitch: isNaN(row.dPitch) ? null : +row.dPitch.toFixed(3) });
+        render();
+      } else if (!others.some(x => !x.web)) {
+        // browser only (no Bluetooth phone): still list its swings
+        const wo = e.oldSwings.filter(s => Math.abs(s.tPeak - sw.tPeak) < 200).sort((a, b) => Math.abs(a.tPeak - sw.tPeak) - Math.abs(b.tPeak - sw.tPeak))[0];
+        const row = { n: rows.length + 1, bt: NaN, web: sw.peak, old: wo ? wo.peak : 0, dt: null, hasWeb: true, dPitch: NaN };
+        rows.push(row);
+        rec('lab.swing', { n: row.n, web: +sw.peak.toFixed(3), old: +row.old.toFixed(3), tWeb: +sw.tPeak.toFixed(2), webOnly: 1 });
+        render();
+      }
+    }
+  }
+  setInterval(settle, 50);
+
+  function render() {
+    const f = (v, d) => (isNaN(v) ? '–' : v.toFixed(d === undefined ? 1 : d));
+    $('rows').innerHTML = rows.slice().reverse().map(r => {
+      const ratio = r.bt > 0 && r.web > 0 ? r.web / r.bt : NaN;
+      const cb = isNaN(r.bt) ? '–' : cls(r.bt), cw = r.hasWeb ? cls(r.web) : '–';
+      const bad = !isNaN(r.bt) && r.hasWeb && cb !== cw;
+      return `<tr><td>${r.n}</td><td>${f(r.bt)}</td><td>${f(r.web)}</td><td>${f(r.old)}</td><td class="${isNaN(ratio) ? '' : Math.abs(ratio - 1) < 0.15 ? 'good' : 'bad'}">${f(ratio, 2)}</td>
+        <td>${r.dt === null ? '–' : Math.round(r.dt)}</td><td>${cb}</td><td class="${bad ? 'bad' : ''}">${cw}</td><td>${isNaN(r.dPitch) ? '–' : Math.round(Math.asin(Math.max(-1, Math.min(1, r.dPitch))) * 57.3) + '°'}</td></tr>`;
+    }).join('');
+    const paired = rows.filter(r => r.bt > 0 && r.web > 0 && r.bt >= BAT.V_PUSH);
+    $('sN').textContent = paired.length;
+    $('sR').textContent = paired.length ? med(paired.map(r => r.web / r.bt)).toFixed(2) + '×' : '–';
+    const po = rows.filter(r => r.bt >= BAT.V_PUSH && r.old > 0);
+    $('sO').textContent = po.length ? med(po.map(r => r.old / r.bt)).toFixed(2) + '×' : '–';
+    const dts = paired.filter(r => r.dt !== null).map(r => r.dt);
+    $('sT').textContent = dts.length ? Math.round(med(dts)) + ' ms' : '–';
+    $('sM').textContent = rows.filter(r => r.bt >= BAT.V_PUSH && r.hasWeb && !(r.web > 0)).length;
+  }
+  $('clear').onclick = () => { rows.length = 0; rec('lab.clear', {}); render(); };
+  $('centre').onclick = () => {
+    // the browser phone re-aims on its Centre button; the app on its own. Both are just a yaw offset
+    // here (the bat maths reads speed and blade pitch, neither depends on yaw)
+    rec('lab.centre', {});
+  };
+
+  // ------------------------------------------------------------------ controllers list + trace
+  function padsHtml() {
+    const phones = window.MimicLink ? MimicLink.phones() : [];
+    const list = Array.from(P.entries()).filter(([i]) => { const p = (navigator.getGamepads() || [])[i]; return p && isMotion(p) && live(p); });
+    if (!list.length) return '<div id="none">No phone yet. Connect the app, or scan the QR.</div>';
+    return list.map(([i, e]) => {
+      const ph = e.web ? phones.find(x => x.index === i) : null;
+      const extra = e.web ? `${ph && ph.latencyMs !== null ? ph.latencyMs + ' ms · ' : ''}${ph ? ph.hz : e.hz} Hz` : `${e.hz} Hz`;
+      return `<div class="pad"><span class="dot" style="background:var(${e.web ? '--web' : '--bt'})"></span><div><b>${e.web ? 'Browser (QR)' : 'Bluetooth (app)'}</b><small>pad ${i} · ${extra}</small></div></div>`;
+    }).join('');
+  }
+  setInterval(() => {
+    const now = performance.now();
+    for (const e of P.values()) { const dt = now - e.nT; if (dt >= 1000) { e.hz = Math.round(e.n * 1000 / dt); e.n = 0; e.nT = now; } }
+    $('pads').innerHTML = padsHtml();
+  }, 1000);
+
+  const cv = $('trace'), cx = cv.getContext('2d');
+  function draw() {
+    const W = cv.width = cv.clientWidth * devicePixelRatio, H = cv.height = 220 * devicePixelRatio;
+    cx.clearRect(0, 0, W, H);
+    const tEnd = performance.now(), span = 3000, vMax = 20;
+    const X = t => W - (tEnd - t) / span * W, Y = v => H - Math.min(v, vMax) / vMax * (H - 8) - 4;
+    cx.setLineDash([4 * devicePixelRatio, 5 * devicePixelRatio]); cx.strokeStyle = '#3a3f4a'; cx.lineWidth = devicePixelRatio;
+    for (const v of [BAT.V_PUSH, BAT.V_SWING]) { cx.beginPath(); cx.moveTo(0, Y(v)); cx.lineTo(W, Y(v)); cx.stroke(); }
+    cx.setLineDash([]);
+    const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+    for (const e of P.values()) {
+      const line = (key, color) => {
+        cx.strokeStyle = color; cx.lineWidth = 2 * devicePixelRatio; cx.beginPath();
+        let first = true;
+        for (const s of e.trace) { const v = s[key]; if (v === null) return; const x = X(s.t), y = Y(v); if (first) { cx.moveTo(x, y); first = false; } else cx.lineTo(x, y); }
+        cx.stroke();
+      };
+      if (e.web) { line('o', css('--old')); line('v', css('--web')); } else line('v', css('--bt'));
+    }
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+  window.__lab = { P, rows };
+})();
+</script>
+</body>
+</html>

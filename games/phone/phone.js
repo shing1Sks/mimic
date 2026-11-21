@@ -44,6 +44,56 @@
     sensor: null, sensorT: 0, sent: 0,
   };
 
+  // ------------------------------------------------------------------ recording (dev server only)
+  // On this repo's dev server (tools/serve.py, which answers /signal-info with its Wi-Fi address)
+  // every raw reading, every packet sent and every control message is filed to
+  // recordings/<session>/phone-<id>-<time>.ndjson, so a session can be studied from the phone's
+  // side too. The site answers lan:null: nothing is recorded there. t = performance.now() (ms).
+  const R = { on: null, lines: [], sess: '', file: '', n: 0, chain: Promise.resolve() };
+  const r6 = v => (typeof v === 'number' ? Math.round(v * 1e6) / 1e6 : v);
+  function rlog(o) {
+    if (R.on === false) return;
+    o.t = Math.round(performance.now() * 100) / 100;
+    R.lines.push(JSON.stringify(o));
+    if (R.on === null && R.lines.length > 20000) R.lines.splice(0, 5000);   // still asking the server
+  }
+  function rflush(final) {
+    if (!R.on || !R.lines.length) return;
+    const u = `${location.origin}/rec/${R.sess}/${R.file}?append=1`;
+    if (final) {
+      // the page is going away (closed, screen off, another app): send at once, as keepalive
+      // requests (they outlive the page; each piece stays inside the browser's 64 KB budget)
+      while (R.lines.length) {
+        const body = R.lines.splice(0, 150).join('\n') + '\n'; R.n += body.length;
+        try { fetch(u, { method: 'POST', body, keepalive: true }).catch(() => {}); } catch (e) { /* over budget */ }
+      }
+      return;
+    }
+    const body = R.lines.join('\n') + '\n'; R.lines = []; R.n += body.length;
+    R.chain = R.chain.then(() => fetch(u, { method: 'POST', body })).catch(() => {});   // one at a time: lines stay in order
+  }
+  (function startRec() {
+    if (SIG !== location.origin + '/signal') { R.on = false; return; }
+    fetch(location.origin + '/signal-info', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).then(j => {
+      if (!j || !j.lan) { R.on = false; R.lines = []; return; }
+      const d = new Date(), p2 = n => String(n).padStart(2, '0');
+      const hms = `${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`;
+      const want = qs.get('rec');
+      R.sess = want && /^[A-Za-z0-9._-]{1,80}$/.test(want) ? want : `phone-${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${hms}`;
+      R.file = `phone-${me}-${hms}.ndjson`;
+      R.on = true;
+      R.lines.unshift(JSON.stringify({ k: 'meta', t: 0, me, room, url: location.href, ua: navigator.userAgent, timeOrigin: performance.timeOrigin,
+        screen: [screen.width, screen.height, devicePixelRatio], orient: screen.orientation && screen.orientation.type,
+        sensorApi: typeof RelativeOrientationSensor !== 'undefined', secure: window.isSecureContext }));
+      setInterval(rflush, 500);
+      const b = document.createElement('div');
+      b.textContent = 'REC';
+      b.style.cssText = 'position:fixed;left:6px;bottom:6px;z-index:99;font:700 10px system-ui;color:#fff;background:rgba(200,30,30,.8);padding:2px 6px;border-radius:8px;pointer-events:none';
+      document.body.appendChild(b);
+    }).catch(() => { R.on = false; R.lines = []; });
+  })();
+  addEventListener('pagehide', () => { rlog({ k: 'pagehide' }); rflush(true); });
+
   // ------------------------------------------------------------------ connection
   const C = { pc: null, ctl: null, motion: null, sid: null, iceQ: [], signal: null, retry: 0, timer: null };
 
@@ -55,6 +105,7 @@
   }
 
   function setConn(state, text) {
+    if (state !== S.conn) rlog({ k: 'conn', state, text });
     S.conn = state;
     for (const el of [$('status'), $('cstatus')]) {
       el.className = (el.id === 'status' ? 'status ' : 'cstatus ') + ({ ok: 'ok', wait: 'wait', bad: 'bad' }[state] || '');
@@ -158,6 +209,7 @@
   function sendCtl(obj) { if (C.ctl && C.ctl.readyState === 'open') C.ctl.send(typeof obj === 'string' || obj instanceof ArrayBuffer ? obj : JSON.stringify(obj)); }
   function onCtl(txt) {
     let m; try { m = JSON.parse(txt); } catch (e) { return; }
+    rlog({ k: 'rx', m });
     if (m.t === 'ping') {
       sendCtl({ t: 'pong', pc: m.pc, ph: nowAbs() });
       if (typeof m.rtt === 'number') { S.rtt = m.rtt; statusText(); }
@@ -180,17 +232,21 @@
   function sendState(reliable, at) {
     const t = at || nowAbs();
     let buf;
+    let ax = null;
     if (S.mode === 'pad') buf = P.encodePad(++S.seq, t, S.pad, flags());
     else {
       if (!S.q) return;
       const r = P.relative(S.ref || { x: 0, y: 0, z: 0, w: 1 }, S.q);
       const g = P.gravityInPhone(S.q);
       const acc = { x: g.x + S.lin.x, y: g.y + S.lin.y, z: g.z + S.lin.z };
-      buf = P.encodeMotion(++S.seq, t, S.buttons, P.motionAxes(r, acc, S.mode), flags());
+      ax = P.motionAxes(r, acc, S.mode);
+      buf = P.encodeMotion(++S.seq, t, S.buttons, ax, flags());
     }
     const ch = reliable ? C.ctl : C.motion;
     // never queue motion behind a slow link: a stale sample is worse than a skipped one
-    if (ch && ch.readyState === 'open' && (reliable || ch.bufferedAmount < 2048)) { ch.send(buf); S.sent++; }
+    const ok = !!(ch && ch.readyState === 'open' && (reliable || ch.bufferedAmount < 2048));
+    if (ok) { ch.send(buf); S.sent++; }
+    rlog({ k: 'tx', seq: S.seq, at: Math.round(t * 100) / 100, rel: reliable ? 1 : 0, ok: ok ? 1 : 0, buf: ch ? ch.bufferedAmount : -1, b: S.buttons, ax: ax ? Array.from(ax) : undefined, pad: S.mode === 'pad' ? S.pad : undefined });
   }
 
   // ------------------------------------------------------------------ sensors
@@ -208,15 +264,18 @@
     if (src === 'event' && S.sensor && performance.now() - S.sensorT < 300) return;  // the Sensor API is feeding
     if (src === 'sensor') S.sensorT = performance.now();
     S.q = q;
-    if (S.centreNext) { S.ref = P.yawReference(q); S.centreNext = false; }
+    if (S.centreNext) { S.ref = P.yawReference(q); S.centreNext = false; rlog({ k: 'ref', ref: [S.ref.x, S.ref.y, S.ref.z, S.ref.w].map(r6) }); }
     sendState(false, readAt(ts));
   }
   addEventListener('deviceorientation', e => {
     if (e.alpha === null && e.beta === null) return;
+    rlog({ k: 'do', ts: Math.round(e.timeStamp * 100) / 100, a: r6(e.alpha), b: r6(e.beta), g: r6(e.gamma), abs: e.absolute ? 1 : 0 });
     onQuat(P.fromDeviceOrientation(e.alpha, e.beta, e.gamma), 'event', e.timeStamp);
   });
   addEventListener('devicemotion', e => {
-    const a = e.acceleration;
+    const a = e.acceleration, ag = e.accelerationIncludingGravity, rr = e.rotationRate;
+    rlog({ k: 'dm', ts: Math.round(e.timeStamp * 100) / 100, iv: e.interval, a: a ? [r6(a.x), r6(a.y), r6(a.z)] : null,
+      ag: ag ? [r6(ag.x), r6(ag.y), r6(ag.z)] : null, rr: rr ? [r6(rr.alpha), r6(rr.beta), r6(rr.gamma)] : null });
     if (!a || a.x === null) return;
     const k = isIOS ? -1 : 1;   // iOS Safari reports acceleration with the opposite sign
     S.lin = { x: (a.x || 0) * k, y: (a.y || 0) * k, z: (a.z || 0) * k };
@@ -225,7 +284,8 @@
     if (S.sensor || typeof RelativeOrientationSensor === 'undefined') return;
     try {
       const s = new RelativeOrientationSensor({ frequency: 120, referenceFrame: 'device' });
-      s.addEventListener('reading', () => { const v = s.quaternion; if (v) onQuat({ x: v[0], y: v[1], z: v[2], w: v[3] }, 'sensor', s.timestamp); });
+      s.addEventListener('reading', () => { const v = s.quaternion; if (v) rlog({ k: 'so', ts: Math.round(s.timestamp * 1000) / 1000, q: Array.from(v, r6) }); if (v) onQuat({ x: v[0], y: v[1], z: v[2], w: v[3] }, 'sensor', s.timestamp); });
+      s.addEventListener('error', e => rlog({ k: 'sensor-error', name: e.error && e.error.name, msg: e.error && e.error.message }));
       s.addEventListener('error', () => { try { s.stop(); } catch (e) { /* */ } S.sensor = null; });
       s.start();
       S.sensor = s;
@@ -252,6 +312,8 @@
     try { if (navigator.wakeLock && !wake) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); } } catch (e) { /* not allowed */ }
   }
   document.addEventListener('visibilitychange', () => {
+    rlog({ k: 'vis', v: document.visibilityState });
+    if (document.visibilityState !== 'visible') rflush();   // still alive: an ordinary request, in order
     if (document.visibilityState === 'visible' && S.playing) keepAwake();
     if (document.visibilityState !== 'visible') { releaseAll(); }
   });
@@ -293,6 +355,7 @@
         c.el.classList.remove('down');
       }
     }
+    rlog({ k: 'key', key, down: down ? 1 : 0 });
     if (down && navigator.vibrate) navigator.vibrate(key === 'center' ? 14 : 6);
     if (S.mode === 'pad') {
       if (['up', 'down', 'left', 'right'].includes(key)) S.pad.dpad[key] = down;
@@ -505,6 +568,7 @@
     if (mode !== 'pad') motionOk = await askMotion();
     if (!motionOk) { setConn('bad', 'Motion access was refused. Allow it in Settings > Safari, or use Pad.'); return; }
     S.mode = mode; S.playing = true; S.centreNext = true; S.q = null;
+    rlog({ k: 'mode', mode, motionOk, sensor: !!S.sensor, orient: screen.orientation && screen.orientation.type });
     document.body.dataset.mode = mode;
     $('home').classList.add('hidden'); $('ctl').classList.remove('hidden');
     keepAwake();
@@ -547,5 +611,5 @@
   });
 
   // test / debugging hook (also handy from the remote devtools console)
-  window.__mimicPhone = { S, C, start, home, press: (k, d) => setKey(k, d), centre: () => { setKey('center', true); setTimeout(() => setKey('center', false), 80); } };
+  window.__mimicPhone = { S, C, R, start, home, press: (k, d) => setKey(k, d), centre: () => { setKey('center', true); setTimeout(() => setKey('center', false), 80); } };
 })();

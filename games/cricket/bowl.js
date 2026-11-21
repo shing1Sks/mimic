@@ -34,6 +34,14 @@
  *   swing    from the seam: the palm's (screen's) heading at the whip against the direction of
  *            travel, measured from the player's own natural grip (the real screen sat 95-137 deg
  *            off the line of travel: the phone does not lie on the palm). Spin scrambles it.
+ *   slower   the hand turned right over at the whip (the back of the hand toward the batter, the
+ *            palm more than SLOWER.SEAM off its natural angle): a back-of-the-hand slower ball,
+ *            SLOWER.PACE of the arm's pace, so it loops up and dips. 50 recorded balls never
+ *            strayed more than 0.8 rad from the natural grip without meaning to.
+ *   cutter   a hard twist (CUT.TWIST) with a fast arm (hand at CUT.HAND or more): the fingers roll down
+ *            the side of the ball instead, so it keeps its pace and moves off the seam (CUT.KICK
+ *            m/s sideways at the bounce) the way the twist turns, instead of spinning. Recorded
+ *            spin balls came at 13-15 m/s of hand speed.
  *
  * The room and the game differ by a mirror: both players face the TV, the camera sits behind
  * the batter, so the bowler bowls "into the screen" and the ball comes toward the camera.
@@ -59,6 +67,11 @@
     PACE: { A: 8, B: 1.45, MIN: 13.9, MAX: 44 },
     SPIN: { K: 8, MIN_TWIST: 7, MAX: 300, SIDE: 0.62, TOP: 0.78, SCRAMBLE: 120 },
     SEAM: { FULL: 25 * Math.PI / 180, LOST: 70 * Math.PI / 180 },
+    // variations (see the header): the palm this far off the natural grip is the back of the hand
+    // (only once the grip is known from an earlier ball: phones sit in the fist every which way)
+    SLOWER: { SEAM: 2.0, PACE: 0.74 },
+    // a cutter needs a deliberate twist: fast arms twist 8-16 rad/s on their own (session 2), meant ones 19-20
+    CUT: { HAND: 18, TWIST: 17, KICK: 1.0, PACE: 0.94 },
     // visible option BOWLING CONTROL. The marker says where the ball pitches; the action only
     // costs a small miss (2026-11-14 rework: 7 of 9 real balls had come out full tosses when the
     // timing and the arm's heading set the length and line outright). len: metres per second of
@@ -231,10 +244,13 @@
     const ph = { x: palm.x, z: palm.z };
     const alpha = Math.hypot(ph.x, ph.z) > 0.2 ? wrapPi(heading(ph) - az) : 0;
     const seam = wrapPi(alpha - (o.seamRef != null ? o.seamRef : alpha));
-    const pace = paceFrom(handSpeed), spin = spinFrom(twist);
+    let pace = paceFrom(handSpeed), spin = spinFrom(twist), cutter = 0, slower = false;
+    if (spin > 0 && handSpeed >= BOWL.CUT.HAND && Math.abs(twist) >= BOWL.CUT.TWIST) { cutter = Math.sign(twist); spin = 0; pace *= BOWL.CUT.PACE; }
+    if (!spin && !cutter && o.seamRef != null && Math.abs(seam) > BOWL.SLOWER.SEAM) { slower = true; pace = Math.max(BOWL.PACE.MIN, pace * BOWL.SLOWER.PACE); }
     const spinness = clamp(spin / BOWL.SPIN.SCRAMBLE, 0, 1);
+    const swing = slower || cutter ? 0 : seamSwing(seam) * (1 - spinness);
     const dtRef = o.dtRef != null ? o.dtRef : BOWL.DT_IDEAL, azRef = o.azRef != null ? o.azRef : 0;
-    return Object.assign(base, { ok: true, azRaw: az, az: wrapPi(az - azRef), dtRef, azRef, lenErr: (dt - dtRef) / 1000, twist, alpha, seam, pace, spin, swing: seamSwing(seam) * (1 - spinness) });
+    return Object.assign(base, { ok: true, azRaw: az, az: wrapPi(az - azRef), dtRef, azRef, lenErr: (dt - dtRef) / 1000, twist, alpha, seam, pace, spin, swing, cutter, slower });
   }
 
   /** Median of a player's recent values (null when there are none). */
@@ -279,8 +295,10 @@
       : { x: -18 * top.x, y: 0, z: -18 * top.z };      // a seamer's natural backspin
     const swing = (rel.swing || 0) * sx;
     const upright = rel.spin > 0 ? 0 : 1 - Math.min(1, Math.abs(swing) * 0.6);
-    const seamKick = clamp(gauss() * 0.35 * upright, -0.8, 0.8);
-    return { from, speed: rel.pace, target, aim: { x: aim.x, len: aim.len }, w, swing, seamKick, lenAdj, lineAdj, azAdj: 0, spinDir: rel.spin > 0 ? sgn : 0 };
+    // a cutter's seam kicks the way the wrist rolled (as the spin would turn it), a little more or less
+    const cutter = rel.cutter ? Math.sign(rel.cutter) * sx : 0;
+    const seamKick = cutter ? cutter * BOWL.CUT.KICK * (0.8 + 0.4 * rng()) : clamp(gauss() * 0.35 * upright, -0.8, 0.8);
+    return { from, speed: rel.pace, target, aim: { x: aim.x, len: aim.len }, w, swing, seamKick, lenAdj, lineAdj, azAdj: 0, spinDir: rel.spin > 0 ? sgn : 0, cutter, slower: !!rel.slower };
   }
 
   /** The ball as it leaves the hand: aim solved (with swing), then the release error added. */
@@ -303,7 +321,9 @@
       tags.push(L < 1.8 ? 'YORKER' : L < 4 ? 'FULL' : L < 7 ? 'GOOD LENGTH' : h > 1.3 ? 'BOUNCER' : 'SHORT');
     }
     const away = s => s * (side || 1) > 0;          // moving toward the batter's off side
+    if (del.slower) tags.push('SLOWER BALL');
     if (del.spinDir) tags.push(away(del.spinDir) ? 'LEG-BREAK' : 'OFF-BREAK');
+    else if (del.cutter) tags.push(away(del.cutter) ? 'LEG-CUTTER' : 'OFF-CUTTER');
     else if (Math.abs(del.swing) > 0.25 && Phys.swingPace(del.speed) > 0.3) tags.push(away(del.swing) ? 'OUTSWING' : 'INSWING');
     else if (Math.abs(del.seamKick) > 0.25) tags.push(away(del.seamKick) ? 'SEAMS AWAY' : 'SEAMS IN');
     return tags;

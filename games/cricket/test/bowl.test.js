@@ -215,5 +215,31 @@ function real(i) {
     w(-1, 0.1) === 'YORKER' && w(-3, 0.4) === 'FULL' && w(-6, 0.7) === 'GOOD LENGTH' && w(-9, 1.0) === 'SHORT' && w(-10, 1.6) === 'BOUNCER' && w(null, 0.6) === 'FULL TOSS' && w(null, 1.3) === 'BEAMER');
 }
 
+// --- variations from the hand: the slower ball (hand turned over) and the cutter (twist, fast arm)
+{
+  const ref = rel({ peakW: 22 }).alpha, plain = rel({ peakW: 22 }, { seamRef: ref });
+  const over = rel({ peakW: 22, rho0: rad(160) }, { seamRef: ref }), half = rel({ peakW: 22, rho0: rad(45) }, { seamRef: ref });
+  check('hand turned right over (back of the hand): a slower ball, ~3/4 of the pace, no swing', over.slower && Math.abs(over.pace / plain.pace - B.BOWL.SLOWER.PACE) < 0.02 && over.swing === 0, [over.slower, over.pace / plain.pace]);
+  check('...a wrist turned 45 deg is still swing, not a slower ball', !half.slower && half.swing !== 0, [half.slower, half.swing]);
+  check('...not on the first ball (the natural grip is not known yet)', !rel({ peakW: 22, rho0: rad(160) }).slower);
+  const sb = bowlRel(over, { x: 0, len: 5 }), pb = bowlRel(plain, { x: 0, len: 5 });
+  check('...it still pitches on the aim, looping up slower', sb.pitch && Math.abs(-sb.pitch.z - 5) < 0.6 && sb.d.speed < pb.d.speed, sb.pitch && -sb.pitch.z);
+  check('...the batter reads SLOWER BALL', B.describe({ pitch: sb.pitch, heightAtBat: 0.6 }, sb.d, 1).includes('SLOWER BALL'));
+  const fastCw = rel({ peakW: 28, twist: 22 }), slowCw = rel({ peakW: 13, twist: 22 });
+  check('a twist with a fast arm is a cutter (keeps its pace, no spin); with a slow arm, spin', fastCw.cutter === 1 && fastCw.spin === 0 && slowCw.spin > 0 && !slowCw.cutter, [fastCw.cutter, fastCw.spin, slowCw.spin]);
+  const dc = B.toDelivery(fastCw, AIM, { arm: 1, rng: seeded() }), ds = B.toDelivery(slowCw, AIM, { arm: 1, rng: seeded() });
+  check('...the cutter kicks off the seam the way the spin would turn', dc.seamKick * ds.spinDir > 0.7, [dc.seamKick, ds.spinDir]);
+  check('...and reads as a cutter', B.describe({ pitch: { x: 0, z: -5 }, heightAtBat: 0.6 }, dc, 1).some(t => /CUTTER/.test(t)));
+  // the real throws, each against the grip of the ones before it: none comes out a slower ball by accident
+  const R2 = require(path.join(__dirname, 'fixtures', 'real-bowls-2.json'));
+  const alphas = [], acc = [];
+  for (const f of R2) {
+    const s = f.s.map(([t, ax, a]) => ({ t, q: B.decodePad(ax), a: !!a }));
+    const r = B.readRelease(s, 0, { seamRef: B.seamNeutral(alphas.slice(-5)) });
+    if (r.ok) { acc.push(r); alphas.push(r.alpha); }
+  }
+  check('26 real throws: no accidental slower balls or cutters', acc.length > 20 && acc.every(r => !r.slower && !r.cutter), acc.filter(r => r.slower || r.cutter).length);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

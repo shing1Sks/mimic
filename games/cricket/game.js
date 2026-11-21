@@ -618,7 +618,7 @@
       G.phase = 'void'; G.phaseT = 0;
       return;
     }
-    G.seamAlphas[seat].push(rel.alpha);
+    if (!rel.slower) G.seamAlphas[seat].push(rel.alpha);   // the hand turned over is not their natural grip
     H.dt.push(rel.dt); H.az.push(rel.azRaw);
     [G.seamAlphas[seat], H.dt, H.az].forEach(a => { while (a.length > 5) a.shift(); });
     if (H.dt.length === 2 && opt('lineup') === 'AUTO') toast('Line-up set to your action');
@@ -651,6 +651,7 @@
     if (batSeat().kind === 'cpu') {
       const onStumps = !!(atS && Math.abs(atS.x) < 0.15 && atS.y < 0.75);
       G.cpuPlan = BA.cpuShot({ x: atC.x, h: atC.y, len: pr.pitch && pr.pitch.z < -0.3 ? -pr.pitch.z : null, onStumps }, cpuSkill(), rng, batSide());
+      if (del.slower && G.cpuPlan && rng() < 0.55) G.cpuPlan.e -= rand(0.05, 0.11);   // done by the change of pace: through the shot early
     }
     prompts();
   }
@@ -660,9 +661,11 @@
     if (G.phase === 'ready' && G.phaseT > 1.0) { G.aim = cpuAim(); G.phase = 'runup'; G.phaseT = 0; G.bowler.phase = 'run'; G.cutAt = 0.85; prompts(); }
     else if (G.phase === 'runup' && G.phaseT > runT() + 0.25) {
       const sk = cpuSkill(), spin = G.cpuStyle === 'spin';
-      const pace = spin ? rand(78, 92) / 3.6 : rand(128, 146) / 3.6;
-      const twist = spin ? (rng() < 0.65 ? 1 : -1) * rand(14, 26) : 0;
-      const rel = { ok: true, pace, twist, spin: BO.spinFrom(twist), swing: spin ? 0 : rand(-0.8, 0.8), lenErr: 0, az: 0, cpu: true };
+      // a seamer mixes in a slower ball and the odd cutter, as a person can with the hand
+      const vr = spin ? 1 : rng(), slower = vr < 0.1, cutter = !slower && vr < 0.18 ? (rng() < 0.5 ? 1 : -1) : 0;
+      const pace = spin ? rand(78, 92) / 3.6 : rand(128, 146) / 3.6 * (slower ? BO.BOWL.SLOWER.PACE : cutter ? BO.BOWL.CUT.PACE : 1);
+      const twist = spin ? (rng() < 0.65 ? 1 : -1) * rand(14, 26) : cutter ? cutter * rand(10, 18) : 0;
+      const rel = { ok: true, pace, twist, spin: spin ? BO.spinFrom(twist) : 0, swing: spin || slower || cutter ? 0 : rand(-0.8, 0.8), cutter, slower, lenErr: 0, az: 0, cpu: true };
       const a = G.aim;
       const del = BO.toDelivery(rel, { x: a.x + rand(-1, 1) * sk.acc * 0.35, len: a.len + rand(-1, 1) * sk.acc * 2 }, { arm: armSide(), gain: BO.BOWL.GAIN.NORMAL, rng, view: 'bowler' });
       launchDelivery(del, rel);

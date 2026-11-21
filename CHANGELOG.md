@@ -2,6 +2,25 @@
 
 Updated just before each approved release, not on every change.
 
+## Chak De Fatte Cricket update (2026-11-22)
+
+From two recorded matches over the browser controller (same Wi-Fi, then over mobile data):
+- **Browser phones bat as well as the app:** swings are timed at the moment the phone captured them,
+  so a slower network (a relay) no longer makes every shot late; the timing matches Bluetooth (the
+  mobile-data match: 21 shots, median within 4 ms of Bluetooth play, 13 middled). Browser swings are
+  measured over a fixed time span, so they keep their full power (sixes are back).
+- **Fielding is real:** a fielder reacts, sprints and only takes the ball if his hands actually get
+  there (from where he really stands); catches, dives, pick-ups, throws to the keeper or bowler at the
+  stumps, dropped catches and fumbles that knock the ball away, the bowler fielding off his
+  follow-through, the keeper taking the ball in his gloves.
+- **Bowling:** a sleeker aim marker that settles fast and never snaps back; a run-up that builds, a
+  bound into the delivery stride; new deliveries from the hand: a slower ball (hand turned over) and
+  off/leg cutters (a hard wrist twist with a fast arm).
+- **How-to before play:** animated steps for holding the phone, bowling and batting, before each
+  innings (skippable; can be turned off).
+- **Smoother:** no snapping poses (batter's stride, runs, fielders), replays at true speed, no ghost
+  fielders on camera cuts, a steady render resolution, the scoreboard post out of the screen.
+
 ## 1.0.0 (2026-11-13)
 
 First public release: the Android app (air mouse, gamepad, Wand/Grip motion controller over Bluetooth) and nine browser games playable at mimic.shing.in, with the app or straight from a phone browser.

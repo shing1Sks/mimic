@@ -198,6 +198,15 @@
     return { t, x: s.x, y: s.y, z: s.z, plan: Object.assign(makePlan(g, s, { act: 'low', ta: t0 + runTime(Math.max(0, D - F.HANDS)) }), { act: 'low' }) };
   }
   const endOf = p => (p.act === 'dive' ? { x: p.ex, z: p.ez } : { x: p.tx, z: p.tz });
+  /** Where a loose ball crosses the rope between t0 and t1 (null if it doesn't). */
+  function overRope(samples, t0, t1) {
+    for (const s of samples) { if (s.t < t0) continue; if (s.t > t1) break; if (Phys.fromCentre(s) > Phys.FIELD.R) return s; }
+    return null;
+  }
+  /** He turns and chases it to the rope from where he is (from t0). */
+  const chaseFrom = (from, end, t0) => ({ sx: from.x, sz: from.z, t0, vmax: F.RUN, tx: end.x * 0.96, tz: Phys.FIELD.CZ + (end.z - Phys.FIELD.CZ) * 0.96, face: Math.atan2(end.x - from.x, end.z - from.z), act: 'chase' });
+  /** A loose ball that reaches the rope before he gathers it: four (or six) after all. */
+  const toRope = (over, extra) => Object.assign({ type: over.air ? 'six' : 'four', runs: over.air ? 6 : 4, by: null, t: over.t }, extra);
 
   /**
    * What happens to a hit. samples: flight from the bat [{t, x, y, z, air}] (air = not bounced yet).
@@ -239,7 +248,8 @@
           dropped.push(m.name);
           const p1 = makePlan(m, s, r, 1.1), p2 = makePlan(other, s, canReach(other, s), 1.0);
           p1.act = p2.act = 'leave';
-          const g = gather(m, endOf(p1), samples.slice(j), s.t + 0.5);
+          const g = gather(m, endOf(p1), samples.slice(j), s.t + 0.5), over = overRope(samples, s.t, g.t);
+          if (over) { p1.next = chaseFrom(endOf(p1), over, s.t + 0.5); return finish(toRope(over, { contact: { t: s.t, at, kind: 'leave' }, mishap: { kind: 'leaveIt', by: m.i, with: other.i } }), { [m.i]: p1, [other.i]: p2 }); }
           p1.next = g.plan;
           return finish(Object.assign(runsFrom(g, m, dropped), { contact: { t: s.t, at, kind: 'leave' }, mishap: { kind: 'leaveIt', by: m.i, with: other.i } }), { [m.i]: p1, [other.i]: p2 });
         }
@@ -250,7 +260,8 @@
         // put down: off his hands, up and down at his feet, and he gathers it
         dropped.push(m.name);
         const v = deflectV(s, samples[Math.max(0, j - 1)], rng, 'drop'), after = flightFrom(at, v, s.t);
-        const g = gather(m, endOf(plan), after, s.t + (r.act === 'dive' ? 0.9 : 0.35));
+        const g = gather(m, endOf(plan), after, s.t + (r.act === 'dive' ? 0.9 : 0.35)), over = overRope(after, s.t, g.t);
+        if (over) { plan.next = chaseFrom(endOf(plan), over, s.t + 0.5); return finish(toRope(over, { contact: { t: s.t, at, kind: 'drop' }, deflect: { t: s.t, p: at, v } }), { [m.i]: plan }); }
         plan.next = g.plan;
         return finish(Object.assign(runsFrom(g, m, dropped), { contact: { t: s.t, at, kind: 'drop' }, deflect: { t: s.t, p: at, v } }), { [m.i]: plan });
       }
@@ -301,10 +312,11 @@
       // it squirts off his hands; he gathers it again (one run more than it would have been)
       const base = runsFrom(s, m, dropped);
       const v = deflectV(s, samples[Math.max(0, best.j - 1)], rng, 'fumble'), after = flightFrom(at, v, s.t);
-      const g = gather(m, endOf(plan), after, s.t + 0.3);
+      const g = gather(m, endOf(plan), after, s.t + 0.3), over = overRope(after, s.t, g.t);
+      if (over) { plan.next = chaseFrom(endOf(plan), over, s.t + 0.5); return finish(toRope(over, { contact: { t: s.t, at, kind: 'fumble' }, deflect: { t: s.t, p: at, v }, mishap: { kind: 'fumble', by: m.i } }), { [m.i]: plan }); }
       plan.next = g.plan;
       const out = runsFrom(g, m, dropped);
-      out.runs = Math.min(4, base.runs + 1);
+      out.runs = Math.min(3, Math.max(out.runs, base.runs + 1));   // (no more than the batters run without a boundary)
       return finish(Object.assign(out, { contact: { t: s.t, at, kind: 'fumble' }, deflect: { t: s.t, p: at, v }, mishap: { kind: 'fumble', by: m.i } }), { [m.i]: plan });
     }
     return finish(Object.assign(runsFrom(s, m, dropped), { at, contact: { t: s.t, at, kind: 'stop' } }), { [m.i]: plan });

@@ -91,7 +91,7 @@ check('left-handed batter: the field is mirrored (slip on the other side)', F.se
   check('a misfield-four only on a ball that reaches the rope, called when it gets there', on.filter(r => r.mishap && r.mishap.kind === 'misfield4').every(r => r.mishap.missT < r.t && r.t > 0));
   check('a juggled catch is still out', on.filter(r => r.mishap && r.mishap.kind === 'juggle').every(r => r.type === 'caught'));
   check('"leave it" only when two fielders could reach, and the ball goes down', on.filter(r => r.mishap && r.mishap.kind === 'leaveIt').every(r => r.type === 'runs' && r.mishap.with !== undefined && r.mishap.with !== r.mishap.by));
-  check('a fumble costs exactly one extra run (max 4)', on.filter(r => r.mishap && r.mishap.kind === 'fumble').every(r => r.type === 'runs' && r.runs >= 1 && r.runs <= 4));
+  check('a fumble costs at least one extra run (1-3), or squirts away to the rope for four', on.filter(r => r.mishap && r.mishap.kind === 'fumble').every(r => (r.type === 'runs' && r.runs >= 1 && r.runs <= 3) || (r.type === 'four' && r.by === null)));
   check('same seed, same result (replays stay deterministic)', JSON.stringify(run().map(r => [r.type, r.runs])) === JSON.stringify(on.map(r => [r.type, r.runs])));
 }
 {
@@ -116,7 +116,7 @@ check('left-handed batter: the field is mirrored (slip on the other side)', F.se
   for (let i = 0; i < 1500; i++) {
     const r = F.resolve(hit(8 + pick() * 32, -180 + pick() * 360, -10 + pick() * 55), moved, { rng, bowler: { x: -1.5, z: -15 } });
     const c = r.contact;
-    if (!c || c.kind === 'leave' || c.kind === 'miss') continue;
+    if (!c || c.kind === 'leave' || c.kind === 'miss' || r.by === null) continue;   // (null: it got away to the rope)
     const plan = r.by === -1 ? r.bowlerPlan : r.plans[r.by];
     const m = F.motionAt(plan, c.t), d = Math.hypot(m.x - c.at.x, m.z - c.at.z);
     n++;
@@ -129,6 +129,10 @@ check('left-handed batter: the field is mirrored (slip on the other side)', F.se
   const pickups = [];
   for (let i = 0; i < 400; i++) { const r = F.resolve(hit(10 + pick() * 20, -180 + pick() * 360, 15 + pick() * 40), field, { rng: never }); if (r.contact && r.contact.kind === 'drop') pickups.push(r); }
   check('a dropped catch is gathered later, where the ball fell (not where it was dropped)', pickups.length > 5 && pickups.every(r => r.t > r.contact.t + 0.3), pickups.length);
+  // review: a ball that got away (left, dropped, fumbled) and reached the rope was "gathered" in the stands for runs
+  let stands = 0;
+  for (let i = 0; i < 3000; i++) { const r = F.resolve(hit(8 + pick() * 32, -180 + pick() * 360, -10 + pick() * 55), field, { rng: seed(i + 3) }); if (r.type === 'runs' && r.at && P.fromCentre(r.at) > P.FIELD.R + 0.5) stands++; }
+  check('nothing is picked up beyond the rope', stands === 0, stands);
 }
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

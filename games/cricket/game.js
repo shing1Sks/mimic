@@ -545,7 +545,7 @@
     resetStumps();
     const prevField = G.field;
     G.field = FI.setField(bowlKind(), batSide());
-    if (prevField) G.field.forEach((f, i) => { if (prevField[i] && prevField[i].cur) { f.cur = prevField[i].cur; f.face = prevField[i].face; } });
+    if (prevField) G.field.forEach((f, i) => { const q = prevField[i]; if (q && q.cur) { f.cur = q.cur; f.face = q.face; f.faceSm = q.faceSm; f.runSm = q.runSm; f.crouchSm = q.crouchSm; } });
     hud.speedOff();
     castPlayers();
     prompts();
@@ -667,8 +667,8 @@
     if (batSeat().kind === 'cpu') {
       const onStumps = !!(atS && Math.abs(atS.x) < 0.15 && atS.y < 0.75);
       G.cpuPlan = BA.cpuShot({ x: atC.x, h: atC.y, len: pr.pitch && pr.pitch.z < -0.3 ? -pr.pitch.z : null, onStumps }, cpuSkill(), rng, batSide());
-      cpuSwingVisual(G.cpuPlan, atC.t);
       if (del.slower && G.cpuPlan && rng() < 0.55) G.cpuPlan.e -= rand(0.05, 0.11);   // done by the change of pace: through the shot early
+      cpuSwingVisual(G.cpuPlan, atC.t);
     }
     prompts();
   }
@@ -1249,7 +1249,7 @@
     // the stride: in with the ball, held through the hit (G.t starts again there), eased back after
     const kT = G.phase === 'hit' ? 1 : G.phase === 'flight' ? clamp(G.t / 0.35, 0, 1) : 0;
     G.batS = G.batS || {};
-    const k = G.phase === 'flight' && G.t < 0.4 ? kT : damp(G.batS, 'k', kT, kT > G.batS.k ? 30 : 5, dt);
+    const k = G.phase === 'flight' && G.t < 0.4 ? (G.batS.k = kT) : damp(G.batS, 'k', kT, kT > G.batS.k ? 30 : 5, dt);
     const base = { x: -0.42 * side, z: -1.0 };
     const x = base.x + (fw.padX + 0.18 * side - 0.08 * side - base.x) * k * 0.7;
     const z = base.z + (fw.padZ + 0.1 - base.z) * k;
@@ -1346,6 +1346,7 @@
     if (plan && plan.t != null && plan.act === 'low' && Math.abs(G.t - plan.t) < 0.45) st.crouch = 0.9;
     if (plan && plan.t != null && (plan.act === 'dive' || plan.act === 'leap')) { const ap = CK.Anim.actionPose({ kind: plan.act, side: plan.side || 1, lift: plan.lift || 0 }, G.t - plan.t); st.y = ap.y; st.roll = ap.roll; if (ap.roll) st.facing = B.faceSm = plan.face; }
     const fa = (B.fielding || G.ballHeldBy === -1 || (G.throwBall && G.throwBall.rec === -1)) && !cel ? fieldArms(-1, st, plan) : null;
+    if (cel && G.ballHeldBy === -1) G.holdPt = holdPoint(st);   // celebrating with it: the ball goes with him
     if (fa) st.fieldArms = fa;
     return st;
   }
@@ -1440,7 +1441,11 @@
       if (!f.cur) f.cur = { x: f.x, z: f.z };
       const P = plans && plans[i];
       let face, run, crouch = f.keeper ? (G.phase === 'hit' ? 0.2 : 0.85) : (G.phase === 'flight' ? 0.3 : 0.1), y = 0, roll = 0, plan = null;
-      if (P && G.phase === 'hit') {
+      const gH = G.gesture && performance.now() < G.gesture.until && G.phase !== 'runup' ? G.gesture : null;
+      const huddling = gH && gH.huddle && !f.keeper && G.ballHeldBy !== i && !(gH.who === 'fielder' && gH.by === i) &&
+        (G.phase !== 'hit' || (G.outcome && G.outcome.type === 'caught' && G.outcome.done)) && Math.hypot(G.bowler.x - f.cur.x, G.bowler.z - f.cur.z) < 33;
+      if (huddling) { run = f.runSm || 0; face = f.faceSm || 0; }
+      else if (P && G.phase === 'hit') {
         // his run, from field.js: the same plan that decided he gets there
         const m = FI.motionAt(P, G.t);
         plan = P.next && G.t >= P.next.t0 ? P.next : P;
@@ -2402,7 +2407,7 @@
       aimHalo.material.opacity = 0.32;
     }
     if (G.phase === 'flight' || G.phase === 'hit') {
-      if (G.hold) { judgeContact(now); if (G.hold && now - G.contact.tArr > lagMs() + (webBat() ? 900 : 400)) { G.hold = false; beaten('miss'); } }
+      if (G.hold) { judgeContact(now); if (G.hold && now - G.contact.tArr > lagMs() + (webBat() ? 600 : 400)) { G.hold = false; beaten('miss'); } }
       if (G.ballOn) flightStep(dt * (G.hold ? 0.12 : G.slow), now); else if (G.phase === 'hit') G.t += dt;
       if (G.phase === 'hit') hitTimers();
       feedTracker();

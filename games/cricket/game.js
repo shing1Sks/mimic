@@ -116,11 +116,20 @@
     if (dyn.t < 1) return;
     const fps = dyn.fps = dyn.n / dyn.sum;
     let pr = dyn.pr;
-    if (opt('gfx') === 'HIGH') pr = PR_MAX;
-    else if (fps < 52) pr = Math.max(PR_MIN, pr - (fps < 40 ? 0.15 : 0.07));
-    else if (fps > 58.5) pr = Math.min(prTop(), pr + 0.05);
+    // hysteresis (recorded: the scale stepped 208 times in 8 minutes, the canvas re-made each time, a
+    // stall that pulled the next second's rate down again): down after 2 slow seconds, up after 6 good
+    // ones, never in the middle of a ball, and the second after a change is not measured
+    const busy = G.phase === 'flight' || G.phase === 'hit' || G.replay;
+    if (dyn.skip) dyn.skip = false;
+    else {
+      dyn.bad = fps < 50 ? (dyn.bad || 0) + 1 : 0;
+      dyn.good = fps > 58 ? (dyn.good || 0) + 1 : 0;
+      if (opt('gfx') === 'HIGH') pr = PR_MAX;
+      else if (fps < 36 || (dyn.bad >= 2 && !busy)) { pr = Math.max(PR_MIN, pr - (fps < 40 ? 0.15 : 0.08)); dyn.bad = 0; }
+      else if (dyn.good >= 6 && !busy) { pr = Math.min(prTop(), pr + 0.05); dyn.good = 0; }
+    }
     pr = Math.min(pr, prTop());
-    if (Math.abs(pr - dyn.pr) > 1e-3) { dyn.pr = pr; renderer.setPixelRatio(pr); }
+    if (Math.abs(pr - dyn.pr) > 1e-3) { dyn.pr = pr; renderer.setPixelRatio(pr); dyn.skip = true; }
     if (opt('gfx') === 'AUTO' && dyn.shadows && pr <= PR_MIN + 1e-3 && fps < 40) { if (++dyn.low >= 6) setShadows(false); } else dyn.low = 0;
     dyn.t = dyn.n = dyn.sum = 0;
   }
@@ -518,10 +527,13 @@
     el.style.left = at.x + 'px'; el.style.top = at.y + 'px';
     el.classList.add('on');
   }
+  /** A quick dip to black (a cut the eye accepts) over everyone jumping back to their marks. */
+  function dip() { const f = $('flash'); f.style.transition = 'none'; f.style.background = '#05060c'; f.style.opacity = 1; requestAnimationFrame(() => requestAnimationFrame(() => { f.style.transition = 'opacity 0.35s'; f.style.opacity = 0; setTimeout(() => { f.style.background = ''; }, 400); })); }
   function newBall(first) {
+    if (!first && /bat|bowl|split/.test(G.camMode || '') && !G.replay) dip();
     if (G.att) G.att.ball++;
     if (G.match && G.match.overs > 1 && inn() && inn().balls === (G.match.overs - 1) * 6 && inn().cur.length === 0) paaji('lastOver');
-    G.phase = 'ready'; G.phaseT = 0; G.ball = null; G.ballOn = false; G.contact = null; G.outcome = null; G.hold = false;
+    G.phase = 'ready'; G.phaseT = 0; G.ball = null; G.ballOn = false; G.contact = null; G.outcome = null; G.hold = false; G.cpuSwing = null; G.recT = 0;
     G.umpireOut = 0; G.ballHeldBy = null; G.throwBall = null; G.stroke = null; G.juggleT = null; G.grip = null; G.holdPt = null; G.bowlerPlan = null;
     G.del = null; G.rel = null; G.path = null; G.cpuPlan = null; G.frames = []; G.stumpsFall = null; G.runs = null; G.fielderPlan = null;
     G.slow = 1; G.tracker = BA.tracker(); G.fed = 0;
@@ -617,6 +629,7 @@
       const w = NOT_A_BALL[rel.why] || NOT_A_BALL.nowhip;
       banner(w[0], w[1], 'bad', 1.6);
       G.phase = 'void'; G.phaseT = 0;
+      G.bowler.phase = 'follow'; G.bowler.relT = 0; G.bowler.relFrom = { x: G.bowler.x, z: G.bowler.z }; G.bowler.fielding = null;
       return;
     }
     if (!rel.slower) G.seamAlphas[seat].push(rel.alpha);   // the hand turned over is not their natural grip
@@ -652,6 +665,7 @@
     if (batSeat().kind === 'cpu') {
       const onStumps = !!(atS && Math.abs(atS.x) < 0.15 && atS.y < 0.75);
       G.cpuPlan = BA.cpuShot({ x: atC.x, h: atC.y, len: pr.pitch && pr.pitch.z < -0.3 ? -pr.pitch.z : null, onStumps }, cpuSkill(), rng, batSide());
+      cpuSwingVisual(G.cpuPlan, atC.t);
       if (del.slower && G.cpuPlan && rng() < 0.55) G.cpuPlan.e -= rand(0.05, 0.11);   // done by the change of pace: through the shot early
     }
     prompts();
@@ -747,7 +761,6 @@
     const s = batSeat();
     if (s.kind === 'cpu') {
       const c = G.cpuPlan;
-      cpuSwingVisual(c);
       if (!c) { beaten('leave'); return; }
       const f = BA.fit(c.b, G.contact.p.y), q = BA.quality(c.e, 1, f, c.push);
       if (q === 'miss') { beaten('miss'); return; }
@@ -877,6 +890,7 @@
     c.state = 'hit';
     const from = G.ball.p.z < -0.3 ? G.ball.p : c.p;
     G.ball = PH.ball(from, sh.v, {});
+    G.tHit = G.t;
     G.phase = 'hit'; G.phaseT = 0; G.t = 0; G.ballOn = true;
     const power = clamp(sh.speed / 38, 0, 1);
     SFX.bat(power, sh.sweet, sh.edge);
@@ -909,6 +923,13 @@
   function hitPhysics(prev, p, ev) {
     const o = G.outcome;
     if (!o) return;
+    // the boundary boards stop a ball along the ground (it used to roll on through them to the stand)
+    const rc = PH.fromCentre(p), RBD = PH.FIELD.R + 2.45;
+    if (rc > RBD && p.y < 0.95) {
+      const nx = (p.x - PH.FIELD.CX) / rc, nz = (p.z - PH.FIELD.CZ) / rc, v = G.ball.v, vr = v.x * nx + v.z * nz;
+      p.x = PH.FIELD.CX + nx * RBD; p.z = PH.FIELD.CZ + nz * RBD;
+      if (vr > 0) { v.x -= 1.35 * vr * nx; v.z -= 1.35 * vr * nz; v.x *= 0.6; v.z *= 0.6; if (vr > 3) SFX.thud(vr * 0.5, false); }
+    }
     if (ev === 'bounce' && G.phaseT < 6) SFX.thud(PH.len(G.ball.v) * 0.6, false);
     if (o.type === 'playedon') {
       const hs = PH.hitsStumps(prev, p, 0);
@@ -1178,10 +1199,11 @@
     G.stumpsFall = null;
   }
   function knockStumps(at) {
-    const sp = G.ball ? Math.min(1.5, PH.len(G.ball.v) / 25) : 1;
-    G.stumpsFall = { t: 0, x: at.x, sp, bails: [0, 1].map(() => ({ v: { x: rand(-3, 3), y: rand(4.5, 7) * sp, z: rand(3, 6) * sp }, w: rand(14, 26) })),
+    // (review: bails went 5 m up, off the top of every close shot; the dust washed out the batter's legs)
+    const sp = G.ball ? Math.min(1.2, PH.len(G.ball.v) / 25) : 1;
+    G.stumpsFall = { t: 0, x: at.x, sp, bails: [0, 1].map(() => ({ v: { x: rand(-2, 2), y: rand(2.6, 4.2) * sp, z: rand(2.5, 4.5) * sp }, w: rand(14, 26) })),
       stumps: [0, 1, 2].map(i => ({ v: { x: (i - 1) * rand(0.4, 1.2), y: rand(0.5, 2) * sp, z: (2.2 - Math.abs((i - 1) * 0.0965 - at.x) * 8) * sp }, p: { x: 0, y: 0, z: 0 } })) };
-    puff({ x: at.x, y: 0.2, z: 0.1 }, 10, 1.6);
+    puff({ x: at.x, y: 0.12, z: 0.35 }, 5, 0.8);
     G.shake = 0.28; G.tsT = 0.65;
   }
   function stumpsFrame(dt) {
@@ -1212,8 +1234,10 @@
   // Actor states each frame (plain data, so a replay can store and replay them)
   function batterState(dt) {
     const side = batSide(), fw = G.footwork || { padX: -0.1 * side, padZ: -0.95, fwd: 0 };
-    const going = G.phase === 'flight' || G.phase === 'hit';
-    const k = going ? clamp(G.t / 0.35, 0, 1) : 0;
+    // the stride: in with the ball, held through the hit (G.t starts again there), eased back after
+    const kT = G.phase === 'hit' ? 1 : G.phase === 'flight' ? clamp(G.t / 0.35, 0, 1) : 0;
+    G.batS = G.batS || {};
+    const k = G.phase === 'flight' && G.t < 0.4 ? kT : damp(G.batS, 'k', kT, kT > G.batS.k ? 30 : 5, dt);
     const base = { x: -0.42 * side, z: -1.0 };
     const x = base.x + (fw.padX + 0.18 * side - 0.08 * side - base.x) * k * 0.7;
     const z = base.z + (fw.padZ + 0.1 - base.z) * k;
@@ -1235,26 +1259,38 @@
     }
     const st = { x, z, facing: side * Math.PI / 2, twist: 0.45 * side + clamp(Math.atan2(b.x, -b.z) * 0.25, -0.5, 0.5) * (Math.abs(b.y) < 0.8 ? 1 : 0.2), crouch: 0.35, run: 0,
       arms: side > 0 ? { left: { hand: hands }, right: { hand: low } } : { right: { hand: hands }, left: { hand: low } } };
-    if (runOff) { st.z = runOff.z; st.x = 0.9 * side; st.facing = runOff.dir > 0 ? 0 : Math.PI; st.run = runOff.dir ? 1 : 0; st.arms = null; st.twist = 0; st.crouch = 0; }
-    if (G.batCheer > 0 && !runOff) {
-      // a boundary: the bat goes up to the crowd, face toward the camera
-      const hu = { x: x + 0.1 * side, y: 2.25, z: z + 0.05 };
-      st.facing = 0.35 * side; st.twist = 0; st.crouch = 0.05;
-      st.arms = side > 0 ? { left: { hand: hu }, right: { hand: { x: hu.x, y: hu.y - 0.09, z: hu.z } } } : { right: { hand: hu }, left: { hand: { x: hu.x, y: hu.y - 0.09, z: hu.z } } };
-      return { st, bat: { p: hu, q: BA.batQuat(Math.PI * 0.95, 0, 'vertical') } };
+    if (runOff) {
+      const rb = runOff.blend;
+      st.z = lerp(z, runOff.z, rb); st.x = lerp(x, 0.9 * side, rb); st.arms = rb > 0.5 ? null : st.arms; st.twist *= 1 - rb; st.crouch *= 1 - rb;
+      st.facing = runOff.dir > 0 ? 0 : runOff.dir < 0 ? Math.PI : st.facing;
     }
-    return { st, bat: runOff ? { p: { x: st.x + 0.3 * side, y: 0.6, z: st.z }, q: BA.batQuat(0.6, 0, 'vertical') } : { p: hands, q } };
+    st.facing = damp(G.batS, 'face', st.facing, 12, dt, true);
+    st.run = damp(G.batS, 'run', runOff && runOff.dir ? 1 : 0, 8, dt);
+    // a boundary: the bat goes up to the crowd, face toward the camera (eased in and out)
+    const ck = damp(G.batS, 'cheer', G.batCheer > 0 && !runOff ? 1 : 0, 9, dt);
+    if (ck > 0.01) {
+      const hu = { x: x + 0.1 * side, y: 2.25, z: z + 0.05 }, e = ck * ck * (3 - 2 * ck), L3 = (a, b2) => ({ x: lerp(a.x, b2.x, e), y: lerp(a.y, b2.y, e), z: lerp(a.z, b2.z, e) });
+      st.facing = lerp(st.facing, 0.35 * side, e); st.twist *= 1 - e; st.crouch = lerp(st.crouch, 0.05, e);
+      const top = L3(hands, hu), bot = L3(low, { x: hu.x, y: hu.y - 0.09, z: hu.z });
+      st.arms = side > 0 ? { left: { hand: top }, right: { hand: bot } } : { right: { hand: top }, left: { hand: bot } };
+      const qa = _bq.set(q.x, q.y, q.z, q.w), qb = BA.batQuat(Math.PI * 0.95, 0, 'vertical');
+      qa.slerp(_bq2.set(qb.x, qb.y, qb.z, qb.w), e);
+      return { st, bat: { p: top, q: { x: qa.x, y: qa.y, z: qa.z, w: qa.w } } };
+    }
+    return { st, bat: runOff && runOff.blend > 0.5 ? { p: { x: st.x + 0.3 * side, y: 0.6, z: st.z }, q: BA.batQuat(0.6, 0, 'vertical') } : { p: hands, q } };
   }
+  const _bq = new T.Quaternion(), _bq2 = new T.Quaternion();
   function runProgress() {
     const r = G.runs, t = G.t - 0.15;
     if (t < 0) return null;
+    const blend = (u => u * u * (3 - 2 * u))(clamp(t / 0.35, 0, 1));   // into the run from where he stood
     const L = PH.PITCH.L - 1.2;
     let i = 0, acc = 0;
     while (i < r.n) { const d = i === 0 ? FI.F.RUN1 : FI.F.RUNN; if (t < acc + d) break; acc += d; i++; }
-    if (i >= r.n) return { z: r.n % 2 ? -1.0 - L : -1.0, dir: 0 };
+    if (i >= r.n) return { z: r.n % 2 ? -1.0 - L : -1.0, dir: 0, blend };
     const d = i === 0 ? FI.F.RUN1 : FI.F.RUNN, k = clamp((t - acc) / d, 0, 1);
     const from = i % 2 ? -1.0 - L : -1.0, to = i % 2 ? -1.0 : -1.0 - L;
-    return { z: lerp(from, to, k), dir: i % 2 ? 1 : -1 };
+    return { z: lerp(from, to, k), dir: i % 2 ? 1 : -1, blend };
   }
   function bowlerState(dt) {
     const B = G.bowler, side = armSide();
@@ -1274,8 +1310,9 @@
         const m = FI.motionAt(bp, G.t);
         B.x = m.x; B.z = m.z; B.run = m.run; B.face = m.facing; B.fielding = bp.next && G.t >= bp.next.t0 ? bp.next : bp;
       } else {
-        const f = followAt(B.relT);
-        B.x = f.x; B.z = f.z; B.run = (1 - f.k) * 0.8; B.face = 0;
+        const f = followAt(B.relT), f2 = followAt(B.relT + 0.03);
+        B.x = f.x; B.z = f.z; B.face = 0;
+        B.run = damp(B, 'runSm', clamp(Math.hypot(f2.x - f.x, f2.z - f.z) / 0.03 / 6.5, 0, 1), 10, dt);
       }
     }
     // the bowling arm: the phone's own direction, the room turned half round into the ground
@@ -1301,21 +1338,23 @@
     return halfTurn(BO.rotate(BO.armQuat(phi, 0, 0), { x: 0, y: 0, z: -1 }));
   }
   const halfTurn = v => ({ x: -v.x, y: v.y, z: -v.z });
-  function cpuSwingVisual(c) {
-    G.cpuSwing = c ? { t0: performance.now(), e: c.e, cross: c.b.y > -0.5, dir: Math.atan2(c.u.x, -c.u.z) } : null;
+  /** The computer's swing, planned at the release: fastest at the ball's arrival (tC, s after the release) + its timing error. */
+  function cpuSwingVisual(c, tArr) {
+    G.cpuSwing = c ? { tC: tArr + c.e, cross: c.b.y > -0.5, dir: Math.atan2(c.u.x, -c.u.z) } : null;
   }
   function cpuBatFrame() {
-    const s = G.cpuSwing;
-    if (!s || !G.contact) {
-      // stance, then the backlift as the bowler arrives
-      const lift = G.phase === 'flight' ? clamp(G.t / 0.35, 0, 1) : 0;
-      cpuBat.q = BA.batQuat(-lift * 2.3, 0, 'vertical');
-      return;
-    }
-    const tt = (performance.now() - s.t0) / 1000 - s.e;
+    const s = G.cpuSwing, lift = G.phase === 'flight' ? clamp(G.t / 0.35, 0, 1) : G.phase === 'hit' ? 1 : 0;
+    const back = BA.batQuat(-lift * 2.3, 0, 'vertical');   // stance, then the backlift as the bowler arrives
+    if (!s || (G.phase !== 'flight' && G.phase !== 'hit')) { cpuBat.q = back; return; }
+    const tt = (G.phase === 'hit' ? (G.tHit || 0) + G.t : G.t) - s.tC;
+    if (tt < -0.36) { cpuBat.q = back; return; }
     const th = 2.2 * Math.tanh(tt / 0.12);
     const sweep = s.dir < 0 ? 1 : -1;
-    cpuBat.q = s.cross ? BA.batQuat(th * 0.9, s.dir + sweep * Math.PI / 2, 'flat', 0.1, sweep) : BA.batQuat(th, s.dir, 'vertical');
+    const q = s.cross ? BA.batQuat(th * 0.9, s.dir + sweep * Math.PI / 2, 'flat', 0.1, sweep) : BA.batQuat(th, s.dir, 'vertical');
+    if (!s.cross || tt > -0.15) { cpuBat.q = q; return; }
+    // a cross bat comes round from the backlift
+    const u = clamp((tt + 0.36) / 0.21, 0, 1), a = _bq.set(back.x, back.y, back.z, back.w).slerp(_bq2.set(q.x, q.y, q.z, q.w), u * u * (3 - 2 * u));
+    cpuBat.q = { x: a.x, y: a.y, z: a.z, w: a.w };
   }
   // damped pose numbers (facing the short way round), so a fielder never snaps from one pose to the next
   function damp(o, key, target, rate, dt, angle) {
@@ -1432,7 +1471,9 @@
     const side = batSide(), aside = armSide();
     const ns = { x: aside * 2.6, z: -PH.PITCH.L - 1.2, facing: 0, run: 0, crouch: 0.1 };
     const rp = G.runs && G.phase === 'hit' ? runProgress() : null;
-    if (rp) { ns.z = -2 - (PH.PITCH.L - 1.2) - rp.z; ns.run = rp.dir ? 1 : 0; ns.facing = rp.dir > 0 ? Math.PI : 0; ns.x = -0.9 * side; }
+    if (rp) { ns.z = lerp(ns.z, -2 - (PH.PITCH.L - 1.2) - rp.z, rp.blend); ns.x = lerp(ns.x, -0.9 * side, rp.blend); ns.facing = rp.dir > 0 ? Math.PI : rp.dir < 0 ? 0 : ns.facing; }
+    G.nsS = G.nsS || {};
+    ns.facing = damp(G.nsS, 'face', ns.facing, 12, dt, true); ns.run = damp(G.nsS, 'run', rp && rp.dir ? 1 : 0, 8, dt);
     // the throw leaves his hand: from where his hand is, to where the man at the stumps will be
     const th = G.throwBall;
     if (th && G.t >= th.t0 && !th.from) {
@@ -1486,7 +1527,8 @@
     }
     CK.poseAthlete(people.nonStriker, F.ns, dt);
     const u = F.umpire;
-    const uArms = u.out ? { right: { hand: { x: u.x - 0.25, y: 2.25, z: u.z + 0.15 } } } : null;
+    const uk = u.out ? Math.min(1, u.out / 0.3) : 0, ue = uk * uk * (3 - 2 * uk);
+    const uArms = u.out ? { right: { hand: { x: u.x - 0.25 + 0.05 * (1 - ue), y: 1.0 + 1.25 * ue, z: u.z + 0.15 } } } : null;
     CK.poseAthlete(people.umpire, Object.assign({}, u, { arms: uArms }), dt);
     F.fielders.forEach((st, i) => CK.poseAthlete(people.fielders[i], st, dt));
     // the ball: in the bowler's hand before the release
@@ -1494,7 +1536,7 @@
       ballMesh.visible = true; ballMesh.position.set(F.ball.x, F.ball.y, F.ball.z);
       if (F.ballQ) ballMesh.quaternion.set(F.ballQ[0], F.ballQ[1], F.ballQ[2], F.ballQ[3]);
     }
-    else if (G.phase === 'ready' || (G.phase === 'runup' && !G.keyUp)) { ballMesh.visible = true; ballMesh.position.copy(hand); }
+    else if (G.phase === 'ready' || G.phase === 'runup') { ballMesh.visible = true; ballMesh.position.copy(hand); }
     else ballMesh.visible = false;
     const fast = G.ball && PH.len(G.ball.v) > 14;
     trail.push(ballMesh.position, ballMesh.visible && fast && (G.phase === 'flight' || G.phase === 'hit') && !G.replayStill, camera.position);
@@ -1511,25 +1553,43 @@
 
   // ---------------------------------------------------------------------------------
   // Replays: the frames since the release, played back slower from another angle
-  function snapshot(F) {
-    if (G.phase !== 'flight' && G.phase !== 'hit') return;
-    G.frames.push({ F: JSON.parse(JSON.stringify(F)), stumps: world.stumps.bat.stumps.map(s => [s.rotation.x, s.rotation.z, s.position.x, s.position.y, s.position.z]), bails: world.stumps.bat.bails.map(b => [b.position.x, b.position.y, b.position.z, b.rotation.x]), cam: G.camMode });
-    if (G.frames.length > 60 * 9) G.frames.shift();
+  function snapshot(F, dt) {
+    if ((G.phase !== 'flight' && G.phase !== 'hit') || !(dt > 0)) return;   // (nothing while paused)
+    G.recT = (G.recT || 0) + dt;
+    G.frames.push({ tm: G.recT, F: JSON.parse(JSON.stringify(F)), stumps: world.stumps.bat.stumps.map(s => [s.rotation.x, s.rotation.z, s.position.x, s.position.y, s.position.z]), bails: world.stumps.bat.bails.map(b => [b.position.x, b.position.y, b.position.z, b.rotation.x]), cam: G.camMode });
+    if (G.frames.length > 60 * 9) { G.frames.shift(); if (G.eventFrame != null) G.eventFrame = Math.max(0, G.eventFrame - 1); }
+  }
+  const ANG = { facing: 1, roll: 1, twist: 1 };
+  /** Two recorded frames blended k of the way (angles the short way round). */
+  function mixF(a, b, k) {
+    if (typeof a === 'number' && typeof b === 'number') return a + (b - a) * k;
+    if (Array.isArray(a)) return Array.isArray(b) && b.length === a.length ? a.map((v, i) => mixF(v, b[i], k)) : a;
+    if (!a || typeof a !== 'object' || !b || typeof b !== 'object') return a;
+    const o = {};
+    for (const key in a) o[key] = ANG[key] && typeof a[key] === 'number' && typeof b[key] === 'number' ? a[key] + BO.wrapPi(b[key] - a[key]) * k : mixF(a[key], b[key], k);
+    return o;
   }
   function startReplay(done) {
     const frames = G.frames.slice();
     // from 0.8 s before the bat (or the stumps) to 1.6 s after: a short highlight, not the whole ball
     const ev = G.eventFrame != null ? G.eventFrame : Math.max(0, frames.length - 90);
     const i0 = Math.max(0, ev - 48), i1 = Math.min(frames.length - 1, ev + 100);
-    G.replay = { frames, t: 0, done, start: i0, end: i1 };
+    G.replay = { frames, t: 0, done, start: i0, end: i1, idx: i0 };
+    $('visor').classList.remove('on'); gloves.visible = false; people.batter.setOpacity && people.batter.setOpacity(1);   // no first-person kit in a replay
+    trail.clear();
     bugText('REPLAY'); $('replay-bug').classList.add('on'); $('hud').classList.add('replaying');
     SFX.sting();
   }
   function replayFrame(dt) {
-    const R = G.replay;
-    R.t += dt * 0.6 * 60;
-    const i = Math.min(R.end, R.start + Math.floor(R.t));
-    const fr = R.frames[i];
+    const R = G.replay, fs = R.frames, t0 = fs[R.start].tm || R.start / 60;
+    R.t += dt * 0.6;
+    const target = t0 + R.t;
+    while (R.idx < R.end && (fs[R.idx + 1].tm || (R.idx + 1) / 60) <= target) R.idx++;
+    const a = fs[R.idx], b = fs[Math.min(R.end, R.idx + 1)];
+    const ta = a.tm || R.idx / 60, tb = b.tm || (R.idx + 1) / 60, k = b === a ? 0 : clamp((target - ta) / Math.max(1e-6, tb - ta), 0, 1);
+    const fr = { F: mixF(a.F, b.F, k), stumps: mixF(a.stumps, b.stumps, k), bails: mixF(a.bails, b.bails, k) };
+    if (fr.F.ballQ) { const l = Math.hypot(...fr.F.ballQ) || 1; fr.F.ballQ = fr.F.ballQ.map(v => v / l); }
+    const i = R.idx;
     G.replayStill = false;
     applyFrame(fr.F, dt * 0.6);
     world.stumps.bat.stumps.forEach((s, k) => { s.rotation.x = fr.stumps[k][0]; s.rotation.z = fr.stumps[k][1]; s.position.set(fr.stumps[k][2], fr.stumps[k][3], fr.stumps[k][4]); });
@@ -1548,6 +1608,7 @@
    */
   function bugText(t) { const b = $('replay-bug'); b.lastChild.textContent = t; }
   function startCutaway(rec, done, o) {
+    $('visor').classList.remove('on'); gloves.visible = false;
     const six = rec && rec.boundary && rec.runs === 6, wk = !!(rec && rec.wicket);
     const shots = o ? o.shots : six ? ['cheer', 'fans'] : wk && Math.random() < 0.6 ? ['fans'] : [];
     if (!shots.length || !people.fans || !CK.Hype.extras(gfxLevel()).cheerleaders || opt('replays') !== 'ON') { done(); return; }
@@ -1598,6 +1659,7 @@
    */
   const drsGroup = new T.Group(); drsGroup.visible = false; scene.add(drsGroup);
   function startDRS(v, at, track, done) {
+    $('visor').classList.remove('on'); gloves.visible = false;
     while (drsGroup.children.length) { const c = drsGroup.children.pop(); if (c.geometry) c.geometry.dispose(); }
     const P = (x, y, z) => new T.Vector3(x, y, z);
     const from = G.del ? G.del.from : { x: 0.3, y: 2.1, z: -18.4 }, pitch = G.path.pitch || { x: at.x, z: at.z - 2 };
@@ -1673,7 +1735,7 @@
   const _p = new T.Vector3(), _l = new T.Vector3();
   /** A shot everyone shares (big moments): the celebration, the catch, the ball in play. */
   function sharedShot() {
-    if (G.celebrate && G.celebrate.t > 0 && G.celebrate.t < G.celebrate.dur) return 'celebrate';
+    if (G.celebrate && G.celebrate.t > 0 && (G.celebrate.t < G.celebrate.dur || G.ending)) return 'celebrate';
     if (G.milestone && G.milestone.t < 3.0) return 'milestone';
     const o = G.outcome;
     if (G.phase === 'hit' && o && o.type === 'caught' && G.t >= o.t - 0.5 && G.field[o.by]) return 'catch';
@@ -1683,7 +1745,7 @@
   /** The live views this frame: one full screen, or two halves in a two-player match. */
   function planViews() {
     if (!G.inGame || !G.match) return ['title'];
-    if (G.walk && G.walk.t < G.walk.dur + 0.2) return ['walkout'];
+    if (G.walk && G.walk.t < G.walk.dur) return ['walkout'];
     const sh = sharedShot();
     if (sh) return [sh];
     const v = r => (fp() ? 'fp' + r : r);
@@ -1704,7 +1766,10 @@
       setCamOn(st, _p, _l, 46, 1 - Math.exp(-dt * 1.5));
     } else if (shot === 'follow') {
       // broadcast follow: high behind the batter's end, panning and pushing toward the ball
-      const b = G.ballHeldBy !== null && G.ballHeldBy !== undefined && F.ball ? F.ball : G.ball.p;
+      let b = G.ballHeldBy !== null && G.ballHeldBy !== undefined && F.ball ? F.ball : G.ball.p;
+      const rc = PH.fromCentre(b);
+      if (rc > PH.FIELD.R) { const kR = PH.FIELD.R / rc; b = { x: PH.FIELD.CX + (b.x - PH.FIELD.CX) * kR, y: Math.min(b.y, 5), z: PH.FIELD.CZ + (b.z - PH.FIELD.CZ) * kR }; }   // over the rope: hold on the rope
+      if (G.runs && G.ballHeldBy !== null && G.ballHeldBy !== undefined) b = { x: b.x * 0.6, y: Math.min(b.y, 2), z: lerp(b.z, -PH.PITCH.L / 2, 0.4) };   // runs on: the fielder and the batters
       const d = Math.hypot(b.x, b.z - Z_CONTACT);
       const dir = d > 0.5 ? { x: b.x / d, z: (b.z - Z_CONTACT) / d } : { x: 0, z: -1 };
       const back = 16 + d * 0.25;
@@ -1789,9 +1854,13 @@
    * views, blocking either one fades the person.
    */
   const _o = new T.Vector3(), _q2 = new T.Vector3(), _q3 = new T.Vector3();
+  const _lastCam = [];
   function fadeOccluders(plan, F) {
     if (!people.ready) return;
     const side = G.match ? batSide() : 1, o = G.outcome;
+    // a cut (a new shot, or a camera that jumped): blockers go at once, not over four frames in view
+    const key = plan.join(','), cut = key !== fadeOccluders.key || plan.some((_, i) => !_lastCam[i] || _lastCam[i].distanceTo(camSt[i].cam.position) > 2.5);
+    fadeOccluders.key = key; plan.forEach((_, i) => { (_lastCam[i] = _lastCam[i] || new T.Vector3()).copy(camSt[i].cam.position); });
     const keep = new Set();
     if (plan.includes('catch') || plan.includes('follow')) { if (o && o.by >= 0) keep.add(people.fielders[o.by]); }
     if (plan.some(s => s === 'celebrate' || s === 'runup' || s === 'bowl' || s === 'replay')) keep.add(people.bowler);
@@ -1829,7 +1898,7 @@
         if (_o.distanceTo(C) < 2.2) block = true;
         if (block) break;
       }
-      A.setOpacity(block ? Math.max(0, A.opacity - 0.25) : Math.min(1, A.opacity + 0.1));
+      A.setOpacity(cut ? (block ? 0 : 1) : block ? Math.max(0, A.opacity - 0.25) : Math.min(1, A.opacity + 0.1));
     }
   }
   function replayCamera(F, dt) {
@@ -1994,7 +2063,7 @@
   }
   let toastT = 0;
   function toast(t) { $('toast').textContent = t; $('toast').classList.add('on'); toastT = 2.2; }
-  function flash(a) { const f = $('flash'); f.style.transition = 'none'; f.style.opacity = a; requestAnimationFrame(() => { f.style.transition = 'opacity 0.5s'; f.style.opacity = 0; }); }
+  function flash(a) { const f = $('flash'); f.style.transition = 'none'; f.style.background = ''; f.style.opacity = a; requestAnimationFrame(() => { f.style.transition = 'opacity 0.5s'; f.style.opacity = 0; }); }
   function crowdReact(kind, k) { AU.Crowd.react(kind, k); world.crowd.excite = Math.max(world.crowd.excite, kind === 'cheer' ? 0.4 + (k || 0.5) : 0.2); }
 
   /** The two players' prompts: what to do now, in each phone's own words. */
@@ -2276,7 +2345,6 @@
     G.phaseT += dt;
     if (G.celebrate) G.celebrate.t += dt;
     if (G.milestone) G.milestone.t += dt;
-    bubbleFrame();
     if (G.batCheer > 0) G.batCheer -= dt;
     if (G.dance > 0) G.dance -= dt;
     cheerFrame(dt);
@@ -2349,7 +2417,7 @@
       if (G.phase === 'hit' && oc && oc.type === 'caught' && G.t > oc.t - 0.4 && G.t < oc.t + 0.25) ts = 0.3;
       const sdt = rdt * ts;
       if (G.inGame && !G.paused && G.screen === 'game' && G.phase !== 'over') gameFrame(sdt, now);
-      if (G.inGame && G.match && people.ready) { F = liveFrame(G.paused ? 0 : sdt); applyFrame(F, G.paused ? 0 : sdt); snapshot(F); }
+      if (G.inGame && G.match && people.ready) { F = liveFrame(G.paused ? 0 : sdt); applyFrame(F, G.paused ? 0 : sdt); snapshot(F, G.paused ? 0 : sdt); }
       dustFrame(sdt);
       landRing.material.opacity = G.phase === 'hit' && G.landAt && G.ball && G.ballOn && !G.ball.bounces ? 0.55 + 0.35 * Math.sin(now / 120) : Math.max(0, landRing.material.opacity - rdt * 2);
       if (G.landAt) landRing.position.set(G.landAt.x, 0.03, G.landAt.z);
@@ -2357,6 +2425,7 @@
       if (G.inGame) AU.Crowd.setTension(G.phase === 'runup' ? 0.45 + Math.min(0.4, G.phaseT * 0.3) : G.phase === 'flight' ? 0.9 : G.phase === 'hit' ? 0.7 : 0.15);
       else if (people.ready) idleScene(rdt);
       updateCamera(rdt, F || {});
+      if (G.inGame) bubbleFrame();
     }
     if (bannerT > 0) { bannerT -= rdt; if (bannerT <= 0) $('banner').classList.remove('on'); }
     if (toastT > 0) { toastT -= rdt; if (toastT <= 0) $('toast').classList.remove('on'); }

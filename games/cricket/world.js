@@ -145,8 +145,14 @@
     boards.position.set(0, 0.45, CZ); boards.scale.x = -1;   // read from inside the ring
     scene.add(boards);
     // sight screens behind both ends (dark, for the white ball)
+    // (slatted, with a frame: a plain box read as an unfinished grey block when the camera came close)
+    const ssTex = canvasTex(512, 224, (g, w, h) => {
+      g.fillStyle = '#10131c'; g.fillRect(0, 0, w, h);
+      for (let x = 0; x < w; x += 16) { g.fillStyle = x % 32 ? '#141826' : '#0c0f17'; g.fillRect(x, 10, 14, h - 20); }
+      g.strokeStyle = '#2a3042'; g.lineWidth = 10; g.strokeRect(5, 5, w - 10, h - 10);
+    });
     for (const z of [CZ - RB - 4, CZ + RB + 4]) {
-      const ss = new T.Mesh(new T.BoxGeometry(16, 7, 0.4), std({ color: 0x14161d, roughness: 0.9 }));
+      const ss = new T.Mesh(new T.BoxGeometry(16, 7, 0.4), std({ color: 0xffffff, map: ssTex, roughness: 0.9 }));
       ss.position.set(0, 3.5, z); ss.receiveShadow = true;
       scene.add(ss);
     }
@@ -164,8 +170,9 @@
     const frame = new T.Mesh(new T.BoxGeometry(17, 9, 0.6), std({ color: 0x0c0d14, roughness: 0.6 }));
     const scr = new T.Mesh(new T.PlaneGeometry(16, 8), new T.MeshBasicMaterial({ map: tex, toneMapped: false }));
     scr.position.z = 0.31;
-    const leg = new T.Mesh(new T.BoxGeometry(1.2, y, 1.2), std({ color: 0x23262f }));
-    leg.position.y = -y / 2;
+    // the post holds it from below and behind (it used to stand through the middle, in front of the screen)
+    const legH = y - 4.5, leg = new T.Mesh(new T.BoxGeometry(1.2, legH, 1.2), std({ color: 0x23262f }));
+    leg.position.set(0, -4.5 - legH / 2, -0.9);
     grp.add(frame, scr, leg); grp.position.set(x, y, z); grp.rotation.y = ry;
     scene.add(grp);
     const S = { big: '', sub: '', score: '', hot: 0, col: '#ffc24d' };

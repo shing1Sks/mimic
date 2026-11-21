@@ -205,7 +205,7 @@ h1 span { display: block; color: transparent; -webkit-text-stroke: 2px var(--gol
 .slot.joined .s-join, .slot:not(.joined) ~ .slot:not(.joined) .s-join { display: none; }
 
 @media (max-width: 1000px) { .t-right { display: none; } }
-@media (max-width: 1250px) { #caption { left: 22px; right: 140px; bottom: 112px; justify-content: flex-start; } }
+@media (max-width: 1250px) { #caption { left: 22px; right: 140px; bottom: 196px; justify-content: flex-start; } }   /* clear of the player card and the split-screen labels */
 @media (max-height: 780px) {
   h1 span { display: inline; }
   h1 { font-size: clamp(44px, min(5.6vw, 11svh), 92px); }

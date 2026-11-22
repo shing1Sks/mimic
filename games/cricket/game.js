@@ -105,7 +105,44 @@
   $('stage').appendChild(renderer.domElement);
   const scene = new T.Scene();
   const camera = new T.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 2000);
-  addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
+  addEventListener('resize', () => { room.cw = -1; sizeCanvas(); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
+  // ---------------------------------------------------------------------------------
+  // The online room (games/lib/mimic-room.js): a friend plays from their own laptop. Their phone came
+  // through their room page, so its seat is "remote": the canvas grows a second view to the right of
+  // the screen (out of sight here) at their window's shape, from their end of the pitch, and that view
+  // streams to them with the game's sound; the HUD and menus are mirrored as DOM. Their swings are
+  // judged against what they saw: their picture runs MimicRoom.delayFor() ms behind the game.
+  const room = { seat: -1, guest: null, wide: false, wg: 0, cw: -1, ch: -1, t: 0 };
+  if (window.MimicRoom) {
+    MimicRoom.host({ game: 'cricket', mirror: ['hud', 'title', 'solo', 'lobby', 'pause', 'break', 'end', 'flash'],
+      audio: () => { AU.init(); return AU.state.ctx ? { ctx: AU.state.ctx, node: AU.state.master } : null; } });
+    MimicRoom.on('change', () => { room.t = 0; if (G.screen === 'lobby') renderOnline(); });
+  }
+  /** Which seat plays from a friend's room page (-1: none), checked a few times a second. */
+  function roomFrame(dt) {
+    room.t -= dt;
+    if (room.t > 0) return;
+    room.t = 0.4;
+    room.seat = -1; room.guest = null;
+    if (!window.MimicRoom || !MimicRoom.active || !window.MimicLink) return;
+    const ps = MimicLink.phones();
+    seats.forEach((s, i) => {
+      if (s.kind !== 'phone' || !s.mc || s.mc.padIndex == null) return;
+      const ph = ps.find(p => p.index === s.mc.padIndex && p.guest);
+      if (ph && MimicRoom.viewers().some(v => v.id === ph.guest && v.open)) { room.seat = i; room.guest = ph.guest; }
+    });
+  }
+  /** ms the seat's player sees the game late (their room page's picture delay), 0 for a player here. */
+  const remoteLag = s => (room.seat >= 0 && s === seats[room.seat] && window.MimicRoom ? MimicRoom.delayFor(room.guest) : 0);
+  /** The canvas: the screen, plus the friend's view beside it while a match has a remote seat. */
+  function sizeCanvas() {
+    room.wide = room.seat >= 0 && G.inGame && !!G.match;
+    room.wg = room.wide ? Math.round(innerHeight * MimicRoom.aspect) : 0;
+    const w = innerWidth + room.wg, h = innerHeight;
+    if (w === room.cw && h === room.ch) return;
+    room.cw = w; room.ch = h;
+    renderer.setSize(w, h);
+  }
   const world = CK.buildWorld(scene);
   const prTop = () => (opt('gfx') === 'LOW' ? Math.min(PR_MAX, 0.8) : PR_MAX);
   function setShadows(on) { dyn.shadows = on; dyn.low = 0; world.lights.key.castShadow = on; }
@@ -515,10 +552,11 @@
     const A = g.who === 'batter' ? people.batter : g.who === 'fielder' ? people.fielders[g.by] : people.bowler;
     if (!A) { el.classList.remove('on'); return; }
     // split-screen: whichever half sees him (each half has its own camera)
-    const split = (G.views || []).length > 1, halves = split ? [0, 1] : [0];
+    const split = (G.views || []).length > 1 && !room.wide, halves = split ? [0, 1] : [0];
+    const own = room.wide && (G.views || []).length > 1 ? camSt[1 - room.seat].cam : camera;   // the room: this screen's view only
     let at = null;
     for (const i of halves) {
-      A.root.getWorldPosition(_bubP); _bubP.y += 2.3; _bubP.project(split ? camSt[i].cam : camera);
+      A.root.getWorldPosition(_bubP); _bubP.y += 2.3; _bubP.project(split ? camSt[i].cam : own);
       if (_bubP.z <= 1 && Math.abs(_bubP.x) <= 1.05 && Math.abs(_bubP.y) <= 1.05) { const w = split ? innerWidth / 2 : innerWidth; at = { x: i * (split ? w : 0) + (_bubP.x + 1) / 2 * w, y: (1 - _bubP.y) / 2 * innerHeight }; break; }
     }
     if (!at) { el.classList.remove('on'); return; }
@@ -774,7 +812,8 @@
   }
   const webBat = () => { const inp = batSeat().input; return !!(inp && inp.S.web); };
   // a browser phone is timed at capture: it needs less of the swing delay than Bluetooth (bat.js BAT.WEB.LEAD_MS)
-  const lagMs = () => (batSeat().kind === 'phone' ? opt('lag') - (webBat() ? BA.BAT.WEB.LEAD_MS : 0) : Math.min(30, opt('lag')));
+  // a friend batting from their room page swings at a picture remoteLag() ms old: judged against it
+  const lagMs = () => (batSeat().kind === 'phone' ? opt('lag') - (webBat() ? BA.BAT.WEB.LEAD_MS : 0) + remoteLag(batSeat()) : Math.min(30, opt('lag')));
   /** Human batter: decide once the swing's samples are in, or keep waiting while it speeds up. */
   function judgeContact(now) {
     feedTracker();
@@ -1845,18 +1884,19 @@
   function updateCamera(dt, F) {
     const plan = planViews();
     G.views = plan;
+    const split = plan.length > 1 && !room.wide;   // online room: each player's own full view, no halves
     plan.forEach((shot, i) => {
       const st = camSt[i];
-      shotCam(shot, st, dt, F, plan.length > 1);
-      applyCamTo(st, dt, plan.length > 1 ? innerWidth / 2 / innerHeight : innerWidth / innerHeight);
+      shotCam(shot, st, dt, F, split);
+      applyCamTo(st, dt, split ? innerWidth / 2 / innerHeight : room.wide && plan.length > 1 && i === room.seat ? room.wg / innerHeight : innerWidth / innerHeight);
     });
     G.camMode = plan.length > 1 ? 'split' : plan[0];
-    $('hud').classList.toggle('split', plan.length > 1);
+    $('hud').classList.toggle('split', split);
     const fpb = plan.length === 1 && plan[0] === 'fpbat';
     if (people.ready && !G.drs) people.batter.setOpacity(fpb ? 0 : 1);
     gloves.visible = plan.includes('fpbat');
     $('visor').classList.toggle('on', fpb);
-    if (plan.length > 1) {
+    if (split) {
       [0, 1].forEach(i => { const t = $('half' + i); t.querySelector('b').textContent = seats[i].name; t.querySelector('span').textContent = plan[i] === 'bowl' ? 'BOWLING' : 'BATTING'; t.style.setProperty('--tc', tcol(i)); });
     }
     fadeOccluders(plan, F);
@@ -1935,6 +1975,26 @@
   function renderViews() {
     const w = innerWidth, h = innerHeight, plan = G.views || ['title'];
     renderer.shadowMap.needsUpdate = true;
+    if (room.wide && !G.dbgCam) {
+      // online room: this screen's player on the left (all that shows here), the friend's view to its right
+      const L = 1 - room.seat, wg = room.wg;
+      let gcam = camSt[room.seat].cam;
+      if (plan.length < 2) {
+        // one shared shot (replay, celebration, walk-out): the same camera at the friend's window shape
+        camera2.position.copy(camera.position); camera2.quaternion.copy(camera.quaternion); camera2.fov = camera.fov;
+        camera2.aspect = wg / h; camera2.updateProjectionMatrix(); gcam = camera2;
+      }
+      renderer.setScissorTest(true);
+      renderer.setViewport(0, 0, w, h); renderer.setScissor(0, 0, w, h);
+      renderer.render(scene, plan.length < 2 ? camera : camSt[L].cam);
+      renderer.shadowMap.needsUpdate = false;
+      renderer.setViewport(w, 0, wg, h); renderer.setScissor(w, 0, wg, h);
+      renderer.render(scene, gcam);
+      renderer.setScissorTest(false);
+      renderer.setViewport(0, 0, w + wg, h);
+      if (window.MimicRoom) MimicRoom.frame(renderer.domElement, w, 0, wg, h);
+      return;
+    }
     if (plan.length > 1 && !G.dbgCam) {
       renderer.setScissorTest(true);
       [0, 1].forEach(i => {
@@ -1946,6 +2006,8 @@
       renderer.setScissorTest(false);
       renderer.setViewport(0, 0, w, h);
     } else renderer.render(scene, camera);
+    // a friend's room page with no match on (menus, lobby): they see this screen
+    if (window.MimicRoom && MimicRoom.active) MimicRoom.frame(renderer.domElement, 0, 0, w, h);
   }
 
   // ---------------------------------------------------------------------------------
@@ -2234,7 +2296,17 @@
     lobby.keyJoin = lobby.keyLeave = lobby.keySwap = false;
     return list;
   }
-  function openLobby() { lobby.st = LB.createLobby(2); lobby.guard = 0.35; showScreen('lobby'); renderLobby([]); }
+  function openLobby() { lobby.st = LB.createLobby(2); lobby.guard = 0.35; showScreen('lobby'); renderLobby([]); if (window.MimicLink) MimicLink.start().then(renderOnline); renderOnline(); }
+  /** The lobby's online-room box: the friend's link, and who is watching from where. */
+  function renderOnline() {
+    const box = $('online'), u = window.MimicRoom ? MimicRoom.inviteUrl() : '';
+    box.hidden = !u;
+    if (!u) return;
+    if ($('online-url').value !== u) $('online-url').value = u;
+    const vs = MimicRoom.viewers().filter(v => v.open);
+    $('online-state').innerHTML = !vs.length ? '<i>Waiting for your friend to open the link…</i>'
+      : vs.map(v => `<b>${v.name} is watching</b>${v.delayMs != null ? ` <i>· picture ${v.delayMs} ms behind</i>` : ''} · ${v.phone && v.phone.connected ? 'phone connected: press HOLD on it to take a seat' : '<i>waiting for their phone</i>'}`).join('<br>');
+  }
   function renderLobby(inputs) {
     const sl = lobby.st.slots;
     for (let i = 0; i < 2; i++) {
@@ -2246,7 +2318,8 @@
       el.querySelector('.s-role').className = 's-role ' + (lobby.st.firstBat === i ? 'bat' : 'bowl');
       if (s) {
         const c = inp && inp.ctrl;
-        el.querySelector('.s-state').textContent = 'READY · ' + (s.kind === 'mouse' ? 'MOUSE + KEYS' : ctrlMode(c).toUpperCase());
+        const far = c && c.padIndex != null && window.MimicLink && MimicLink.phones().some(p => p.index === c.padIndex && p.guest);   // came in through a friend's room page
+        el.querySelector('.s-state').textContent = 'READY · ' + (far ? 'ONLINE · ' : '') + (s.kind === 'mouse' ? 'MOUSE + KEYS' : ctrlMode(c).toUpperCase());
         el.querySelector('.s-help').innerHTML = s.kind === 'mouse' ? '<kbd>Tab</kbd> swaps roles · <kbd>Backspace</kbd> leaves'
           : `<b>${c.keyName('one')}</b> swaps roles · <b>${c.keyName('b')}</b> leaves · ${c.keyName('center')} aligns`;
         const sp = c ? clamp(c.angularSpeed / 14, 0, 1) : 0;
@@ -2297,6 +2370,13 @@
   $('lobby-start').addEventListener('click', () => startVersus());
   $('lobby-swap').addEventListener('click', () => { lobby.st.firstBat = 1 - lobby.st.firstBat; SFX.ui('move'); });
   $('lobby-back').addEventListener('click', () => { SFX.ui('back'); toTitle(); });
+  $('online-copy').addEventListener('click', () => {
+    const u = $('online-url').value; if (!u) return;
+    const done = () => { $('online-copy').textContent = 'COPIED'; setTimeout(() => { $('online-copy').textContent = 'COPY LINK'; }, 1600); };
+    if (navigator.clipboard) navigator.clipboard.writeText(u).then(done, () => { $('online-url').select(); document.execCommand('copy'); done(); });
+    else { $('online-url').select(); document.execCommand('copy'); done(); }
+    SFX.ui('move');
+  });
 
   // ---------------------------------------------------------------------------------
   // Phone buttons outside the motion: pause, align, menus
@@ -2373,6 +2453,10 @@
     // the variations card: up while a phone gets ready to bowl, faded through the run-up
     const tipsOn = bowlSeat().kind !== 'cpu' && !G.walk && (G.phase === 'ready' || G.phase === 'runup');
     $('tips').classList.toggle('on', tipsOn); $('tips').classList.toggle('dim', tipsOn && G.phase === 'runup');
+    // the online room: the card, and each prompt, only on the screen of the player it is for
+    const whose = seat => (room.wide ? (seat === seats[room.seat] ? 'guest' : 'host') : '');
+    const tagRoom = (id, v) => { const el = $(id); if ((el.dataset.room || '') !== v) { if (v) el.dataset.room = v; else delete el.dataset.room; } };
+    tagRoom('tips', whose(bowlSeat())); tagRoom('prompt-bowl', whose(bowlSeat())); tagRoom('prompt-bat', whose(batSeat()));
     aimRing.visible = showAim || (G.phase === 'runup' && bowlSeat().kind !== 'cpu' && opt('aim') === 'ON');
     if (!aimRing.visible) aimPin.visible = false;
     if (aimRing.visible) {
@@ -2418,6 +2502,7 @@
     if (!wandCursor && window.MimicCursor) wandCursor = MimicCursor.create(mc, { visible: () => !!activeMenu() });
     phoneButtons(wandCursor ? wandCursor.update() : false);
     if (G.screen === 'lobby') lobbyFrame(rdt);
+    roomFrame(rdt); sizeCanvas();
     let F = null;
     if (G.replay) {
       // HOLD on any phone, Space or a click skips the highlight

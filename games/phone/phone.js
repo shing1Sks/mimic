@@ -140,7 +140,8 @@
       if (tabs) try { tabs.postMessage({ t: 'active', room, sid }); } catch (e) { /* closed */ }
       setConn('ok', 'Connected');
       routeOf(pc).then(r => { if (C.sid === sid) { C.route = r; statusText(); } });
-      sendCtl({ t: 'hello', mode: S.mode || hint || 'wand', name: deviceName });
+      // guest: this phone was handed out by a friend's online-room page (the game knows the player is far away)
+      sendCtl({ t: 'hello', mode: S.mode || hint || 'wand', name: deviceName, guest: qs.get('guest') || undefined });
       sendState(true);
     };
     C.ctl.onclose = () => { if (C.sid === sid) lost(); };

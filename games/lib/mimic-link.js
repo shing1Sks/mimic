@@ -195,6 +195,8 @@
   function onSignal(m) {
     const d = m.data || {};
     if (!P().SAFE_ID.test(m.from || '')) return;
+    // a friend's room page (games/room/, ids "v-..."): the online room takes it (mimic-room.js)
+    if (/^v-/.test(m.from)) { if (global.MimicRoom) global.MimicRoom._onSignal(m, signal); return; }
     if (m.type === 'offer') accept(m.from, d);
     else if (m.type === 'ice') {
       const p = peers.get(m.from);
@@ -272,6 +274,8 @@
         if (changed) padEvent('gamepaddisconnected', p);
         p.mode = mode;
         if (m.name) p.name = String(m.name).slice(0, 24);
+        // a phone that came through a friend's room page (mimic-room.js): that player is far away
+        if (typeof m.guest === 'string' && P().SAFE_ID.test(m.guest)) p.guest = m.guest;
         // the lowest player number no joined phone holds: failed attempts and phones that left don't count
         if (!p.joined) { p.n = freePlayerNumber(p); p.joined = true; getGamepads(); padEvent('gamepadconnected', p); emit('join', publicPeer(p)); if (phones().length >= panelPlayers) closeSoon(1800); }
         else if (changed) { getGamepads(); padEvent('gamepadconnected', p); }
@@ -362,7 +366,7 @@
   }
 
   const publicPeer = p => ({
-    id: p.id, name: p.name, mode: p.mode, index: p.index, player: p.n, connected: !!(p.joined && p.open),
+    id: p.id, name: p.name, mode: p.mode, index: p.index, player: p.n, connected: !!(p.joined && p.open), guest: p.guest || null,
     rttMs: p.rttMs === null ? null : Math.round(p.rttMs * 10) / 10,
     latencyMs: p.latencyMs === null ? null : Math.round(p.latencyMs * 10) / 10, hz: p.hz,
   });

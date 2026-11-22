@@ -273,3 +273,16 @@ h1 span { display: block; color: transparent; -webkit-text-stroke: 2px var(--gol
 #tips li b { font-size: 10.5px; letter-spacing: 0.12em; color: var(--gold); font-weight: 800; }
 #hud.replaying #tips { opacity: 0; }
 @media (max-height: 560px), (max-width: 760px) { #tips { display: none; } }
+/* ---- the online room in the lobby: the friend's link ---- */
+.online { margin: 12px 0 2px; padding: 12px 14px; border-radius: 12px; background: rgba(0,0,0,0.25); border: 1px solid var(--line); text-align: left; display: grid; gap: 8px; }
+.online[hidden] { display: none; }
+.ol-text b { display: block; font-size: 14px; letter-spacing: 0.04em; color: #fff; }
+.ol-text span { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.ol-row { display: flex; gap: 8px; }
+.ol-row input { flex: 1; min-width: 0; font: 13px/1 ui-monospace, Consolas, monospace; color: #e6e0fb; background: rgba(0,0,0,0.35); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.ol-row .mi { padding: 8px 14px; font-size: 13px; white-space: nowrap; }
+.ol-state { font-size: 13px; color: #e2dcf6; }
+.ol-state b { color: var(--teal); }
+.ol-state i { font-style: normal; color: var(--muted); }
+/* the online room: HUD bits for one player only (game.js tags them; the friend's room page has body.room-guest) */
+body:not(.room-guest) [data-room=guest], body.room-guest [data-room=host] { display: none !important; }

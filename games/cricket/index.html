@@ -148,6 +148,11 @@
       <div class="slot" id="slot1"><b class="s-tag">P2</b><div class="s-role bowl">BOWLS FIRST</div><div class="s-state">PRESS TO JOIN</div><div class="s-bar"><i></i></div><div class="s-help"></div><div class="s-join" data-mimic-join="grip" data-size="88"></div></div>
     </div>
     <p class="lobby-status" id="lobby-status"></p>
+    <div class="online" id="online" hidden>
+      <div class="ol-text"><b>Friend somewhere else?</b><span>Send them this link. They watch from their own end on their laptop, with sound, and scan it with their phone to play.</span></div>
+      <div class="ol-row"><input id="online-url" readonly spellcheck="false"><button class="mi" id="online-copy">COPY LINK</button></div>
+      <div class="ol-state" id="online-state"></div>
+    </div>
     <div class="menu row">
       <button class="mi primary" id="lobby-start">START</button>
       <button class="mi" id="lobby-swap">SWAP ROLES</button>
@@ -205,6 +210,7 @@
 <script type="module" src="../lib/vendor/loaders.js"></script>
 <script src="../lib/mimic.js"></script>
 <script src="../lib/mimic-link.js"></script>
+<script src="../lib/mimic-room.js"></script>
 <script src="../lib/recorder.js"></script>
 <script src="../lib/wandcursor.js"></script>
 <script src="phys.js"></script>

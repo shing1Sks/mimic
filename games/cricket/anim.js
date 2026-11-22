@@ -90,7 +90,30 @@
     }
   }
 
-  const api = { solveElbow, elbowPole, handPair, forwardOf, rightOf, fieldAction, actionPose, gestureHands };
+  const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  /**
+   * The walk out to the middle, k = 0..1 of the way: helmet in his free hand, put on halfway
+   * ('hand' hanging by the grille, 'up' raised to his head, then 'head'), the free hand at the
+   * other glove's strap, a look up at the sky, the bat twirled, slowing into his crease.
+   * Returns { helmet, reach: null|'head'|'glove' and how far (0..1), lookPitch, twirl (rad), walk (0..1) }.
+   */
+  function walkOutBeat(k) {
+    const up = smooth(0.4, 0.5, k) * (1 - smooth(0.52, 0.62, k)), glove = smooth(0.62, 0.67, k) * (1 - smooth(0.72, 0.78, k));
+    return {
+      helmet: k < 0.4 ? 'hand' : k < 0.5 ? 'up' : 'head',
+      reach: up > 0.01 ? 'head' : glove > 0.01 ? 'glove' : null, reachK: Math.max(up, glove),
+      lookPitch: 0.42 * smooth(0.2, 0.27, k) * (1 - smooth(0.33, 0.4, k)),
+      twirl: Math.PI * 2 * smooth(0.8, 0.9, k),
+      walk: 1 - smooth(0.9, 1.0, k),
+    };
+  }
+  /** The man out, walking off, k = 0..1: helmet off in his hand, head down, one look back at the pitch. */
+  function walkOffBeat(k) {
+    const back = smooth(0.18, 0.26, k) * (1 - smooth(0.34, 0.42, k));
+    return { helmet: 'hand', lookPitch: -0.38 * (1 - back), lookYaw: 1.05 * back, walk: 1 };
+  }
+
+  const api = { solveElbow, elbowPole, handPair, forwardOf, rightOf, fieldAction, actionPose, gestureHands, walkOutBeat, walkOffBeat };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (root) { root.CK = root.CK || {}; root.CK.Anim = api; }
 })(typeof window !== 'undefined' ? window : null);

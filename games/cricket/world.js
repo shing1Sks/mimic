@@ -186,6 +186,7 @@
         g.fillStyle = '#e6e0fb'; g.font = '600 30px Bahnschrift, "Segoe UI", sans-serif'; g.fillText(S.sub, 256, 210, 480);
       } else {
         g.fillStyle = '#ffc24d'; g.font = 'italic 800 34px Bahnschrift, "Segoe UI", sans-serif'; g.fillText('CHAK DE FATTE', 256, 46);
+        if (S.flags && CK.Kits) S.flags.forEach((id, i) => { const x = i ? 512 - 22 - 66 : 22; g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(x - 2, 20, 70, 48); CK.Kits.drawFlag(g, id, x, 22, 66, 44); });
         g.fillStyle = '#ffffff'; g.font = '800 92px Bahnschrift, "Segoe UI", sans-serif'; g.fillText(S.score, 256, 140, 476);
         g.fillStyle = '#b2abcf'; g.font = '600 28px Bahnschrift, "Segoe UI", sans-serif'; g.fillText(S.sub, 256, 218, 480);
       }
@@ -199,11 +200,17 @@
     const pick = base.filter((b, i) => i % 11 === 3 && b.y > 2);
     const n = pick.length;
     const geo = new T.PlaneGeometry(0.9, 0.55, 6, 1); geo.translate(0.45, 1.6, 0);
-    const mat = new T.MeshBasicMaterial({ side: T.DoubleSide, vertexColors: false });
+    // which third of the strip each flag shows (0: side A's flag, 1: side B's, 2: white)
+    const which = new Float32Array(n); geo.setAttribute('aFlag', new T.InstancedBufferAttribute(which, 1));
+    const strip = document.createElement('canvas'); strip.width = 384; strip.height = 80;
+    { const g = strip.getContext('2d'); g.fillStyle = '#ffffff'; g.fillRect(0, 0, 384, 80); }
+    const stripTex = new T.CanvasTexture(strip); stripTex.encoding = T.sRGBEncoding;
+    const mat = new T.MeshBasicMaterial({ side: T.DoubleSide, vertexColors: false, map: stripTex });
     const uni = { uTime: { value: 0 }, uWave: { value: 0 } };
     mat.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, uni);
-      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; uniform float uWave;')
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; uniform float uWave; attribute float aFlag;')
+        .replace('#include <uv_vertex>', '#include <uv_vertex>\n  vUv.x = (vUv.x + aFlag) / 3.0;')
         .replace('#include <begin_vertex>', `#include <begin_vertex>
           float ph = instanceMatrix[3].x * 0.37 + instanceMatrix[3].z * 0.21;
           float a = (0.25 + uWave) * sin(uTime * (3.0 + uWave * 5.0) + ph);
@@ -223,9 +230,19 @@
     });
     mesh.frustumCulled = false;
     scene.add(mesh);
-    /** The fans' flags: the +x half for side A, the -x half for side B, with some white among them. */
-    uni.paint = (a, b) => {
-      pick.forEach((s, i) => mesh.setColorAt(i, col.setHex(i % 4 === 3 ? 0xffffff : s.x > 0 ? a : b).convertSRGBToLinear()));
+    /**
+     * The fans' flags: the +x half for side A, the -x half for side B, with some white among them.
+     * With the sides' ids (and CK.Kits), each waves its side's real flag (a franchise: its banner).
+     */
+    uni.paint = (a, b, idA, idB) => {
+      const flagged = !!(idA && idB && CK.Kits);
+      if (flagged) { CK.Kits.drawFlagStrip(strip.getContext('2d'), idA, idB, 384, 80); stripTex.needsUpdate = true; }
+      pick.forEach((s, i) => {
+        const w = i % 4 === 3 ? 2 : s.x > 0 ? 0 : 1;
+        which[i] = flagged ? w : 2;
+        mesh.setColorAt(i, col.setHex(flagged ? 0xffffff : w === 2 ? 0xffffff : w === 0 ? a : b).convertSRGBToLinear());
+      });
+      geo.attributes.aFlag.needsUpdate = true;
       mesh.instanceColor.needsUpdate = true;
     };
     return uni;

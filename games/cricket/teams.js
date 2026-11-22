@@ -64,6 +64,59 @@
   /** A player's signature: { run: 'long'|'short'|'spin'|'mid', cel: 'wings'|'leap'|'sky'|'fist'|'cheer' }. */
   const sig = name => ({ run: inList(RUNS, name) || 'mid', cel: inList(CELS, name) || 'cheer' });
 
+  // shirt numbers the players are known for (only ones we are sure of; the rest get a steady made-up one)
+  const NUMBERS = {
+    'Rohit Sharma': 45, 'Shubman Gill': 77, 'Virat Kohli': 18, 'Shreyas Iyer': 41, 'KL Rahul': 1, 'Hardik Pandya': 33, 'Ravindra Jadeja': 8,
+    'Axar Patel': 20, 'Kuldeep Yadav': 23, 'Jasprit Bumrah': 93, 'Mohammed Siraj': 73, 'Suryakumar Yadav': 63, 'MS Dhoni': 7, 'Yuzvendra Chahal': 3,
+    'Arshdeep Singh': 2, 'Mohammed Shami': 11, 'Bhuvneshwar Kumar': 15, 'Ishan Kishan': 32, 'Yashasvi Jaiswal': 64, 'Shivam Dube': 25, 'Rinku Singh': 35,
+    'Ruturaj Gaikwad': 31, 'Babar Azam': 56, 'Mohammad Rizwan': 16, 'Shaheen Shah Afridi': 10, 'Fakhar Zaman': 39, 'Haris Rauf': 97, 'Shadab Khan': 7,
+    'Pat Cummins': 30, 'Steve Smith': 49, 'Mitchell Starc': 56, 'Glenn Maxwell': 32, 'Travis Head': 62, 'Mitchell Marsh': 8, 'Josh Hazlewood': 38,
+    'Adam Zampa': 88, 'Marcus Stoinis': 17, 'Joe Root': 66, 'Jos Buttler': 63, 'Ben Stokes': 55, 'Jofra Archer': 22, 'Mark Wood': 33, 'Adil Rashid': 95,
+    'Liam Livingstone': 23, 'Sam Curran': 58, 'Quinton de Kock': 12, 'Kagiso Rabada': 25, 'David Miller': 10, 'Aiden Markram': 4, 'Heinrich Klaasen': 45,
+    'Lungi Ngidi': 22, 'Keshav Maharaj': 16, 'Rassie van der Dussen': 72, 'Kane Williamson': 22, 'Trent Boult': 18, 'Devon Conway': 88,
+    'Mitchell Santner': 74, 'Glenn Phillips': 23, 'Daryl Mitchell': 75, 'Lockie Ferguson': 69, 'Matt Henry': 21, 'Tom Latham': 48, 'Andre Russell': 12,
+    'Faf du Plessis': 18,
+  };
+  /**
+   * Signature looks, stylized (no likeness): beard clean | stubble | trim | full | long | goatee |
+   * moustache, hair short | crop | quiff | long | curly, brow thick | thin. Unlisted players follow
+   * their look's beard number (0 clean, 1 stubble, 2 full) with short hair.
+   */
+  const STYLES = {
+    'Virat Kohli': 'trim quiff thick', 'Rohit Sharma': 'full short', 'MS Dhoni': 'trim long', 'Hardik Pandya': 'trim quiff', 'Shubman Gill': 'stubble quiff',
+    'Jasprit Bumrah': 'trim short', 'Mohammed Siraj': 'full short thick', 'Ravindra Jadeja': 'full short', 'KL Rahul': 'full quiff', 'Suryakumar Yadav': 'trim crop',
+    'Ishan Kishan': 'trim quiff', 'Yuzvendra Chahal': 'trim short', 'Rinku Singh': 'trim short', 'Babar Azam': 'trim quiff', 'Mohammad Rizwan': 'long short',
+    'Shaheen Shah Afridi': 'trim short', 'Fakhar Zaman': 'full short', 'Haris Rauf': 'trim quiff', 'Shadab Khan': 'stubble quiff', 'Naseem Shah': 'stubble curly',
+    'Travis Head': 'moustache short', 'Mitchell Marsh': 'full short', 'Steve Smith': 'clean short', 'Glenn Maxwell': 'stubble short', 'Adam Zampa': 'full long',
+    'Ben Stokes': 'full crop', 'Adil Rashid': 'long short thick', 'Jofra Archer': 'trim crop', 'Heinrich Klaasen': 'full short', 'Kagiso Rabada': 'trim crop',
+    'Lungi Ngidi': 'trim crop', 'David Miller': 'full short', 'Keshav Maharaj': 'full short', 'Kane Williamson': 'full curly', 'Andre Russell': 'full crop',
+    'Sunil Narine': 'clean crop', 'Shimron Hetmyer': 'trim curly', 'Matheesha Pathirana': 'clean curly', 'Faf du Plessis': 'full quiff', 'Tim David': 'full short',
+    'Marcus Stoinis': 'full short',
+  };
+  const BEARDS = ['clean', 'stubble', 'trim', 'full', 'long', 'goatee', 'moustache'], HAIRS = ['short', 'crop', 'quiff', 'long', 'curly'];
+  /** A player's style: { beard, hair, brow }, from STYLES ("beard hair [brow]", in that order) or from his look's beard number. */
+  function style(name, look) {
+    const w = (STYLES[name] || '').split(' ');
+    return {
+      beard: BEARDS.includes(w[0]) ? w[0] : ['clean', 'stubble', 'full'][look ? look.beard : 1] || 'stubble',
+      hair: HAIRS.includes(w[1]) ? w[1] : 'short',
+      brow: w[2] === 'thick' || w[2] === 'thin' ? w[2] : '',
+    };
+  }
+  /** The eleven shirt numbers of a side: the known ones, then a steady number from the name that nobody else in the side wears. */
+  function numbers(team) {
+    if (team._nums) return team._nums;
+    const used = new Set(), out = team.players.map(n => { const k = NUMBERS[n]; if (k && !used.has(k)) { used.add(k); return k; } return 0; });
+    out.forEach((k, i) => {
+      if (k) return;
+      let h = 0; for (const ch of team.players[i]) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+      let n = 1 + (h % 99);
+      while (used.has(n)) n = n % 99 + 1;
+      used.add(n); out[i] = n;
+    });
+    return (team._nums = out);
+  }
+
   const byId = id => TEAMS.find(t => t.id === id) || TEAMS[0];
   /** The team a seat gets when it wants `id` but the other seat has `taken`: the next one round, in the direction dir (+1/-1). */
   function pickOther(id, taken, dir) {
@@ -82,7 +135,7 @@
     };
   }
 
-  const api = { TEAMS, byId, pickOther, lineup, sig };
+  const api = { TEAMS, byId, pickOther, lineup, sig, style, numbers, NUMBERS, STYLES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (root) { root.CK = root.CK || {}; root.CK.Teams = api; }
 })(typeof window !== 'undefined' ? window : null);

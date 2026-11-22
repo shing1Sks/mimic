@@ -2,6 +2,23 @@
 
 Updated just before each approved release, not on every change.
 
+## Chak De Fatte Cricket: play online with a friend (2026-11-23)
+
+- **Online room:** the 2-player lobby gives you a link for a friend anywhere. Their laptop opens the
+  game and draws the match itself from your game's state (no video): their own end of the pitch at
+  full resolution, with the sound, commentary and scoreboard. They scan their phone from that page
+  and it connects straight to your game. Their picture runs only the network's delay behind (plus
+  about half a frame), and their swings are judged against what they saw.
+- **Commentary:** Paaji finishes every line (only a bigger moment takes over, with a fade at a pause),
+  his voice and subtitle start together and the subtitle stays for the whole line, the next ball
+  waits for him, and the clips load from the title screen.
+- **Players:** real national kits with their flags (India, Pakistan and the rest), names and numbers on
+  the back, faces with real beard and hair styles, helmets with grilles, caps, pads and gloves;
+  they blink, breathe and look around; the batter walks out with his bat in hand and his helmet,
+  putting it on as he goes.
+- **Bowling:** a small card while you bowl lists how to bowl each variation (the how-to overlay is
+  gone). The scoreboard never wraps.
+
 ## Chak De Fatte Cricket update (2026-11-22)
 
 From two recorded matches over the browser controller (same Wi-Fi, then over mobile data):

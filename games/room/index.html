@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mimic · Join a friend's game</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #05060c; color: #e8eaee; font-family: Bahnschrift, "Segoe UI", system-ui, sans-serif; overflow: hidden; }
+  #r-pic { position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; overflow: hidden; background: #000; z-index: 0; }
+  #r-video { position: absolute; left: 0; top: 0; display: block; }
+  /* the host's HUD and menus, mirrored: drawn over the picture, nothing to click (the phone plays) */
+  #r-mirror { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
+  #r-mirror #bubble, #r-mirror #visor, #r-mirror .half, #r-mirror #split-line { display: none !important; }
+  #r-join { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: radial-gradient(120% 90% at 50% 0%, #1b1640 0%, #05060c 70%); transition: opacity 0.35s; }
+  body.started #r-join { opacity: 0; pointer-events: none; }
+  .r-card { width: min(460px, calc(100vw - 32px)); text-align: center; }
+  .r-kick { font-size: 12px; letter-spacing: 0.32em; color: #5ee6d0; }
+  .r-card h1 { margin: 10px 0 8px; font-size: clamp(28px, 5vw, 40px); font-style: italic; letter-spacing: 0.02em; }
+  .r-card p { margin: 0 0 22px; color: #a9afbd; line-height: 1.5; }
+  #r-go { font: inherit; font-weight: 800; letter-spacing: 0.14em; font-size: 16px; padding: 14px 34px; border-radius: 99px; border: 0; background: #ffc24d; color: #120f24; cursor: pointer; }
+  #r-go:hover { filter: brightness(1.08); }
+  #r-status { margin-top: 16px; min-height: 20px; font-size: 13px; color: #8a909c; }
+  body:not(.live) #r-status:empty::before { content: 'Connecting to the game…'; }
+  #r-phone { position: fixed; left: 18px; top: 18px; z-index: 10; display: flex; gap: 14px; align-items: center; max-width: min(420px, calc(100vw - 36px)); padding: 12px 16px 12px 12px; border-radius: 14px; background: rgba(12, 10, 30, 0.88); border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 14px 40px rgba(0,0,0,0.45); transition: opacity 0.4s, transform 0.4s; }
+  #r-phone:empty { display: none; }
+  #r-phone .qr { width: 132px; height: 132px; flex: none; background: #fff; border-radius: 8px; padding: 4px; box-sizing: border-box; }
+  #r-phone .qr svg { width: 100%; height: 100%; display: block; }
+  #r-phone b { display: block; font-size: 15px; letter-spacing: 0.04em; margin-bottom: 4px; }
+  #r-phone span { font-size: 13px; color: #a9afbd; line-height: 1.45; }
+  #r-phone.joined { padding: 8px 14px; gap: 10px; opacity: 0.85; }
+  #r-phone.joined b { color: #6fd39a; margin: 0; font-size: 13px; }
+  #r-phone.joined span { font-size: 12px; }
+  #r-lag { position: fixed; right: 12px; bottom: 8px; z-index: 10; font-size: 11px; letter-spacing: 0.1em; color: rgba(255,255,255,0.45); }
+  #r-lag:not(:empty)::before { content: 'PICTURE DELAY '; }
+  body:not(.live) #r-lag { display: none; }
+</style>
+</head>
+<body class="room-guest">
+<div id="r-pic"><video id="r-video" playsinline autoplay muted></video></div>
+<div id="r-mirror"></div>
+<div id="r-phone"></div>
+<div id="r-lag"></div>
+<div id="r-join">
+  <div class="r-card">
+    <div class="r-kick">MIMIC · ONLINE ROOM</div>
+    <h1>Your friend's game</h1>
+    <p>You'll see the match from your own end, with its sound. Then scan the code with your phone and play.</p>
+    <button id="r-go">JOIN THE GAME</button>
+    <div id="r-status"></div>
+  </div>
+</div>
+<script src="../lib/mimic-proto.js"></script>
+<script src="../lib/qr.js"></script>
+<script src="../lib/mimic-room.js"></script>
+<script>window.__room = MimicRoom.guest();</script>
+</body>
+</html>

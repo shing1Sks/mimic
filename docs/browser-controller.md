@@ -172,12 +172,70 @@ Tests: `python games/lib/test/qr-lab.e2e.py` (the Wi-Fi https flow and its recor
 `mimic.js`, the mailbox over HTTP). `python games/lib/test/mimic-link.e2e.py` (Chromium: a game page
 and emulated phones connected over WebRTC).
 
+## Online room by state (cricket)
+
+The friend's laptop draws the match itself; nothing is video. `games/lib/mimic-sync.js` (pure,
+node-tested), `games/lib/mimic-room.js` (transport), `games/cricket/net.js` (what cricket sends).
+
+- **Invite:** `MimicRoom.host({ join: true, ... })` makes the friend link the game's own page,
+  `<game>/?join=<room>`. That page builds the same stadium and joins as a *state* viewer; mimic-link
+  hosts no phones there. Its phone QR carries `&guest=` as below.
+- **Channels:** `st` (unordered, no retransmits): one state packet per host frame, plus 9/17-byte
+  clock pings; a congested link drops a frame rather than queue it (bufferedAmount > 32 KB). `ev`
+  (ordered): events, HUD (`dom` per child of `#hud`, `attrs` for the container), sticky events
+  (the latest kit/screen/flags/settings per key) replayed to anyone joining late.
+- **State packet:** a fixed entity list built identically on both pages: transforms, visibility,
+  material opacity/colour, reparenting, numbers, flags, and each player's 31 bone rotations (32-bit
+  smallest-three) and 5 bone positions. Only what changed in the last 3 frames, plus each entity in
+  full every 20 frames (staggered): a lost packet heals by the next one. ~1.2 KB a frame.
+- **Playout:** the friend draws the newest host frame no newer than `hostNow - D`, D = the floor
+  one-way delay (3 s window) + p95 jitter + 1 ms; D rises at once and comes back down over ~0.3 s.
+  Every host frame then comes out once, evenly paced. `?smooth=1`: one frame more delay, blended.
+- **Events at the picture's moment:** every event carries the host time it happened; the friend's
+  page runs it when the frame it draws reaches that time, so sound, commentary and HUD stay with the
+  picture. The friend's page animates crowd, cheerleaders, trail and DRS tubes itself from numbers in
+  the state.
+- **Timing:** the friend reports the median age of what it draws (host time of the frame vs now on
+  the host's clock); `MimicRoom.delayFor()` returns it and cricket adds it to that batter's lag.
+- Measured headless (one laptop, six pages, ~25 fps): every drawn frame matches the host frame it
+  shows (1500+ frames, worst 0.5 mm); encode ~0.5 ms, draw ~0.5-0.9 ms a frame.
+
+Tests: `node games/lib/test/mimic-sync.test.js`, `python games/lib/test/room-state.e2e.py`,
+`python games/lib/test/room-spectate.e2e.py <outdir>`.
+
+## Online room by video (any game)
+
+`games/lib/mimic-room.js` plus the page `games/room/` (cricket uses it; any game can).
+
+- The host's game calls `MimicRoom.host({ game, mirror: [ids], audio: () => ({ ctx, node }) })` and,
+  after drawing each frame, `MimicRoom.frame(canvas, x, y, w, h)` with the part of the canvas the
+  friend should see. `MimicRoom.inviteUrl()` is the friend's link: the phone link with `/room/`
+  instead of `/phone/` (same server, same room, same mailbox) plus `game=`.
+- The friend's page joins the room as a viewer (id `v-...`; mimic-link hands those messages to
+  mimic-room) and offers to receive one video and one audio track and a `room` data channel. The host
+  answers with a canvas stream (at the friend's window shape, at most 1280x720, 30 fps, game sound
+  from a MediaStreamDestination on the game's mix). The data channel carries the mirrored DOM
+  (`{t:'dom', id, html}`, applied by morphing so CSS transitions still run), the phone link,
+  `dims`, clock pings, and the friend's `size` and measured `delay`.
+- The friend's phone link carries `&guest=<viewer id>`; the phone sends it in its `hello`, and
+  `MimicLink.phones()[].guest` names the viewer. That is how the game knows a seat is far away.
+- Picture delay: every streamed frame has a strip of 24 blocks under the picture (sync, 20 bits of
+  the host's `performance.now()` in ms, parity). The friend's page reads it back with
+  `requestVideoFrameCallback` as each frame is shown, maps it through a ping-measured clock offset,
+  and reports the median delay; `MimicRoom.delayFor(guestId)` returns it. Cricket adds it to the
+  swing lag of that batter.
+- Elements tagged `data-room="host"` or `data-room="guest"` show on one side only (the guest page has
+  `body.room-guest`).
+- Video starts at 2.5 Mbps (`x-google-start-bitrate` in the offer), up to 4.5 Mbps. Over TURN that is
+  roughly 200-350 MB per match.
+
+Test: `python games/lib/test/room.e2e.py` (host page, friend's page and two phone pages, headless).
+
 ## Limits
 
-- **No TURN server.** Only public STUN (`stun:stun.l.google.com:19302`). A phone and a PC on the
-  same Wi-Fi connect directly. Some networks block that (guest Wi-Fi with client isolation, some
-  corporate networks, phone on mobile data behind a strict carrier NAT). Those will not connect
-  until a TURN server is added to the ICE list.
+- **TURN only on the site.** The site serves Cloudflare TURN credentials at `/ice`; the dev server
+  has STUN only (or the site's TURN with `serve.py --public`). Without TURN, networks that block a
+  direct link (client-isolated guest Wi-Fi, strict carrier NAT) cannot connect.
 - **Vibration:** Android only. iOS Safari has no vibration API.
 - **Sensor rate:** browsers give about 60 Hz (Chrome caps sensors at 60 Hz). The app sends more
   often over Bluetooth, so very fast swings show less detail.

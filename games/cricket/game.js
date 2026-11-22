@@ -12,6 +12,9 @@
   const AU = CK.Audio, SFX = AU.SFX;
   const T = THREE;
   const $ = id => document.getElementById(id);
+  // the online room, the friend's side (?join=<room>): this page draws the host's match (net.js), never runs one
+  const GUEST = !!new URLSearchParams(location.search).get('join') && !!window.MimicSync && !!CK.Net;
+  let net = null;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const lerp = (a, b, t) => a + (b - a) * t;
   const rand = (a, b) => a + Math.random() * (b - a);
@@ -36,8 +39,6 @@
     hand1: { label: 'P2 PLAYS', vals: ['RIGHT-HANDED', 'LEFT-HANDED'], def: 0 },
     cpu: { label: 'COMPUTER', vals: ['CLUB', 'PRO'], def: 0 },
     replays: { label: 'REPLAYS', vals: ['ON', 'OFF'], def: 0 },
-    // the how-to (CK.Demo) before each innings a phone bats or bowls in
-    howto: { label: 'HOW-TO BEFORE PLAY', vals: ['ON', 'OFF'], def: 0 },
     // first person: bat from behind the helmet grille, bowl from the bowler's eyes (big moments stay broadcast)
     camera: { label: 'CAMERA', vals: ['BROADCAST', 'FIRST PERSON'], def: 0 },
     comm: { label: 'COMMENTARY', vals: ['ON', 'OFF'], def: 0 },
@@ -107,7 +108,46 @@
   $('stage').appendChild(renderer.domElement);
   const scene = new T.Scene();
   const camera = new T.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 2000);
-  addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
+  addEventListener('resize', () => { room.cw = -1; sizeCanvas(); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
+  // ---------------------------------------------------------------------------------
+  // The online room (games/lib/mimic-room.js): a friend plays from their own laptop. Their phone came
+  // through their room page, so its seat is "remote": the canvas grows a second view to the right of
+  // the screen (out of sight here) at their window's shape, from their end of the pitch, and that view
+  // streams to them with the game's sound; the HUD and menus are mirrored as DOM. Their swings are
+  // judged against what they saw: their picture runs MimicRoom.delayFor() ms behind the game.
+  const room = { seat: -1, guest: null, kind: null, wide: false, wg: 0, cw: -1, ch: -1, t: 0 };
+  if (window.MimicRoom && !GUEST) {
+    MimicRoom.host({ game: 'cricket', join: !!(window.MimicSync && CK.Net), mirror: ['title', 'solo', 'lobby', 'pause', 'break', 'end', 'flash'], mirrorChildren: ['hud'],
+      audio: () => { AU.init(); return AU.state.ctx ? { ctx: AU.state.ctx, node: AU.state.master } : null; },
+      onViewer: () => sendSettings() });
+    MimicRoom.on('change', () => { room.t = 0; if (G.screen === 'lobby') renderOnline(); });
+  }
+  /** Which seat plays from a friend's room page (-1: none), checked a few times a second. */
+  function roomFrame(dt) {
+    room.t -= dt;
+    if (room.t > 0) return;
+    room.t = 0.4;
+    room.seat = -1; room.guest = null; room.kind = null;
+    if (!window.MimicRoom || !MimicRoom.active || !window.MimicLink) return;
+    const ps = MimicLink.phones();
+    seats.forEach((s, i) => {
+      if (s.kind !== 'phone' || !s.mc || s.mc.padIndex == null) return;
+      const ph = ps.find(p => p.index === s.mc.padIndex && p.guest);
+      const v = ph && MimicRoom.viewers().find(x => x.id === ph.guest && x.open);
+      if (v) { room.seat = i; room.guest = ph.guest; room.kind = v.kind; }
+    });
+  }
+  /** ms the seat's player sees the game late (their room page's picture delay), 0 for a player here. */
+  const remoteLag = s => (room.seat >= 0 && s === seats[room.seat] && window.MimicRoom ? MimicRoom.delayFor(room.guest) : 0);
+  /** The canvas: the screen, plus the friend's view beside it while a match has a remote seat. */
+  function sizeCanvas() {
+    room.wide = room.seat >= 0 && room.kind === 'view' && G.inGame && !!G.match;   // a video friend: their view drawn here too
+    room.wg = room.wide ? Math.round(innerHeight * MimicRoom.aspect) : 0;
+    const w = innerWidth + room.wg, h = innerHeight;
+    if (w === room.cw && h === room.ch) return;
+    room.cw = w; room.ch = h;
+    renderer.setSize(w, h);
+  }
   const world = CK.buildWorld(scene);
   const prTop = () => (opt('gfx') === 'LOW' ? Math.min(PR_MAX, 0.8) : PR_MAX);
   function setShadows(on) { dyn.shadows = on; dyn.low = 0; world.lights.key.castShadow = on; }
@@ -148,7 +188,15 @@
   scene.add(halo); halo.visible = false;
   const batMesh = CK.makeBat(); scene.add(batMesh); batMesh.visible = false;
   const gloves = new T.Group(); gloves.visible = false; batMesh.add(gloves);
-  {
+  if (CK.Gear) {
+    // the bat's frame: the top hand at the origin, the blade along -z, the face +y; the glove's palm frame: fingers along +y
+    gloves.userData.mat = new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, map: CK.Gear.texture('mum') });
+    [[0.012, 1], [-0.12, -1]].forEach(([z, s]) => {
+      const g = new T.Mesh(CK.Gear.gloveGeo(s, false), gloves.userData.mat);
+      g.position.set(0, -0.005, z); g.rotation.set(0, 0, 0); g.rotateX(-Math.PI / 2); g.rotateY(s > 0 ? Math.PI / 2 : -Math.PI / 2);
+      g.translateY(-0.05); gloves.add(g);
+    });
+  } else {
     const gm = new T.MeshStandardMaterial({ color: 0xf2f2ee, roughness: 0.75 }), pm = new T.MeshStandardMaterial({ color: 0x2b2f3a, roughness: 0.9 });
     [-0.02, -0.135].forEach((z, i) => {
       const g = new T.Mesh(new T.BoxGeometry(0.085, 0.075, 0.1), gm); g.position.set(0, 0.012, z); gloves.add(g);
@@ -208,13 +256,15 @@
   pitchMark.rotation.x = -Math.PI / 2; pitchMark.position.y = 0.012; scene.add(pitchMark);
   const people = { ready: false, batter: null, nonStriker: null, bowler: null, fielders: [], umpire: null };
   CK.Rig.onReady(() => {
-    people.batter = CK.makeAthlete(Object.assign({}, KITS[0]));
-    people.nonStriker = CK.makeAthlete(Object.assign({}, KITS[0]));
-    people.outgoing = CK.makeAthlete(Object.assign({}, KITS[0]));   // the man just out, walking off
+    people.batter = CK.makeAthlete(Object.assign({}, KITS[0], { role: 'bat' }));
+    people.nonStriker = CK.makeAthlete(Object.assign({}, KITS[0], { role: 'bat' }));
+    people.outgoing = CK.makeAthlete(Object.assign({}, KITS[0], { role: 'bat' }));   // the man just out, walking off
     people.outgoing.root.visible = false; scene.add(people.outgoing.root);
-    people.bowler = CK.makeAthlete(Object.assign({}, KITS[1], { pads: false, helmet: null, gloves: null }));
-    people.umpire = CK.makeAthlete({ body: 'm', shirt: 0xf0f0ea, pants: 0x1c1c22, skin: 0xc68642, hair: 0x2a2a2a });
-    for (let i = 0; i < 10; i++) people.fielders.push(CK.makeAthlete(Object.assign({}, KITS[1], { body: 'm', pads: i === 0, gloves: i === 0 ? 0xf2f2f2 : null, helmet: null, skin: [0xd9a273, 0x8d5524, 0xc68642, 0xf1c8a0][i % 4] })));
+    people.nsBat = CK.makeBat(); scene.add(people.nsBat);
+    people.outBat = CK.makeBat(); people.outBat.visible = false; scene.add(people.outBat);
+    people.bowler = CK.makeAthlete(Object.assign({}, KITS[1], { pads: false, helmet: null, gloves: null, role: 'bowl' }));
+    people.umpire = CK.makeAthlete({ body: 'm', shirt: 0xf0f0ea, pants: 0x1c1c22, skin: 0xc68642, hair: 0x2a2a2a, role: 'ump', team: 'ump' });
+    for (let i = 0; i < 10; i++) people.fielders.push(CK.makeAthlete(Object.assign({}, KITS[1], { body: 'm', pads: i === 0, gloves: i === 0 ? 0xf2f2f2 : null, helmet: null, role: i === 0 ? 'keeper' : 'field', skin: [0xd9a273, 0x8d5524, 0xc68642, 0xf1c8a0][i % 4] })));
     [people.batter, people.nonStriker, people.bowler, people.umpire, ...people.fielders].forEach(a => scene.add(a.root));
     // the stadium's cheerleaders: two on each of four platforms just past the rope
     people.cheer = [];
@@ -255,13 +305,15 @@
       }
     }
     people.ready = true;
+    startNet();
     cheerN = -1; cheerFrame(0);   // the cheerleaders on their platforms from the start (the title shows the ground)
     try { CK.crowdImpostors(scene, world.crowd, CK.bakeCrowdAtlas(renderer)); } catch (e) { console.warn('crowd atlas', e); }
     paintTeams();
   });
   function paintTeams() {
     if (!people.ready || !G.match) return;
-    world.flags.paint(teamOf(0).shirt, teamOf(1).shirt);   // the fans: P1's side on the +x half, P2's on the -x half
+    world.flags.paint(teamOf(0).shirt, teamOf(1).shirt, teamOf(0).id, teamOf(1).id);   // the fans' flags: P1's side on the +x half, P2's on the -x half
+    world.screen({ flags: [teamOf(0).id, teamOf(1).id] });   // and the two flags on the big screens
     const inn = MA.current(G.match), bk = kitOf(inn.bat), fk = kitOf(inn.bowl);
     [people.batter, people.nonStriker, people.outgoing].forEach(a => a.paint(bk));
     people.bowler.paint(fk);
@@ -272,14 +324,22 @@
   function castPlayers() {
     if (!people.ready || !G.match) return;
     const i = MA.current(G.match), bt = teamOf(i.bat), bw = teamOf(i.bowl), Lb = CK.Teams.lineup(bt), Lw = CK.Teams.lineup(bw);
-    people.batter.look(bt.looks[Lb.batterIdx(i.wkts)]);
-    people.nonStriker.look(bt.looks[Lb.batterIdx(i.wkts + 1)]);
-    if (people.outgoing) people.outgoing.look(bt.looks[Lb.batterIdx(i.wkts - 1)]);
+    // each man in his side's kit, his own name and number on his back, his own face (CK.Kits)
+    const dress = (A, tm, k, role) => {
+      const name = tm.players[k], look = tm.looks[k];
+      if (A.dress) A.dress({ team: tm, name, number: CK.Teams.numbers(tm)[k], look, style: CK.Teams.style(name, look), keeper: role === 'keeper', role });
+      else A.look(look);
+    };
+    dress(people.batter, bt, Lb.batterIdx(i.wkts), 'bat');
+    if (gloves.userData.mat && CK.Gear) { const gt = CK.Gear.texture(bt.id); if (gloves.userData.mat.map !== gt) { gloves.userData.mat.map = gt; gloves.userData.mat.needsUpdate = true; } }
+    dress(people.nonStriker, bt, Lb.batterIdx(i.wkts + 1), 'bat');
+    if (people.outgoing) dress(people.outgoing, bt, Lb.batterIdx(i.wkts - 1), 'bat');
     const bi = Lw.bowlerIdx(Math.floor(i.balls / 6)), fl = Lw.fielders(bi);
-    people.bowler.look(bw.looks[bi]);
+    dress(people.bowler, bw, bi, 'bowl');
     G.bowlSig = CK.Teams.sig(bw.players[bi]);
-    people.fielders.forEach((a, k) => a.look(bw.looks[fl[k]]));
+    people.fielders.forEach((a, k) => dress(a, bw, fl[k], k === 0 ? 'keeper' : 'field'));
     G.fieldNames = fl.map(k => bw.players[k]);
+    if (people.umpire.dress) people.umpire.dress({ team: { id: 'ump' }, name: 'Umpire', number: null, look: { skin: 2, beard: 1, hair: 'g' }, style: { beard: 'trim', hair: 'short' } });
   }
   /**
    * A wicket celebration in the bowler's own style (teams.js sig): wings (arms spread like a glider),
@@ -338,10 +398,10 @@
     showScreen(null);
     $('hud').classList.remove('hidden');
     paintTeams();
+    paajiPlayer.stop();
     newBall(true);
     banner(kind === 'versus' ? `${G.match.names[inn().bat]} BATS` : kind === 'nets-bowl' ? 'YOU BOWL' : 'YOU BAT', `${overs} OVER${overs > 1 ? 'S' : ''} · ${wk} WICKET${wk > 1 ? 'S' : ''}`, 'neutral', 2.2);
     walkOut('start');
-    howTo();
     updateScorebug();
     AU.resume();
   }
@@ -349,18 +409,22 @@
   // Paaji (CK.Commentary): the voice through the game's audio, his line as the subtitle
   const paajiPlayer = CK.Commentary.createPlayer({
     lines: CK.CommentaryLines, base: 'assets/commentary/',
-    audio: () => (AU.state.ctx ? { ctx: AU.state.ctx, out: AU.state.master } : null),   // muted = master gain 0
+    // muted = master gain 0; the crowd dips under his voice
+    audio: () => (AU.state.ctx ? { ctx: AU.state.ctx, out: AU.state.master, duck: () => [AU.state.crowdBus] } : null),
     enabled: () => opt('comm') === 'ON', volume: () => opt('commVol'),
-    onLine: l => say(l.text, Math.max(2.2, l.text.length * 0.06)),
+    onLine: (l, secs) => say(l.text, secs),   // shown when his voice starts, for as long as it runs
+    onVoice: (l, delay) => { if (net && net.line) net.line(l.id, delay); },
   });
-  let paajiLoading = false;
-  function paaji(kind, at) {
+  paajiPlayer.load();   // from the title screen on, each moment's next line fetched and decoded before it is needed
+  /** opts.queue (ms): never cut in; wait that long for the line in progress to finish instead. */
+  function paaji(kind, at, opts) {
     if (opt('comm') !== 'ON') return null;
-    if (!paajiLoading && AU.state.ctx) { paajiLoading = true; paajiPlayer.load(); }
-    return paajiPlayer.moment(kind, at);
+    return paajiPlayer.moment(kind, at, opts);
   }
   /** A call a little after the moment; dropped if the tab was hidden and it fires more than 1 s late. */
-  function paajiLater(kind, ms) { const due = performance.now() + ms; setTimeout(() => paaji(kind, due), ms); }
+  function paajiLater(kind, ms, opts) { const due = performance.now() + ms; setTimeout(() => paaji(kind, due, opts), ms); }
+  /** The next ball waits for Paaji to finish his line (never more than 4 s past its usual pause). over: s past it. */
+  const paajiHolds = over => CK.Commentary.holds(paajiPlayer.busy, over);
   /**
    * The crowd chanting a side's name (assets/chants: one voice per team), layered nine times with
    * a little detune, delay, pan and a stadium echo, so it sounds like a stand. seat: 0 / 1.
@@ -369,7 +433,8 @@
   let chantMan = null, chantOut = null, chantBusy = 0;
   async function teamChant(seat, k) {
     const ctx = AU.state.ctx;
-    if (!ctx || !G.match || performance.now() < chantBusy) return;
+    if (!ctx || (!G.match && !GUEST) || performance.now() < chantBusy) return;
+    if (net && net.chant) net.chant(seat, k);
     const tm = teamOf(seat);
     try {
       if (!chantMan) chantMan = await (await fetch('assets/chants/manifest.json')).json();
@@ -441,7 +506,7 @@
   function teamCanvas(tm, w, h, draw) {
     const c = document.createElement('canvas'); c.width = w; c.height = h;
     draw(c.getContext('2d'), hex6(tm.shirt), hex6(tm.accent));
-    const t = new T.CanvasTexture(c); t.colorSpace = T.SRGBColorSpace; return t;
+    const t = new T.CanvasTexture(c); t.colorSpace = T.SRGBColorSpace; t.encoding = T.sRGBEncoding; return t;   // (r149 reads encoding)
   }
   function fanFlag() {
     const geo = new T.PlaneGeometry(1.5, 0.95, 14, 1);
@@ -456,8 +521,8 @@
     const tm = teamOf(i), key = tm.id;
     if (!fanTex[key]) {
       fanTex[key] = {
-        body: teamCanvas(tm, 160, 100, (x, a, b) => { x.clearRect(0, 0, 160, 100); x.fillStyle = a; x.beginPath(); x.ellipse(80, 50, 78, 46, 0, 0, Math.PI * 2); x.fill(); x.fillStyle = b; x.fillRect(4, 40, 152, 20); x.fillStyle = a === '#ffffff' || a === '#f2f2f2' ? '#c8102e' : '#ffffff'; x.font = 'bold 40px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(tm.short, 80, 52); }),
-        flag: teamCanvas(tm, 192, 120, (x, a, b) => { x.fillStyle = a; x.fillRect(0, 0, 192, 120); x.fillStyle = b; x.fillRect(0, 44, 192, 32); x.fillStyle = a; x.font = 'bold 30px sans-serif'; x.textAlign = 'center'; x.fillText(tm.short, 96, 71); }),
+        body: CK.Kits && CK.Kits.FLAGS.includes(tm.id) ? teamCanvas(tm, 160, 100, x => { x.clearRect(0, 0, 160, 100); x.save(); x.beginPath(); x.ellipse(80, 50, 78, 46, 0, 0, Math.PI * 2); x.clip(); CK.Kits.drawFlag(x, tm.id, 0, 0, 160, 100); x.restore(); }) : teamCanvas(tm, 160, 100, (x, a, b) => { x.clearRect(0, 0, 160, 100); x.fillStyle = a; x.beginPath(); x.ellipse(80, 50, 78, 46, 0, 0, Math.PI * 2); x.fill(); x.fillStyle = b; x.fillRect(4, 40, 152, 20); x.fillStyle = a === '#ffffff' || a === '#f2f2f2' ? '#c8102e' : '#ffffff'; x.font = 'bold 40px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(tm.short, 80, 52); }),
+        flag: CK.Kits && CK.Kits.FLAGS.includes(tm.id) ? teamCanvas(tm, 192, 120, x => CK.Kits.drawFlag(x, tm.id, 0, 0, 192, 120)) : teamCanvas(tm, 192, 120, (x, a, b) => { x.fillStyle = a; x.fillRect(0, 0, 192, 120); x.fillStyle = b; x.fillRect(0, 44, 192, 32); x.fillStyle = a; x.font = 'bold 30px sans-serif'; x.textAlign = 'center'; x.fillText(tm.short, 96, 71); }),
       };
     }
     for (const f of people.fans) {
@@ -518,10 +583,12 @@
     const A = g.who === 'batter' ? people.batter : g.who === 'fielder' ? people.fielders[g.by] : people.bowler;
     if (!A) { el.classList.remove('on'); return; }
     // split-screen: whichever half sees him (each half has its own camera)
-    const split = (G.views || []).length > 1, halves = split ? [0, 1] : [0];
+    const far = room.seat >= 0 && G.inGame && !!G.match;
+    const split = (G.views || []).length > 1 && !far, halves = split ? [0, 1] : [0];
+    const own = far && (G.views || []).length > 1 ? camSt[1 - room.seat].cam : camera;   // the room: this screen's view only
     let at = null;
     for (const i of halves) {
-      A.root.getWorldPosition(_bubP); _bubP.y += 2.3; _bubP.project(split ? camSt[i].cam : camera);
+      A.root.getWorldPosition(_bubP); _bubP.y += 2.3; _bubP.project(split ? camSt[i].cam : own);
       if (_bubP.z <= 1 && Math.abs(_bubP.x) <= 1.05 && Math.abs(_bubP.y) <= 1.05) { const w = split ? innerWidth / 2 : innerWidth; at = { x: i * (split ? w : 0) + (_bubP.x + 1) / 2 * w, y: (1 - _bubP.y) / 2 * innerHeight }; break; }
     }
     if (!at) { el.classList.remove('on'); return; }
@@ -560,7 +627,7 @@
       const note = CK.Story.batterNote(G.story, { inn: G.match.i, wk: inn().wkts });
       if (note) paajiLater(note, 700);
     }
-    if (G.helmetOff && people.batter && people.batter.helmet) { people.batter.helmet.visible = true; G.helmetOff = false; }
+    G.helmetOff = false;   // (applyFrame puts it back on)
     G.milestone = null; G.skipReplay = false;
     if (!first) updateScorebug();
   }
@@ -677,7 +744,7 @@
 
   // the computer bowler: a style per innings, a varied plan per ball, human-sized errors
   function cpuBowlerFrame(dt) {
-    if (G.phase === 'ready' && G.phaseT > 1.0) { G.aim = cpuAim(); G.phase = 'runup'; G.phaseT = 0; G.bowler.phase = 'run'; G.cutAt = 0.85; prompts(); }
+    if (G.phase === 'ready' && G.phaseT > 1.0 && !paajiHolds(G.phaseT - 1.0)) { G.aim = cpuAim(); G.phase = 'runup'; G.phaseT = 0; G.bowler.phase = 'run'; G.cutAt = 0.85; prompts(); }
     else if (G.phase === 'runup' && G.phaseT > runT() + 0.25) {
       const sk = cpuSkill(), spin = G.cpuStyle === 'spin';
       // a seamer mixes in a slower ball and the odd cutter, as a person can with the hand
@@ -777,7 +844,8 @@
   }
   const webBat = () => { const inp = batSeat().input; return !!(inp && inp.S.web); };
   // a browser phone is timed at capture: it needs less of the swing delay than Bluetooth (bat.js BAT.WEB.LEAD_MS)
-  const lagMs = () => (batSeat().kind === 'phone' ? opt('lag') - (webBat() ? BA.BAT.WEB.LEAD_MS : 0) : Math.min(30, opt('lag')));
+  // a friend batting from their room page swings at a picture remoteLag() ms old: judged against it
+  const lagMs = () => (batSeat().kind === 'phone' ? opt('lag') - (webBat() ? BA.BAT.WEB.LEAD_MS : 0) + remoteLag(batSeat()) : Math.min(30, opt('lag')));
   /** Human batter: decide once the swing's samples are in, or keep waiting while it speeds up. */
   function judgeContact(now) {
     feedTracker();
@@ -1037,8 +1105,8 @@
     const ib = G.match.i, bw = inn().wkts;
     const before = (G.batRuns && G.batRuns[ib][bw]) || 0;
     if (rec.runs && rec.extra !== 'wd' && G.batRuns) G.batRuns[ib][bw] = before + rec.runs;
-    if (before < 20 && G.batRuns && G.batRuns[ib][bw] >= 20) paajiLater('quick20', 2600);
-    if (rec.wicket && bw + 1 === 3) paajiLater('threeWickets', 2600);
+    if (before < 20 && G.batRuns && G.batRuns[ib][bw] >= 20) paaji('quick20', undefined, { queue: 6000 });
+    if (rec.wicket && bw + 1 === 3) paaji('threeWickets', undefined, { queue: 6000 });
     if (G.story) CK.Story.ball(G.story, { inn: ib, wk: bw, bowler: bowlerName(), runs: rec.runs || 0, extra: rec.extra || null, wicket: !!rec.wicket, batName: CK.Teams.lineup(teamOf(inn().bat)).batter(bw) });
     const mile = rec.extra !== 'wd' && G.batRuns ? CK.Story.milestone(before, G.batRuns[ib][bw] || 0) : null;
     const ev = MA.record(G.match, rec);
@@ -1065,13 +1133,13 @@
   function milestone(kind, ib, bw) {
     const name = CK.Teams.lineup(teamOf(inn().bat)).batter(bw), b = CK.Story.batter(G.story, { inn: ib, wk: bw });
     banner(kind === 'hundred' ? 'HUNDRED!' : 'FIFTY!', name.toUpperCase() + ' · ' + b.runs + ' (' + b.balls + ')', 'good', 2.8);
-    paajiLater(kind, 250);
+    paajiLater(kind, 250, { queue: 5000 });
     G.batCheer = 3.0; G.milestone = { kind, t: 0 };
     crowdReact('cheer', 1); world.crowd.excite = 1.4; world.crowd.wave = { a: Math.random() * 6.28, t: 7 }; world.boards.flash(3, true);
     setTimeout(() => teamChant(inn().bat, 1.1), 1600);
     if (kind === 'hundred') {
       SFX.band('six');
-      if (people.batter.helmet) { people.batter.helmet.visible = false; G.helmetOff = true; }   // helmet off, face to the sky
+      G.helmetOff = true;   // helmet off, face to the sky (applyFrame)
       const ex = CK.Hype.extras(gfxLevel());
       for (let i = 0; i < Math.round(10 * ex.fireworks); i++) setTimeout(() => { const a = Math.random() * 6.28; world.fx.burst({ x: Math.sin(a) * 80, y: 34 + Math.random() * 12, z: PH.FIELD.CZ + Math.cos(a) * 80 }, 0.6 + Math.random() * 0.5); }, i * 220);
     }
@@ -1091,25 +1159,17 @@
     showScreen('break');
     G.cpuStyle = 'pace';
   }
-  function continueAfterBreak() { showScreen(null); paintTeams(); newBall(true); banner(`${G.match.names[inn().bat]} BATS`, MA.need(G.match).text, 'neutral', 2); walkOut('chase'); howTo(); }
-  /** The how-to for each phone about to bat or bowl this innings (skippable; play waits for it). */
-  function howTo() {
-    if (opt('howto') !== 'ON' || !CK.Demo) return;
-    const roles = [];
-    const add = (s, role) => { if (s && s.kind === 'phone') roles.push({ role, who: G.kind === 'versus' ? s.name : '', keys: { a: keyA(s.mc), centre: keyC(s.mc) } }); };
-    add(bowlSeat(), 'bowl'); add(batSeat(), 'bat');
-    if (!roles.length) return;
-    G.demo = true; seats.forEach(s => s.input && s.input.drain());
-    CK.Demo.show(roles, () => { G.demo = false; seats.forEach(s => s.input && s.input.drain()); });
-  }
+  function continueAfterBreak() { showScreen(null); paintTeams(); newBall(true); banner(`${G.match.names[inn().bat]} BATS`, MA.need(G.match).text, 'neutral', 2); walkOut('chase'); }
   /**
    * The striker walks out to the middle: at the start of each innings and after a wicket. The first
    * ball waits for him and for Paaji's line (so the welcome is never cut off); HOLD skips it.
    */
   function walkOut(kind) {
     const name = CK.Teams.lineup(teamOf(inn().bat)).batter(inn().wkts);
+    // a brisk walk (1.7-2 m/s, the walk cycle's own pace) from just inside the circle's edge of the shot
     const side = batSide(), dur = kind === 'wicket' ? 3.2 : 4.2;
-    G.walk = { t: 0, dur, kind, from: kind === 'wicket' ? { x: -7 * side, z: 11 } : { x: -9 * side, z: 14 } };
+    G.walk = { t: 0, dur, kind, from: kind === 'wicket' ? { x: -3.2 * side, z: 4.4 } : { x: -4.2 * side, z: 6.2 } };
+    if (people.ready) { people.batter.helmetTo('hand', side > 0 ? 'left' : 'right'); if (kind === 'wicket' && people.outgoing) people.outgoing.helmetTo('hand', side > 0 ? 'left' : 'right'); }
     const show = () => { if (G.walk) banner(kind === 'wicket' ? 'NEW BATTER' : 'OPENING THE BATTING', name.toUpperCase() + ' · ' + teamOf(inn().bat).short, 'neutral', 2.2); };
     if (kind === 'wicket') show(); else setTimeout(show, 2300);
     const L = CK.Teams.lineup(teamOf(inn().bat)), n = L.batterIdx(inn().wkts) + 1, bt = teamOf(inn().bat);
@@ -1118,10 +1178,37 @@
     paaji(kind === 'start' ? 'start' : kind === 'chase' ? 'chaseStart' : 'newBatter');
     prompts();
   }
+  // eased so he walks in at a steady pace and slows into his crease (no sprint at the start)
+  const walkEase = k => k * (1.35 - 0.35 * k);
   function walkPos() {
-    const W = G.walk, side = batSide(), k = clamp(W.t / W.dur, 0, 1), e = k * (2 - k);
+    const W = G.walk, side = batSide(), k = clamp(W.t / W.dur, 0, 1), e = walkEase(k);
     const to = { x: -0.42 * side, z: -1.0 };
-    return { x: lerp(W.from.x, to.x, e), z: lerp(W.from.z, to.z, e), k, dir: Math.atan2(to.x - W.from.x, to.z - W.from.z) };
+    const d = Math.hypot(to.x - W.from.x, to.z - W.from.z), speed = d / W.dur * (1.35 - 0.7 * k);
+    return { x: lerp(W.from.x, to.x, e), z: lerp(W.from.z, to.z, e), k, dir: Math.atan2(to.x - W.from.x, to.z - W.from.z), speed };
+  }
+  const smooth01 = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+  /**
+   * The striker walking out (CK.Anim.walkOutBeat): bat in his bottom hand swinging with the walk,
+   * helmet in the other hand until he puts it on halfway, a strap of his glove pulled tight, a look at
+   * the sky, a twirl of the bat; his eyes on the middle. The bat's place comes from his hand (holdBat).
+   */
+  function walkOutState() {
+    const w = walkPos(), side = batSide(), b = CK.Anim.walkOutBeat(w.k);
+    const bh = side > 0 ? 'right' : 'left', fh = side > 0 ? 'left' : 'right', sf = fh === 'right' ? 1 : -1;
+    const f = CK.Anim.forwardOf(w.dir), r = CK.Anim.rightOf(w.dir);
+    const st = { x: w.x, z: w.z, facing: w.dir, twist: 0, crouch: 0, run: 0, walk: b.walk, walkRate: clamp(w.speed / 1.5, 0.75, 1.5),
+      look: b.lookPitch > 0.05 ? null : { x: 0, y: 1.2, z: -12 }, lookPitch: b.lookPitch, helmet: b.helmet, arms: null };
+    if (b.reach === 'head') {
+      // the free hand lifts the helmet up over his head, then comes back down
+      const e = b.reachK, at = (u, y, fw) => ({ x: w.x + r.x * u + f.x * fw, y, z: w.z + r.z * u + f.z * fw });
+      st.arms = { [fh]: { hand: at(sf * lerp(0.28, 0.1, e), lerp(0.95, 1.92, e), lerp(0.05, 0.12, e)) } };
+    } else if (b.reach === 'glove') {
+      // both hands in front of him: the free hand at the bat hand's wrist strap
+      const e = b.reachK, c = { x: w.x + f.x * 0.3 * e, y: 1.0 + 0.05 * e, z: w.z + f.z * 0.3 * e };
+      const bhP = { x: c.x - r.x * sf * 0.04, y: c.y, z: c.z - r.z * sf * 0.04 };
+      st.arms = { [bh]: { hand: bhP }, [fh]: { hand: { x: bhP.x + r.x * sf * 0.09 * (2 - e), y: bhP.y + 0.04, z: bhP.z + r.z * sf * 0.09 * (2 - e) } } };
+    }
+    return { st, bat: { carry: bh, style: b.reach === 'glove' ? 'carry' : 'carry', twirl: b.twirl, p: { x: w.x, y: 0.8, z: w.z }, q: { x: 0, y: 0, z: 0, w: 1 } } };
   }
   function walkFrame(dt) {
     const W = G.walk;
@@ -1129,18 +1216,23 @@
     const skip = skipKey;
     skipKey = false;
     if (skip && W.t > 0.4) { W.t = W.dur; W.skipped = true; }
-    // after a wicket the man who is out walks off, head down, crossing the new batter on his way in
+    // after a wicket the man who is out walks off, helmet off in his hand, head down, crossing the new batter on his way in
     const O = people.outgoing;
     if (W.kind === 'wicket' && O && W.t < W.dur) {
-      const w = walkPos(), side = batSide(), k = clamp(W.t / W.dur, 0, 1);
+      const w = walkPos(), side = batSide(), k = clamp(W.t / W.dur, 0, 1), b = CK.Anim.walkOffBeat(k);
       const fx = Math.sin(w.dir), fz = Math.cos(w.dir);
       const from = { x: -0.42 * side + fz * 2.4, z: -1.0 - fx * 2.4 }, to = { x: W.from.x + fz * 2.4, z: W.from.z - fx * 2.4 };
-      const x = lerp(from.x, to.x, k * 0.85), z = lerp(from.z, to.z, k * 0.85);
+      const x = lerp(from.x, to.x, k * 0.85), z = lerp(from.z, to.z, k * 0.85), sp = Math.hypot(to.x - from.x, to.z - from.z) * 0.85 / W.dur;
       O.root.visible = true;
-      CK.poseAthlete(O, { x, z, facing: Math.atan2(to.x - from.x, to.z - from.z), twist: 0, crouch: 0.12, run: 0.34, arms: null }, dt);
-    } else if (O) O.root.visible = false;
+      if (O.helmetAt !== 'hand') O.helmetTo('hand', side > 0 ? 'left' : 'right');
+      CK.poseAthlete(O, { x, z, facing: Math.atan2(to.x - from.x, to.z - from.z), twist: 0, crouch: 0.06, run: 0, walk: 1, walkRate: clamp(sp / 1.6, 0.7, 1.3), lookPitch: b.lookPitch, lookYaw: b.lookYaw * side, arms: null }, dt);
+      if (people.outBat) CK.holdBat(O, side > 0 ? 'right' : 'left', people.outBat, 'drag');
+    } else if (O) { O.root.visible = false; if (people.outBat) people.outBat.visible = false; }
     // done when he is in and Paaji has finished his line (never more than 3.5 s more)
-    if (W.t >= W.dur && (W.skipped || !paajiPlayer.speaking || W.t > W.dur + 3.5)) { G.walk = null; G.phaseT = 0; if (O) O.root.visible = false; $('pcard').classList.remove('on'); prompts(); }
+    if (W.t >= W.dur && (W.skipped || !paajiPlayer.busy || W.t > W.dur + 3.5)) {
+      G.walk = null; G.phaseT = 0; if (O) { O.root.visible = false; O.helmetTo('head'); } if (people.outBat) people.outBat.visible = false;
+      $('pcard').classList.remove('on'); prompts();
+    }
   }
 
   function endMatch() {
@@ -1157,7 +1249,7 @@
     if (pm) {
       const seat = pm.kind === 'bat' ? m.innings[pm.inn].bat : m.innings[pm.inn].bowl;
       $('end-potm').innerHTML = `<small>PLAYER OF THE MATCH</small><b>${pm.name}</b><span>${teamOf(seat).short} · ${pm.line}</span>`;
-      paajiLater('potm', 5200); paajiLater('signOff', 10500);
+      paajiLater('potm', 1500, { queue: 12000 }); paajiLater('signOff', 3000, { queue: 25000 });   // each after the last
     } else $('end-potm').innerHTML = '';
     if (r.winner >= 0) {
       // the finale: fireworks all round the ground
@@ -1265,12 +1357,7 @@
     const hands = { x: C.x + d.x / dl * 0.48, y: C.y + d.y / dl * 0.48, z: C.z + d.z / dl * 0.48 };
     const low = { x: hands.x + b.x * 0.1, y: hands.y + b.y * 0.1, z: hands.z + b.z * 0.1 };
     const runOff = G.runs && G.phase === 'hit' ? runProgress() : null;
-    if (G.walk && G.walk.t < G.walk.dur) {
-      // walking out to the crease, bat under the arm
-      const w = walkPos();
-      const st = { x: w.x, z: w.z, facing: w.dir, twist: 0, crouch: 0, run: 0.42, arms: null };
-      return { st, bat: { p: { x: w.x - 0.3 * Math.cos(w.dir), y: 0.72, z: w.z + 0.3 * Math.sin(w.dir) }, q: BA.batQuat(0.5, 0, 'vertical') } };
-    }
+    if (G.walk && G.walk.t < G.walk.dur) return walkOutState(dt);
     const st = { x, z, facing: side * Math.PI / 2, twist: 0.45 * side + clamp(Math.atan2(b.x, -b.z) * 0.25, -0.5, 0.5) * (Math.abs(b.y) < 0.8 ? 1 : 0.2), crouch: 0.35, run: 0,
       arms: side > 0 ? { left: { hand: hands }, right: { hand: low } } : { right: { hand: hands }, left: { hand: low } } };
     if (runOff) {
@@ -1285,8 +1372,11 @@
     if (ck > 0.01) {
       const hu = { x: x + 0.1 * side, y: 2.25, z: z + 0.05 }, e = ck * ck * (3 - 2 * ck), L3 = (a, b2) => ({ x: lerp(a.x, b2.x, e), y: lerp(a.y, b2.y, e), z: lerp(a.z, b2.z, e) });
       st.facing = lerp(st.facing, 0.35 * side, e); st.twist *= 1 - e; st.crouch = lerp(st.crouch, 0.05, e);
-      const top = L3(hands, hu), bot = L3(low, { x: hu.x, y: hu.y - 0.09, z: hu.z });
+      // a hundred: the helmet off and up in the other hand, his face to the sky
+      const ton = G.milestone && G.milestone.kind === 'hundred' && G.milestone.t < 3.2;
+      const top = L3(hands, hu), bot = L3(low, ton ? { x: hu.x - 0.62 * side, y: 2.1, z: hu.z + 0.12 } : { x: hu.x, y: hu.y - 0.09, z: hu.z });
       st.arms = side > 0 ? { left: { hand: top }, right: { hand: bot } } : { right: { hand: top }, left: { hand: bot } };
+      if (ton) { st.helmet = 'hand'; st.helmetHand = side > 0 ? 'right' : 'left'; st.lookPitch = G.milestone.t < 1.6 ? 0.42 : 0.1; }
       const qa = _bq.set(q.x, q.y, q.z, q.w), qb = BA.batQuat(Math.PI * 0.95, 0, 'vertical');
       qa.slerp(_bq2.set(qb.x, qb.y, qb.z, qb.w), e);
       return { st, bat: { p: top, q: { x: qa.x, y: qa.y, z: qa.z, w: qa.w } } };
@@ -1367,6 +1457,11 @@
   function cpuBatFrame() {
     const s = G.cpuSwing, lift = G.phase === 'flight' ? clamp(G.t / 0.35, 0, 1) : G.phase === 'hit' ? 1 : 0;
     const back = BA.batQuat(-lift * 2.3, 0, 'vertical');   // stance, then the backlift as the bowler arrives
+    if (G.phase === 'ready' || (G.phase === 'runup' && G.phaseT < runT() - 0.7)) {
+      // waiting: three taps of the bat in the crease every few seconds
+      const c = clock() % 2.8, tap = c < 0.9 ? Math.abs(Math.sin(c / 0.3 * Math.PI)) * 0.2 : 0;
+      cpuBat.q = BA.batQuat(-tap, 0, 'vertical'); return;
+    }
     if (!s || (G.phase !== 'flight' && G.phase !== 'hit')) { cpuBat.q = back; return; }
     const tt = (G.phase === 'hit' ? (G.tHit || 0) + G.t : G.t) - s.tC;
     if (tt < -0.36) { cpuBat.q = back; return; }
@@ -1490,6 +1585,25 @@
     });
   }
 
+  /** Where eyes go this frame: the ball while it is live, the bowler as he runs in (null: their own glances). */
+  function eyesOn() {
+    if ((G.phase === 'flight' || G.phase === 'hit') && G.ball && (G.ballOn || G.phase === 'hit')) return { x: G.ball.p.x, y: G.ball.p.y, z: G.ball.p.z };
+    if (G.phase === 'runup' && G.bowler) return { x: G.bowler.x, y: 1.5, z: G.bowler.z };
+    return null;
+  }
+  /**
+   * The non-striker: the bat in his bottom hand, its toe resting on the turf, carried when he runs;
+   * his eyes on the bowler, then the ball, glancing about between balls.
+   */
+  function nsLife(ns, side) {
+    const hand = side > 0 ? 'right' : 'left', s = hand === 'right' ? 1 : -1, running = ns.run > 0.3;
+    ns.bat = { hand, style: running ? 'carry' : 'rest' };
+    if (!running) {
+      const f = CK.Anim.forwardOf(ns.facing), r = CK.Anim.rightOf(ns.facing);
+      ns.arms = { [hand]: { hand: { x: ns.x + f.x * 0.2 + r.x * s * 0.24, y: 0.84, z: ns.z + f.z * 0.2 + r.z * s * 0.24 } } };
+    }
+    ns.look = eyesOn();
+  }
   /** Everything the renderer needs this frame. */
   function liveFrame(dt) {
     if (batSeat().kind === 'cpu') cpuBatFrame();
@@ -1500,6 +1614,7 @@
     if (rp) { ns.z = lerp(ns.z, -2 - (PH.PITCH.L - 1.2) - rp.z, rp.blend); ns.x = lerp(ns.x, -0.9 * side, rp.blend); ns.facing = rp.dir > 0 ? Math.PI : rp.dir < 0 ? 0 : ns.facing; }
     G.nsS = G.nsS || {};
     ns.facing = damp(G.nsS, 'face', ns.facing, 12, dt, true); ns.run = damp(G.nsS, 'run', rp && rp.dir ? 1 : 0, 8, dt);
+    nsLife(ns, side);
     // the throw leaves his hand: from where his hand is, to where the man at the stumps will be
     const th = G.throwBall;
     if (th && G.t >= th.t0 && !th.from) {
@@ -1527,22 +1642,31 @@
       _ax.set(wl > 1 ? w.x : 1, wl > 1 ? w.y : 0, wl > 1 ? w.z : 0).normalize();
       ballQ.premultiply(_dq.setFromAxisAngle(_ax, vis * dt));
     }
+    const eyes = eyesOn();
+    if (!b.st.look && !G.walk) b.st.look = eyes || (G.phase === 'ready' ? { x: G.bowler.x, y: 1.5, z: G.bowler.z } : null);
+    fielders.forEach((f, i) => { if (!f.look) f.look = eyes || (i === 0 && G.phase === 'ready' ? { x: G.bowler.x, y: 1.4, z: G.bowler.z } : null); });
+    if (!bowler.look) bowler.look = G.phase === 'ready' || G.phase === 'runup' ? { x: -0.42 * side, y: 1.4, z: -1.0 } : eyes;
     return { batter: b.st, bat: b.bat, bowler, ns, fielders, ball: ballP, ballQ: ballP ? [ballQ.x, ballQ.y, ballQ.z, ballQ.w] : null,
-      umpire: { x: aside * 1.35, z: -PH.PITCH.L - 2.4, facing: 0, run: 0, crouch: 0.15, out: G.umpireOut || 0 } };
+      umpire: { x: aside * 1.35, z: -PH.PITCH.L - 2.4, facing: 0, run: 0, crouch: 0.15, out: G.umpireOut || 0, look: eyes } };
   }
   function applyFrame(F, dt) {
     if (!people.ready) return;
+    const bside = G.match ? batSide() : 1, hw = F.batter.helmet || (G.helmetOff ? 'off' : 'head'), hh = F.batter.helmetHand || (bside > 0 ? 'left' : 'right');
+    if (people.batter.helmetAt !== hw || (hw === 'hand' && people.batter.helmetHand !== hh)) people.batter.helmetTo(hw, hh);
     CK.poseAthlete(people.batter, F.batter, dt);
     batMesh.visible = true;
-    batMesh.position.set(F.bat.p.x, F.bat.p.y, F.bat.p.z);
-    batMesh.quaternion.set(F.bat.q.x, F.bat.q.y, F.bat.q.z, F.bat.q.w);
+    if (F.bat.carry) CK.holdBat(people.batter, F.bat.carry, batMesh, F.bat.style, { twirl: F.bat.twirl });
+    else {
+      batMesh.position.set(F.bat.p.x, F.bat.p.y, F.bat.p.z);
+      batMesh.quaternion.set(F.bat.q.x, F.bat.q.y, F.bat.q.z, F.bat.q.w);
+    }
     const bw = F.bowler, A = people.bowler;
     // a gesture (send-off, appeal) takes his arms once the celebration has had its moment
     const bg = gestureOn('bowler'), gh = bg && (!bw.cel || G.celebrate.t > 1.0) ? CK.Anim.gestureHands(bg.gesture, bw) : null;
     const sc = celebrationPose(bw);
     const bArms = gh ? { left: { hand: gh.left }, right: { hand: gh.right } } : bw.cel ? sc.arms : bw.fieldArms || null;
     if (gh) bw.cel = bw.cel || 1;   // keep the phone's arm out of it
-    CK.poseAthlete(A, { x: bw.x, z: bw.z, facing: bw.facing + (bw.cel && !gh ? sc.spin : 0), run: bw.run, crouch: bw.crouch, lean: bw.lean + (bw.cel && !gh ? sc.lean : 0), y: (bw.cel && !gh ? sc.y * bw.cel : 0) + (bw.y || 0), roll: bw.roll || 0, arms: bArms }, dt);
+    CK.poseAthlete(A, { x: bw.x, z: bw.z, facing: bw.facing + (bw.cel && !gh ? sc.spin : 0), run: bw.run, crouch: bw.crouch, lean: bw.lean + (bw.cel && !gh ? sc.lean : 0), y: (bw.cel && !gh ? sc.y * bw.cel : 0) + (bw.y || 0), roll: bw.roll || 0, arms: bArms, look: bw.cel ? null : bw.look, lookPitch: bw.cel && !gh ? sc.lookPitch || 0 : 0 }, dt);
     const sh = CK.boneWorld(A, bw.arm === 'left' ? 'UpperArmL' : 'UpperArmR', new T.Vector3());
     const r = bw.armDir;
     const hand = { x: sh.x + r.x * 0.66, y: sh.y + r.y * 0.66, z: sh.z + r.z * 0.66 };
@@ -1552,6 +1676,7 @@
       CK.aimBone(armB.lower, armB.palm, hand);
     }
     CK.poseAthlete(people.nonStriker, F.ns, dt);
+    if (people.nsBat && F.ns.bat) CK.holdBat(people.nonStriker, F.ns.bat.hand, people.nsBat, F.ns.bat.style);
     const u = F.umpire;
     const uk = u.out ? Math.min(1, u.out / 0.3) : 0, ue = uk * uk * (3 - 2 * uk);
     const uArms = u.out ? { right: { hand: { x: u.x - 0.25 + 0.05 * (1 - ue), y: 1.0 + 1.25 * ue, z: u.z + 0.15 } } } : null;
@@ -1565,7 +1690,8 @@
     else if (G.phase === 'ready' || G.phase === 'runup') { ballMesh.visible = true; ballMesh.position.copy(hand); }
     else ballMesh.visible = false;
     const fast = G.ball && PH.len(G.ball.v) > 14;
-    trail.push(ballMesh.position, ballMesh.visible && fast && (G.phase === 'flight' || G.phase === 'hit') && !G.replayStill, camera.position);
+    G.trailOn = ballMesh.visible && fast && (G.phase === 'flight' || G.phase === 'hit') && !G.replayStill;
+    trail.push(ballMesh.position, G.trailOn, camera.position);
     ballShadow.visible = ballMesh.visible && ballMesh.position.y < 25;
     if (ballShadow.visible) {
       const hgt = ballMesh.position.y;
@@ -1684,25 +1810,48 @@
    * one, then the verdict. Space, a click or HOLD jumps to the verdict.
    */
   const drsGroup = new T.Group(); drsGroup.visible = false; scene.add(drsGroup);
-  function startDRS(v, at, track, done) {
-    $('visor').classList.remove('on'); gloves.visible = false;
+  /**
+   * The DRS picture from plain data (the friend's page builds the same from the host's event):
+   * d = { from, pitch, at, post: [[x,y,z]...], leg (pitched outside leg), third (the hitting verdict) }.
+   */
+  let drsVis = null;
+  function drsBuild(d) {
     while (drsGroup.children.length) { const c = drsGroup.children.pop(); if (c.geometry) c.geometry.dispose(); }
     const P = (x, y, z) => new T.Vector3(x, y, z);
-    const from = G.del ? G.del.from : { x: 0.3, y: 2.1, z: -18.4 }, pitch = G.path.pitch || { x: at.x, z: at.z - 2 };
+    const from = d.from, pitch = d.pitch, at = d.at;
     const pre = new T.CatmullRomCurve3([P(from.x, from.y, from.z), P((from.x + pitch.x) / 2, (from.y + 0.04) / 2 + 0.25, (from.z + pitch.z) / 2), P(pitch.x, 0.04, pitch.z), P(at.x, at.y, at.z)]);
-    const post = track.filter(q => q.z > at.z + 0.02).map(q => P(q.x, q.y, q.z));
+    const post = d.post.map(q => P(q[0], q[1], q[2]));
     const mk = (curve, col, op) => {
       const m = new T.Mesh(new T.TubeGeometry(curve, 80, 0.038, 8), new T.MeshBasicMaterial({ color: col, transparent: true, opacity: op, toneMapped: false, depthTest: false }));
       m.renderOrder = 5; m.geometry.setDrawRange(0, 0); drsGroup.add(m); return m;
     };
     const tubes = [mk(pre, 0xff3b30, 0.95)];
     if (post.length >= 2) tubes.push(mk(new T.CatmullRomCurve3([P(at.x, at.y, at.z), ...post]), 0x4fb8ff, 0.8));
-    const disc = (p, col) => { const d = new T.Mesh(new T.CircleGeometry(0.11, 24), new T.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.85, toneMapped: false, depthTest: false })); d.rotation.x = -Math.PI / 2; d.position.set(p.x, 0.02, p.z); d.renderOrder = 6; drsGroup.add(d); };
-    disc(pitch, v.rows[0].v === 'OUTSIDE LEG' ? 0xff3b30 : 0x22c55e);
+    const disc = (p, col) => { const m = new T.Mesh(new T.CircleGeometry(0.11, 24), new T.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.85, toneMapped: false, depthTest: false })); m.rotation.x = -Math.PI / 2; m.position.set(p.x, 0.02, p.z); m.renderOrder = 6; drsGroup.add(m); };
+    disc(pitch, d.leg ? 0xff3b30 : 0x22c55e);
     // the wicket zone: the stumps' frame, lit by the verdict
     const zone = new T.Mesh(new T.PlaneGeometry(0.2286, 0.711), new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18, toneMapped: false, depthTest: false, side: T.DoubleSide }));
     zone.position.set(0, 0.3555, 0); zone.renderOrder = 4; drsGroup.add(zone);
     drsGroup.visible = true;
+    drsVis = { tubes, zone, third: d.third };
+    return drsVis;
+  }
+  /** The DRS picture t s in: the flight drawing in over 1.6 s, the zone lit by the verdict at 3.3 s. */
+  function drsVisual(t) {
+    const V = drsVis; if (!V) return;
+    const k = clamp(t / 1.6, 0, 1);
+    V.tubes.forEach((m, i) => { const n = m.geometry.index.count, f = V.tubes.length > 1 ? clamp(k * 2 - i, 0, 1) : k; m.geometry.setDrawRange(0, Math.floor(n * f / 6) * 6); });
+    const lit = t >= 3.3, val = V.third;
+    V.zone.material.color.setHex(!lit ? 0xffffff : val === 'MISSING' ? 0xff3b30 : val === 'HITTING' ? 0x22c55e : 0xeab308);
+    V.zone.material.opacity = lit ? 0.45 : 0.18;
+  }
+  function startDRS(v, at, track, done) {
+    $('visor').classList.remove('on'); gloves.visible = false;
+    const from = G.del ? G.del.from : { x: 0.3, y: 2.1, z: -18.4 }, pitch = G.path.pitch || { x: at.x, z: at.z - 2 };
+    const d = { from: { x: from.x, y: from.y, z: from.z }, pitch: { x: pitch.x, z: pitch.z }, at: { x: at.x, y: at.y, z: at.z },
+      post: track.filter(q => q.z > at.z + 0.02).map(q => [q.x, q.y, q.z]), leg: v.rows[0].v === 'OUTSIDE LEG', third: v.rows[2].v };
+    const { tubes, zone } = drsBuild(d);
+    if (net && net.drs) net.drs(d);
     G.drs = { t: 0, v, tubes, zone, done, said: 0 };
     ['drs-r0', 'drs-r1', 'drs-r2'].forEach((id, i) => { const r = $(id); r.className = 'drs-row'; r.querySelector('b').textContent = v.rows[i].v; });
     $('drs-v').className = 'drs-verdict'; $('drs-v').innerHTML = (v.out ? 'OUT' : 'NOT OUT') + (v.umpiresCall ? "<small>UMPIRE'S CALL</small>" : '');
@@ -1718,14 +1867,12 @@
     skipKey = false;
     D.t += dt;
     // the flight draws in over 1.6 s: the real part, then the projection
-    const k = clamp(D.t / 1.6, 0, 1);
-    D.tubes.forEach((m, i) => { const n = m.geometry.index.count, f = D.tubes.length > 1 ? clamp(k * 2 - i, 0, 1) : k; m.geometry.setDrawRange(0, Math.floor(n * f / 6) * 6); });
+    drsVisual(D.t);
     [1.9, 2.6, 3.3].forEach((t, i) => {
       const r = $('drs-r' + i);
       if (D.t >= t && !r.classList.contains('on')) {
         const val = D.v.rows[i].v, good = val === 'IN LINE' || val === 'HITTING' || val === 'OUTSIDE OFF';
         r.classList.add('on', val === "UMPIRE'S CALL" ? 'ump' : good ? 'good' : 'bad'); SFX.tick && SFX.tick();
-        if (i === 2) D.zone.material.color.setHex(val === 'MISSING' ? 0xff3b30 : val === 'HITTING' ? 0x22c55e : 0xeab308), D.zone.material.opacity = 0.45;
       }
     });
     if (D.t >= 4.1 && !D.said) {
@@ -1739,7 +1886,7 @@
     cam.mode = 'drs'; G.camMode = 'drs'; G.views = ['drs']; $('hud').classList.remove('split');
     applyCamTo(cam, dt, innerWidth / innerHeight);
     if (D.t >= 5.6) {
-      G.drs = null; drsGroup.visible = false; $('drs').classList.remove('on'); $('replay-bug').classList.remove('on'); $('hud').classList.remove('replaying');
+      G.drs = null; drsGroup.visible = false; drsVis = null; if (net && net.drsEnd) net.drsEnd(); $('drs').classList.remove('on'); $('replay-bug').classList.remove('on'); $('hud').classList.remove('replaying');
       if (people.batter) people.batter.setOpacity(1);
       D.done();
     }
@@ -1858,18 +2005,20 @@
   function updateCamera(dt, F) {
     const plan = planViews();
     G.views = plan;
+    const remote = room.seat >= 0 && G.inGame && !!G.match;
+    const split = plan.length > 1 && !remote;   // online room: each player's own full view, no halves
     plan.forEach((shot, i) => {
       const st = camSt[i];
-      shotCam(shot, st, dt, F, plan.length > 1);
-      applyCamTo(st, dt, plan.length > 1 ? innerWidth / 2 / innerHeight : innerWidth / innerHeight);
+      shotCam(shot, st, dt, F, split);
+      applyCamTo(st, dt, split ? innerWidth / 2 / innerHeight : room.wide && plan.length > 1 && i === room.seat ? room.wg / innerHeight : remote && plan.length > 1 && i === room.seat ? 16 / 9 : innerWidth / innerHeight);
     });
     G.camMode = plan.length > 1 ? 'split' : plan[0];
-    $('hud').classList.toggle('split', plan.length > 1);
+    $('hud').classList.toggle('split', split);
     const fpb = plan.length === 1 && plan[0] === 'fpbat';
     if (people.ready && !G.drs) people.batter.setOpacity(fpb ? 0 : 1);
     gloves.visible = plan.includes('fpbat');
     $('visor').classList.toggle('on', fpb);
-    if (plan.length > 1) {
+    if (split) {
       [0, 1].forEach(i => { const t = $('half' + i); t.querySelector('b').textContent = seats[i].name; t.querySelector('span').textContent = plan[i] === 'bowl' ? 'BOWLING' : 'BATTING'; t.style.setProperty('--tc', tcol(i)); });
     }
     fadeOccluders(plan, F);
@@ -1948,6 +2097,31 @@
   function renderViews() {
     const w = innerWidth, h = innerHeight, plan = G.views || ['title'];
     renderer.shadowMap.needsUpdate = true;
+    if (room.wide && !G.dbgCam) {
+      // online room: this screen's player on the left (all that shows here), the friend's view to its right
+      const L = 1 - room.seat, wg = room.wg;
+      let gcam = camSt[room.seat].cam;
+      if (plan.length < 2) {
+        // one shared shot (replay, celebration, walk-out): the same camera at the friend's window shape
+        camera2.position.copy(camera.position); camera2.quaternion.copy(camera.quaternion); camera2.fov = camera.fov;
+        camera2.aspect = wg / h; camera2.updateProjectionMatrix(); gcam = camera2;
+      }
+      renderer.setScissorTest(true);
+      renderer.setViewport(0, 0, w, h); renderer.setScissor(0, 0, w, h);
+      renderer.render(scene, plan.length < 2 ? camera : camSt[L].cam);
+      renderer.shadowMap.needsUpdate = false;
+      renderer.setViewport(w, 0, wg, h); renderer.setScissor(w, 0, wg, h);
+      renderer.render(scene, gcam);
+      renderer.setScissorTest(false);
+      renderer.setViewport(0, 0, w + wg, h);
+      if (window.MimicRoom) MimicRoom.frame(renderer.domElement, w, 0, wg, h);
+      return;
+    }
+    if (room.seat >= 0 && room.kind === 'state' && G.inGame && G.match && !G.dbgCam) {
+      // the friend draws their own view: here only this screen's
+      renderer.render(scene, plan.length > 1 ? camSt[1 - room.seat].cam : camera);
+      return;
+    }
     if (plan.length > 1 && !G.dbgCam) {
       renderer.setScissorTest(true);
       [0, 1].forEach(i => {
@@ -1959,6 +2133,8 @@
       renderer.setScissorTest(false);
       renderer.setViewport(0, 0, w, h);
     } else renderer.render(scene, camera);
+    // a friend's room page with no match on (menus, lobby): they see this screen
+    if (window.MimicRoom && MimicRoom.active) MimicRoom.frame(renderer.domElement, 0, 0, w, h);
   }
 
   // ---------------------------------------------------------------------------------
@@ -2119,7 +2295,7 @@
     refreshFocus();
   }
   function toTitle() {
-    if (G.demo && CK.Demo) CK.Demo.close();
+    paajiPlayer.stop();
     G.inGame = false; G.match = null; G.phase = 'idle'; G.paused = false; G.replay = null; G.ending = null; G.walk = null; G.cutaway = null; G.pendingWalk = false; G.drs = null; drsGroup.visible = false; $('drs').classList.remove('on');
     $('replay-bug').classList.remove('on');
     ballMesh.visible = false; batMesh.visible = false; aimRing.visible = false; aimPin.visible = false; trail.clear();
@@ -2207,6 +2383,7 @@
   function bindMenus() {
     document.querySelectorAll('.mi').forEach(el => {
       el.addEventListener('click', e => {
+        if (GUEST) return;
         if (el.dataset.opt) { const arr = e.target.closest('.arr'); if (arr) { changeOpt(el.dataset.opt, arr === el.querySelectorAll('.arr')[0] ? -1 : 1); return; } }
         activate(el);
       });
@@ -2220,9 +2397,9 @@
     if (m === 'opts') { SFX.ui('back'); setPanel('main'); } else if (m === 'solo') { SFX.ui('back'); toTitle(); } else if (m === 'pause') setPaused(false);
   }
   addEventListener('keydown', e => {
+    if (GUEST) return;
     AU.resume();
     if (G.screen === 'lobby') return;
-    if (G.demo && CK.Demo && (e.key === ' ' || e.key === 'Enter' || e.key === 'Escape')) { CK.Demo.close(); e.preventDefault(); return; }
     if (e.key === 'Escape') { if (G.inGame && G.screen === 'game') setPaused(true); else if (G.paused) setPaused(false); else menuBack(); return; }
     if (e.key === 'm' || e.key === 'M') { settings.sound = settings.sound ? 0 : 1; saveSettings(); refreshOpts(); return; }
     const m = activeMenu(); if (!m) return;
@@ -2249,7 +2426,17 @@
     lobby.keyJoin = lobby.keyLeave = lobby.keySwap = false;
     return list;
   }
-  function openLobby() { lobby.st = LB.createLobby(2); lobby.guard = 0.35; showScreen('lobby'); renderLobby([]); }
+  function openLobby() { lobby.st = LB.createLobby(2); lobby.guard = 0.35; showScreen('lobby'); renderLobby([]); if (window.MimicLink) MimicLink.start().then(renderOnline); renderOnline(); }
+  /** The lobby's online-room box: the friend's link, and who is watching from where. */
+  function renderOnline() {
+    const box = $('online'), u = window.MimicRoom ? MimicRoom.inviteUrl() : '';
+    box.hidden = !u;
+    if (!u) return;
+    if ($('online-url').value !== u) $('online-url').value = u;
+    const vs = MimicRoom.viewers().filter(v => v.open);
+    $('online-state').innerHTML = !vs.length ? '<i>Waiting for your friend to open the link…</i>'
+      : vs.map(v => `<b>${v.name} is watching</b>${v.delayMs != null ? ` <i>· picture ${v.delayMs} ms behind</i>` : ''} · ${v.phone && v.phone.connected ? 'phone connected: press HOLD on it to take a seat' : '<i>waiting for their phone</i>'}`).join('<br>');
+  }
   function renderLobby(inputs) {
     const sl = lobby.st.slots;
     for (let i = 0; i < 2; i++) {
@@ -2261,7 +2448,8 @@
       el.querySelector('.s-role').className = 's-role ' + (lobby.st.firstBat === i ? 'bat' : 'bowl');
       if (s) {
         const c = inp && inp.ctrl;
-        el.querySelector('.s-state').textContent = 'READY · ' + (s.kind === 'mouse' ? 'MOUSE + KEYS' : ctrlMode(c).toUpperCase());
+        const far = c && c.padIndex != null && window.MimicLink && MimicLink.phones().some(p => p.index === c.padIndex && p.guest);   // came in through a friend's room page
+        el.querySelector('.s-state').textContent = 'READY · ' + (far ? 'ONLINE · ' : '') + (s.kind === 'mouse' ? 'MOUSE + KEYS' : ctrlMode(c).toUpperCase());
         el.querySelector('.s-help').innerHTML = s.kind === 'mouse' ? '<kbd>Tab</kbd> swaps roles · <kbd>Backspace</kbd> leaves'
           : `<b>${c.keyName('one')}</b> swaps roles · <b>${c.keyName('b')}</b> leaves · ${c.keyName('center')} aligns`;
         const sp = c ? clamp(c.angularSpeed / 14, 0, 1) : 0;
@@ -2302,16 +2490,24 @@
     startMatch('versus');
   }
   addEventListener('keydown', e => {
+    if (GUEST) return;
     if (G.screen !== 'lobby') return;
     if (e.key === ' ') { if (!e.repeat) lobby.keyJoin = true; lobby.keyHold = true; e.preventDefault(); }
     if (e.key === 'Backspace') lobby.keyLeave = true;
     if (e.key === 'Tab') { lobby.keySwap = true; e.preventDefault(); }
     if (e.key === 'Escape') toTitle();
   });
-  addEventListener('keyup', e => { if (e.key === ' ') lobby.keyHold = false; });
+  addEventListener('keyup', e => { if (!GUEST && e.key === ' ') lobby.keyHold = false; });
   $('lobby-start').addEventListener('click', () => startVersus());
   $('lobby-swap').addEventListener('click', () => { lobby.st.firstBat = 1 - lobby.st.firstBat; SFX.ui('move'); });
   $('lobby-back').addEventListener('click', () => { SFX.ui('back'); toTitle(); });
+  $('online-copy').addEventListener('click', () => {
+    const u = $('online-url').value; if (!u) return;
+    const done = () => { $('online-copy').textContent = 'COPIED'; setTimeout(() => { $('online-copy').textContent = 'COPY LINK'; }, 1600); };
+    if (navigator.clipboard) navigator.clipboard.writeText(u).then(done, () => { $('online-url').select(); document.execCommand('copy'); done(); });
+    else { $('online-url').select(); document.execCommand('copy'); done(); }
+    SFX.ui('move');
+  });
 
   // ---------------------------------------------------------------------------------
   // Phone buttons outside the motion: pause, align, menus
@@ -2322,7 +2518,6 @@
         const c = s.mc;
         if (s.kind !== 'phone' || !c) continue;
         if (c !== mc) c.update();
-        if (G.demo) { if (['a', 'b', 'one', 'two', 'center'].some(k => c.pressed(k))) CK.Demo.close(); continue; }
         if (c.pressed('b')) { setPaused(true); return; }
         if (c.pressed('center')) toast(s.name + ': forward set');
       }
@@ -2360,8 +2555,8 @@
   // The main loop
   let lastNow = performance.now(), skipKey = false;
   const skippable = () => G.replay || G.cutaway || G.walk || G.drs;
-  addEventListener('keydown', e => { if (skippable() && (e.key === ' ' || e.key === 'Enter')) { skipKey = true; e.preventDefault(); } });
-  addEventListener('pointerdown', () => { if (skippable()) skipKey = true; });
+  addEventListener('keydown', e => { if (!GUEST && skippable() && (e.key === ' ' || e.key === 'Enter')) { skipKey = true; e.preventDefault(); } });
+  addEventListener('pointerdown', () => { if (!GUEST && skippable()) skipKey = true; });
   const fpsWin = [];
   function gameFrame(dt, now) {
     for (const s of seats) if (s.input) s.input.frame(now);
@@ -2386,6 +2581,15 @@
     if (G.phase === 'between' && G.phaseT > G.betweenT) { newBall(); if (G.pendingWalk) { G.pendingWalk = false; walkOut('wicket'); } }
     // the aim spot
     const showAim = G.phase === 'ready' && !G.walk && bowlSeat().kind !== 'cpu' && opt('aim') === 'ON';
+    // the variations card: up while a phone gets ready to bowl, faded through the run-up
+    const tipsOn = bowlSeat().kind !== 'cpu' && !G.walk && (G.phase === 'ready' || G.phase === 'runup');
+    $('tips').classList.toggle('on', tipsOn); $('tips').classList.toggle('dim', tipsOn && G.phase === 'runup');
+    // the online room: the card, and each prompt, only on the screen of the player it is for
+    const whose = seat => (room.seat >= 0 && G.inGame && G.match ? (seat === seats[room.seat] ? 'guest' : 'host') : '');
+    const tagRoom = (id, v) => { const el = $(id); if ((el.dataset.room || '') !== v) { if (v) el.dataset.room = v; else delete el.dataset.room; } };
+    tagRoom('tips', whose(bowlSeat()));
+    // split screen: the card sits in the bowler's half
+    $('tips').classList.toggle('left', room.seat < 0 && (G.views || []).length > 1 && inn().bowl === 0); tagRoom('prompt-bowl', whose(bowlSeat())); tagRoom('prompt-bat', whose(batSeat()));
     aimRing.visible = showAim || (G.phase === 'runup' && bowlSeat().kind !== 'cpu' && opt('aim') === 'ON');
     if (!aimRing.visible) aimPin.visible = false;
     if (aimRing.visible) {
@@ -2426,11 +2630,13 @@
     lastNow = now;
     fpsWin.push(rdt); if (fpsWin.length > 120) fpsWin.shift();
     if (rdt > 0) dynResolution(rdt);
+    if (GUEST) { guestFrame(rdt); return; }
     mc.update(now);
     updateCtrlStatus();
     if (!wandCursor && window.MimicCursor) wandCursor = MimicCursor.create(mc, { visible: () => !!activeMenu() });
     phoneButtons(wandCursor ? wandCursor.update() : false);
     if (G.screen === 'lobby') lobbyFrame(rdt);
+    roomFrame(rdt); sizeCanvas();
     let F = null;
     if (G.replay) {
       // HOLD on any phone, Space or a click skips the highlight
@@ -2446,13 +2652,13 @@
       const oc = G.outcome;
       if (G.phase === 'hit' && oc && oc.type === 'caught' && G.t > oc.t - 0.4 && G.t < oc.t + 0.25) ts = 0.3;
       const sdt = rdt * ts;
-      if (G.inGame && !G.paused && !G.demo && G.screen === 'game' && G.phase !== 'over') gameFrame(sdt, now);
+      if (G.inGame && !G.paused && G.screen === 'game' && G.phase !== 'over') gameFrame(sdt, now);
       if (G.inGame && G.match && people.ready) { F = liveFrame(G.paused ? 0 : sdt); applyFrame(F, G.paused ? 0 : sdt); snapshot(F, G.paused ? 0 : sdt); }
       dustFrame(sdt);
       landRing.material.opacity = G.phase === 'hit' && G.landAt && G.ball && G.ballOn && !G.ball.bounces ? 0.55 + 0.35 * Math.sin(now / 120) : Math.max(0, landRing.material.opacity - rdt * 2);
       if (G.landAt) landRing.position.set(G.landAt.x, 0.03, G.landAt.z);
       // the crowd's hum: up as the bowler runs in, loudest with the ball in the air
-      if (G.inGame) AU.Crowd.setTension(G.phase === 'runup' ? 0.45 + Math.min(0.4, G.phaseT * 0.3) : G.phase === 'flight' ? 0.9 : G.phase === 'hit' ? 0.7 : 0.15);
+      if (G.inGame) AU.Crowd.setTension(G.netTension = G.phase === 'runup' ? 0.45 + Math.min(0.4, G.phaseT * 0.3) : G.phase === 'flight' ? 0.9 : G.phase === 'hit' ? 0.7 : 0.15);
       else if (people.ready) idleScene(rdt);
       updateCamera(rdt, F || {});
       if (G.inGame) bubbleFrame();
@@ -2463,8 +2669,89 @@
     world.crowd.update(rdt);
     world.tick(rdt);
     if (G.dbgCam) { const d = G.dbgCam; camera.position.set(d.p[0], d.p[1], d.p[2]); camera.lookAt(d.l[0], d.l[1], d.l[2]); camera.fov = d.fov || 35; camera.updateProjectionMatrix(); }
+    if (net && net.hostFrame) net.hostFrame(now);   // before drawing: the friend gets this frame a few ms sooner
     renderViews();
   }
+
+  // ---------------------------------------------------------------------------------
+  // The online room by state (net.js): what the host sends, what the friend's page does with it
+  const camProxy = new T.Object3D(); camProxy.fov = 42;
+  const netParams = [
+    { get: () => world.crowd.excite || 0, set: v => { world.crowd.excite = v; } },
+    { get: () => G.netTension || 0, set: v => { if (Math.abs(v - (G.netTension || 0)) > 0.01) { G.netTension = v; AU.Crowd.setTension(v); } } },
+    { get: () => G.dance || 0, set: v => { G.dance = v; } },
+    { get: () => G.cheerSpecial || 0, set: v => { G.cheerSpecial = v; } },
+    { get: () => (G.cutaway && G.cutaway.shot === 'fans' ? 1 : 0), set: v => { G.netFans = v > 0.5; } },
+    { get: () => (G.drs ? G.drs.t : -1), set: v => { G.netDrsT = v; } },
+    { get: () => (G.trailOn ? 1 : 0), set: v => { G.trailOn = v > 0.5; } },
+  ];
+  const netObj = (o, x) => Object.assign({ obj: () => o }, x || {});
+  const matOpacity = m => ({ get: () => m.opacity, set: v => { m.opacity = v; } });
+  const matColor = m => ({ get: () => m.color.getHex(), set: v => { m.color.setHex(v); } });
+  function netObjects() {
+    const L = [
+      netObj(ballMesh), netObj(batMesh), netObj(gloves), netObj(people.nsBat), netObj(people.outBat),
+      netObj(halo), netObj(ballShadow, { scale: true, opacity: matOpacity(ballShadow.material) }),
+      netObj(landRing, { opacity: matOpacity(landRing.material) }),
+      netObj(aimRing, { scale: true, opacity: matOpacity(aimRing.material), color: matColor(aimRing.material) }),
+      netObj(aimWave, { scale: true, opacity: matOpacity(aimWave.material), color: matColor(aimWave.material) }),
+      { opacity: matOpacity(aimHalo.material) },
+      netObj(aimPin, { opacity: matOpacity(aimPin.material), color: matColor(aimPin.material) }),
+      netObj(pitchMark, { opacity: matOpacity(pitchMark.material) }),
+      netObj(drsGroup),
+    ];
+    dust.forEach(d => L.push(netObj(d.sp, { scale: true, opacity: matOpacity(d.sp.material) })));
+    for (const end of [world.stumps.bat, world.stumps.bowl]) [...end.stumps, ...end.bails].forEach(o => L.push(netObj(o)));
+    return L;
+  }
+  const netActors = () => [people.batter, people.nonStriker, people.outgoing, people.bowler, people.umpire, ...people.fielders];
+  /** The friend's camera: their seat's own view in a two-player match, otherwise what this screen shows. */
+  function fillNetCam(p) {
+    const plan = G.views || [];
+    const src = room.seat >= 0 && plan.length > 1 && G.inGame && G.match ? camSt[room.seat].cam : camera;
+    p.position.copy(src.position); p.quaternion.copy(src.quaternion); p.fov = src.fov;
+  }
+  function sendSettings() {
+    if (!net || !net.settings) return;
+    const s = {}; ['team0', 'team1', 'hand0', 'hand1', 'camera'].forEach(k => { if (k in settings) s[k] = settings[k]; });
+    net.settings(s);
+  }
+  function netContext() {
+    return {
+      T, scene, camProxy, world, trail, audio: AU, params: netParams,
+      actors: netActors, objects: netObjects, fillCam: fillNetCam, ready: () => people.ready,
+      playLine: (id, d) => paajiPlayer.playId(id, d), stopLines: () => paajiPlayer.stop(),
+      chant: (seat, k) => teamChant(seat, k),
+      drs: d => { if (d) drsBuild(d); else { drsGroup.visible = false; drsVis = null; } },
+      settings: s => { Object.keys(s).forEach(k => { if (k in settings) settings[k] = s[k]; }); },
+      onStart: () => { AU.resume(); },
+    };
+  }
+  function startNet() {
+    if (!window.MimicSync || !CK.Net || !people.ready || net) return;
+    if (GUEST) net = CK.Net.guest(netContext());
+    else if (window.MimicRoom) { net = CK.Net.host(netContext()); sendSettings(); }
+  }
+  /** The friend's page, each frame: the host's state as it was a moment ago, and what it animates itself. */
+  function guestFrame(rdt) {
+    if (!net) { if (people.ready) startNet(); renderer.render(scene, camera); return; }
+    const drew = net.guestFrame(rdt);
+    if (drew) {
+      camera.position.copy(camProxy.position); camera.quaternion.copy(camProxy.quaternion);
+      const asp = innerWidth / innerHeight;
+      if (Math.abs(camera.fov - camProxy.fov) > 0.01 || Math.abs(camera.aspect - asp) > 1e-3) { camera.fov = camProxy.fov; camera.aspect = asp; camera.updateProjectionMatrix(); }
+      if (halo.visible) { const d = camera.position.distanceTo(halo.position); halo.scale.setScalar(Math.max(0.25, d * 0.012)); }
+      trail.push(ballMesh.position, !!G.trailOn, camera.position);
+      if (G.netDrsT >= 0) drsVisual(G.netDrsT);
+      G.cutaway = G.netFans ? { shot: 'fans' } : null;
+    }
+    world.crowd.update(rdt);
+    world.tick(rdt);
+    cheerFrame(rdt);
+    renderer.shadowMap.needsUpdate = true;
+    renderer.render(scene, camera);
+  }
+
   /** Title screen: the players warm up in the middle. */
   function idleScene(dt) {
     batMesh.visible = true;
@@ -2491,6 +2778,7 @@
   window.__cricket = {
     G, seats, settings, world, people, renderer, scene, camera, lobby, startMatch, startSolo, openLobby, toTitle, setPaused, setSeat, slotCtrl, changeOpt,
     get fps() { const s = fpsWin.reduce((a, b) => a + b, 0); return fpsWin.length / (s || 1); }, get renderScale() { return dyn.pr; }, get shadows() { return dyn.shadows; },
+    get net() { return net; }, camSt, room, netActors: () => netActors(), netObjects: () => netObjects(), camProxy,
     inn: () => G.match && inn(), hype, say, planViews, knockStumps, attitude, paaji, paajiPlayer, walkOut, startCutaway, startDRS, milestone, interlude, teamChant, castPlayers, endMatch, updateScorebug, newBall,
   };
 })();

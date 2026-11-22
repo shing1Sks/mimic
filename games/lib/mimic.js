@@ -268,6 +268,7 @@
       let q;
       if (pad) {
         this.connected = true; this.source = 'phone'; this.via = /mimic web/i.test(pad.id) ? 'browser' : 'app';
+        this.padIndex = pad.index;   // which gamepad (MimicLink.phones()[].index for a browser phone)
         this._sig = trackSig(pad);
         this.mode = sigKnown(this._sig) && this._sig.code === SIG.GRIP ? 'grip' : 'wand';
         const a = pad.axes;

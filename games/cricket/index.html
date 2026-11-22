@@ -43,6 +43,17 @@
     <div class="shot-tags" id="shot-tags"></div>
     <div class="shot-meter" id="shot-meter"><span class="sm-good"></span><span class="sm-perf"></span><i></i><em>EARLY</em><em>LATE</em></div>
   </div>
+  <div id="tips">
+    <div class="tp-head">BOWLING VARIATIONS</div>
+    <ul>
+      <li><b>PACE</b><span>Whip the arm over faster</span></li>
+      <li><b>LENGTH</b><span>Let go early = fuller, late = shorter</span></li>
+      <li><b>SWING</b><span>Turn the wrist a little from your grip</span></li>
+      <li><b>SPIN</b><span>Twist the wrist as you let go</span></li>
+      <li><b>CUTTER</b><span>Hard twist with a fast arm</span></li>
+      <li><b>SLOWER</b><span>Hand right over, back of it to the batter</span></li>
+    </ul>
+  </div>
   </div>
   <div id="pmap"><div class="pm-strip"><div class="pm-zones"><span>SHORT</span><span>GOOD</span><span>FULL</span></div><i id="pmap-aim"></i><i id="pmap-dot"></i></div><div class="pm-label">PITCH MAP</div></div>
   <div id="banner"><div class="b-main"></div><div class="b-sub"></div></div>
@@ -64,7 +75,7 @@
       <p class="t-sub">Floodlit cricket. One phone bowls, one phone bats.</p>
     </header>
     <div class="menu" id="title-menu">
-      <button class="mi primary" data-act="versus">2 PLAYERS <small>one bats, one bowls, then swap</small></button>
+      <button class="mi primary" data-act="versus">2 PLAYERS <small>side by side, or online with a friend</small></button>
       <button class="mi" data-act="solo">SOLO VS COMPUTER <small id="quick-sub">2 each · 3 wickets</small></button>
       <button class="mi" data-act="options">OPTIONS <small>match, controls, hands, sound, graphics</small></button>
     </div>
@@ -130,13 +141,18 @@
 <!-- ============ LOBBY ============ -->
 <div id="lobby" class="screen modal hidden">
   <div class="card wide lobby">
-    <div class="e-kicker">TWO PHONES · ONE SCREEN</div>
+    <div class="e-kicker">TWO PHONES · HERE OR ONLINE</div>
     <h2>TAKE YOUR SEATS</h2>
     <div class="slots">
       <div class="slot" id="slot0"><b class="s-tag">P1</b><div class="s-role bat">BATS FIRST</div><div class="s-state">PRESS TO JOIN</div><div class="s-bar"><i></i></div><div class="s-help"></div><div class="s-join" data-mimic-join="grip" data-size="88"></div></div>
       <div class="slot" id="slot1"><b class="s-tag">P2</b><div class="s-role bowl">BOWLS FIRST</div><div class="s-state">PRESS TO JOIN</div><div class="s-bar"><i></i></div><div class="s-help"></div><div class="s-join" data-mimic-join="grip" data-size="88"></div></div>
     </div>
     <p class="lobby-status" id="lobby-status"></p>
+    <div class="online" id="online" hidden>
+      <div class="ol-text" title="They open it on their laptop: their own end of the pitch, with sound. Then they scan their phone from that page."><b>Friend somewhere else?</b><span>Send them this link</span></div>
+      <div class="ol-row"><input id="online-url" readonly spellcheck="false"><button class="mi" id="online-copy">COPY LINK</button></div>
+      <div class="ol-state" id="online-state"></div>
+    </div>
     <div class="menu row">
       <button class="mi primary" id="lobby-start">START</button>
       <button class="mi" id="lobby-swap">SWAP ROLES</button>
@@ -146,7 +162,6 @@
 </div>
 
 <!-- ============ PAUSE ============ -->
-<div id="demo" hidden></div>
 <div id="pause" class="screen modal hidden">
   <div class="card">
     <h2>PAUSED</h2>
@@ -195,6 +210,8 @@
 <script type="module" src="../lib/vendor/loaders.js"></script>
 <script src="../lib/mimic.js"></script>
 <script src="../lib/mimic-link.js"></script>
+<script src="../lib/mimic-room.js"></script>
+<script src="../lib/mimic-sync.js"></script>
 <script src="../lib/recorder.js"></script>
 <script src="../lib/wandcursor.js"></script>
 <script src="phys.js"></script>
@@ -207,6 +224,8 @@
 <script src="input.js"></script>
 <script src="world.js"></script>
 <script src="teams.js"></script>
+<script src="kits.js"></script>
+<script src="gear.js"></script>
 <script src="commentary-lines.js"></script>
 <script src="commentary.js"></script>
 <script src="attitude.js"></script>
@@ -215,7 +234,7 @@
 <script src="drs.js"></script>
 <script src="anim.js"></script>
 <script src="actors.js"></script>
-<script src="demo.js"></script>
+<script src="net.js"></script>
 <script src="game.js"></script>
 </body>
 </html>

@@ -338,6 +338,7 @@
     showScreen(null);
     $('hud').classList.remove('hidden');
     paintTeams();
+    paajiPlayer.stop();
     newBall(true);
     banner(kind === 'versus' ? `${G.match.names[inn().bat]} BATS` : kind === 'nets-bowl' ? 'YOU BOWL' : 'YOU BAT', `${overs} OVER${overs > 1 ? 'S' : ''} · ${wk} WICKET${wk > 1 ? 'S' : ''}`, 'neutral', 2.2);
     walkOut('start');
@@ -349,18 +350,21 @@
   // Paaji (CK.Commentary): the voice through the game's audio, his line as the subtitle
   const paajiPlayer = CK.Commentary.createPlayer({
     lines: CK.CommentaryLines, base: 'assets/commentary/',
-    audio: () => (AU.state.ctx ? { ctx: AU.state.ctx, out: AU.state.master } : null),   // muted = master gain 0
+    // muted = master gain 0; the crowd dips under his voice
+    audio: () => (AU.state.ctx ? { ctx: AU.state.ctx, out: AU.state.master, duck: () => [AU.state.crowdBus] } : null),
     enabled: () => opt('comm') === 'ON', volume: () => opt('commVol'),
-    onLine: l => say(l.text, Math.max(2.2, l.text.length * 0.06)),
+    onLine: (l, secs) => say(l.text, secs),   // shown when his voice starts, for as long as it runs
   });
-  let paajiLoading = false;
-  function paaji(kind, at) {
+  paajiPlayer.load();   // from the title screen on, each moment's next line fetched and decoded before it is needed
+  /** opts.queue (ms): never cut in; wait that long for the line in progress to finish instead. */
+  function paaji(kind, at, opts) {
     if (opt('comm') !== 'ON') return null;
-    if (!paajiLoading && AU.state.ctx) { paajiLoading = true; paajiPlayer.load(); }
-    return paajiPlayer.moment(kind, at);
+    return paajiPlayer.moment(kind, at, opts);
   }
   /** A call a little after the moment; dropped if the tab was hidden and it fires more than 1 s late. */
-  function paajiLater(kind, ms) { const due = performance.now() + ms; setTimeout(() => paaji(kind, due), ms); }
+  function paajiLater(kind, ms, opts) { const due = performance.now() + ms; setTimeout(() => paaji(kind, due, opts), ms); }
+  /** The next ball waits for Paaji to finish his line (never more than 4 s past its usual pause). over: s past it. */
+  const paajiHolds = over => CK.Commentary.holds(paajiPlayer.busy, over);
   /**
    * The crowd chanting a side's name (assets/chants: one voice per team), layered nine times with
    * a little detune, delay, pan and a stadium echo, so it sounds like a stand. seat: 0 / 1.
@@ -677,7 +681,7 @@
 
   // the computer bowler: a style per innings, a varied plan per ball, human-sized errors
   function cpuBowlerFrame(dt) {
-    if (G.phase === 'ready' && G.phaseT > 1.0) { G.aim = cpuAim(); G.phase = 'runup'; G.phaseT = 0; G.bowler.phase = 'run'; G.cutAt = 0.85; prompts(); }
+    if (G.phase === 'ready' && G.phaseT > 1.0 && !paajiHolds(G.phaseT - 1.0)) { G.aim = cpuAim(); G.phase = 'runup'; G.phaseT = 0; G.bowler.phase = 'run'; G.cutAt = 0.85; prompts(); }
     else if (G.phase === 'runup' && G.phaseT > runT() + 0.25) {
       const sk = cpuSkill(), spin = G.cpuStyle === 'spin';
       // a seamer mixes in a slower ball and the odd cutter, as a person can with the hand
@@ -1037,8 +1041,8 @@
     const ib = G.match.i, bw = inn().wkts;
     const before = (G.batRuns && G.batRuns[ib][bw]) || 0;
     if (rec.runs && rec.extra !== 'wd' && G.batRuns) G.batRuns[ib][bw] = before + rec.runs;
-    if (before < 20 && G.batRuns && G.batRuns[ib][bw] >= 20) paajiLater('quick20', 2600);
-    if (rec.wicket && bw + 1 === 3) paajiLater('threeWickets', 2600);
+    if (before < 20 && G.batRuns && G.batRuns[ib][bw] >= 20) paaji('quick20', undefined, { queue: 6000 });
+    if (rec.wicket && bw + 1 === 3) paaji('threeWickets', undefined, { queue: 6000 });
     if (G.story) CK.Story.ball(G.story, { inn: ib, wk: bw, bowler: bowlerName(), runs: rec.runs || 0, extra: rec.extra || null, wicket: !!rec.wicket, batName: CK.Teams.lineup(teamOf(inn().bat)).batter(bw) });
     const mile = rec.extra !== 'wd' && G.batRuns ? CK.Story.milestone(before, G.batRuns[ib][bw] || 0) : null;
     const ev = MA.record(G.match, rec);
@@ -1059,13 +1063,13 @@
     }
     if (ev.over && Math.random() < 0.5) setTimeout(() => teamChant(inn().bat, 0.8), 700);
     if (ev.over) { const sm = G.story ? CK.Story.overStart(G.story, { inn: G.match.i, bowler: bowlerName() }) : null; paaji(sm && sm !== 'newBowler' ? sm : Math.random() < 0.5 ? 'newBowler' : 'betweenOvers'); if (!mile) banner('END OF OVER', overSummary(), 'neutral', 1.8); world.crowd.wave = { a: Math.random() * 6.28, t: 6 }; AU.Crowd.chant(2); G.phase = 'between'; G.phaseT = 0; G.betweenT = mile ? 3.0 : 1.9; if (bowlSeat().kind === 'cpu') G.cpuStyle = G.cpuStyle === 'spin' ? 'pace' : 'spin'; return; }
-    newBall();
+    G.phase = 'between'; G.phaseT = 0; G.betweenT = 0;   // the next ball at once, or when Paaji has finished
   }
   /** A fifty or a hundred: the bat raised to every stand, the crowd up, Paaji, fireworks for a hundred. */
   function milestone(kind, ib, bw) {
     const name = CK.Teams.lineup(teamOf(inn().bat)).batter(bw), b = CK.Story.batter(G.story, { inn: ib, wk: bw });
     banner(kind === 'hundred' ? 'HUNDRED!' : 'FIFTY!', name.toUpperCase() + ' · ' + b.runs + ' (' + b.balls + ')', 'good', 2.8);
-    paajiLater(kind, 250);
+    paajiLater(kind, 250, { queue: 5000 });
     G.batCheer = 3.0; G.milestone = { kind, t: 0 };
     crowdReact('cheer', 1); world.crowd.excite = 1.4; world.crowd.wave = { a: Math.random() * 6.28, t: 7 }; world.boards.flash(3, true);
     setTimeout(() => teamChant(inn().bat, 1.1), 1600);
@@ -1140,7 +1144,7 @@
       CK.poseAthlete(O, { x, z, facing: Math.atan2(to.x - from.x, to.z - from.z), twist: 0, crouch: 0.12, run: 0.34, arms: null }, dt);
     } else if (O) O.root.visible = false;
     // done when he is in and Paaji has finished his line (never more than 3.5 s more)
-    if (W.t >= W.dur && (W.skipped || !paajiPlayer.speaking || W.t > W.dur + 3.5)) { G.walk = null; G.phaseT = 0; if (O) O.root.visible = false; $('pcard').classList.remove('on'); prompts(); }
+    if (W.t >= W.dur && (W.skipped || !paajiPlayer.busy || W.t > W.dur + 3.5)) { G.walk = null; G.phaseT = 0; if (O) O.root.visible = false; $('pcard').classList.remove('on'); prompts(); }
   }
 
   function endMatch() {
@@ -1157,7 +1161,7 @@
     if (pm) {
       const seat = pm.kind === 'bat' ? m.innings[pm.inn].bat : m.innings[pm.inn].bowl;
       $('end-potm').innerHTML = `<small>PLAYER OF THE MATCH</small><b>${pm.name}</b><span>${teamOf(seat).short} · ${pm.line}</span>`;
-      paajiLater('potm', 5200); paajiLater('signOff', 10500);
+      paajiLater('potm', 1500, { queue: 12000 }); paajiLater('signOff', 3000, { queue: 25000 });   // each after the last
     } else $('end-potm').innerHTML = '';
     if (r.winner >= 0) {
       // the finale: fireworks all round the ground
@@ -2120,6 +2124,7 @@
   }
   function toTitle() {
     if (G.demo && CK.Demo) CK.Demo.close();
+    paajiPlayer.stop();
     G.inGame = false; G.match = null; G.phase = 'idle'; G.paused = false; G.replay = null; G.ending = null; G.walk = null; G.cutaway = null; G.pendingWalk = false; G.drs = null; drsGroup.visible = false; $('drs').classList.remove('on');
     $('replay-bug').classList.remove('on');
     ballMesh.visible = false; batMesh.visible = false; aimRing.visible = false; aimPin.visible = false; trail.clear();
@@ -2383,7 +2388,7 @@
     else if (G.phase === 'ready' || G.phase === 'runup') bowlerFrame(dt, now);
     if (G.cheerSpecial > 0) G.cheerSpecial -= dt;
     if (G.phase === 'void' && G.phaseT > 1.6) newBall();
-    if (G.phase === 'between' && G.phaseT > G.betweenT) { newBall(); if (G.pendingWalk) { G.pendingWalk = false; walkOut('wicket'); } }
+    if (G.phase === 'between' && G.phaseT > G.betweenT && !paajiHolds(G.phaseT - G.betweenT)) { newBall(); if (G.pendingWalk) { G.pendingWalk = false; walkOut('wicket'); } }
     // the aim spot
     const showAim = G.phase === 'ready' && !G.walk && bowlSeat().kind !== 'cpu' && opt('aim') === 'ON';
     aimRing.visible = showAim || (G.phase === 'runup' && bowlSeat().kind !== 'cpu' && opt('aim') === 'ON');

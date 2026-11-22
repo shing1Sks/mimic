@@ -148,7 +148,15 @@
   scene.add(halo); halo.visible = false;
   const batMesh = CK.makeBat(); scene.add(batMesh); batMesh.visible = false;
   const gloves = new T.Group(); gloves.visible = false; batMesh.add(gloves);
-  {
+  if (CK.Gear) {
+    // the bat's frame: the top hand at the origin, the blade along -z, the face +y; the glove's palm frame: fingers along +y
+    gloves.userData.mat = new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, map: CK.Gear.texture('mum') });
+    [[0.012, 1], [-0.12, -1]].forEach(([z, s]) => {
+      const g = new T.Mesh(CK.Gear.gloveGeo(s, false), gloves.userData.mat);
+      g.position.set(0, -0.005, z); g.rotation.set(0, 0, 0); g.rotateX(-Math.PI / 2); g.rotateY(s > 0 ? Math.PI / 2 : -Math.PI / 2);
+      g.translateY(-0.05); gloves.add(g);
+    });
+  } else {
     const gm = new T.MeshStandardMaterial({ color: 0xf2f2ee, roughness: 0.75 }), pm = new T.MeshStandardMaterial({ color: 0x2b2f3a, roughness: 0.9 });
     [-0.02, -0.135].forEach((z, i) => {
       const g = new T.Mesh(new T.BoxGeometry(0.085, 0.075, 0.1), gm); g.position.set(0, 0.012, z); gloves.add(g);
@@ -208,13 +216,15 @@
   pitchMark.rotation.x = -Math.PI / 2; pitchMark.position.y = 0.012; scene.add(pitchMark);
   const people = { ready: false, batter: null, nonStriker: null, bowler: null, fielders: [], umpire: null };
   CK.Rig.onReady(() => {
-    people.batter = CK.makeAthlete(Object.assign({}, KITS[0]));
-    people.nonStriker = CK.makeAthlete(Object.assign({}, KITS[0]));
-    people.outgoing = CK.makeAthlete(Object.assign({}, KITS[0]));   // the man just out, walking off
+    people.batter = CK.makeAthlete(Object.assign({}, KITS[0], { role: 'bat' }));
+    people.nonStriker = CK.makeAthlete(Object.assign({}, KITS[0], { role: 'bat' }));
+    people.outgoing = CK.makeAthlete(Object.assign({}, KITS[0], { role: 'bat' }));   // the man just out, walking off
     people.outgoing.root.visible = false; scene.add(people.outgoing.root);
-    people.bowler = CK.makeAthlete(Object.assign({}, KITS[1], { pads: false, helmet: null, gloves: null }));
-    people.umpire = CK.makeAthlete({ body: 'm', shirt: 0xf0f0ea, pants: 0x1c1c22, skin: 0xc68642, hair: 0x2a2a2a });
-    for (let i = 0; i < 10; i++) people.fielders.push(CK.makeAthlete(Object.assign({}, KITS[1], { body: 'm', pads: i === 0, gloves: i === 0 ? 0xf2f2f2 : null, helmet: null, skin: [0xd9a273, 0x8d5524, 0xc68642, 0xf1c8a0][i % 4] })));
+    people.nsBat = CK.makeBat(); scene.add(people.nsBat);
+    people.outBat = CK.makeBat(); people.outBat.visible = false; scene.add(people.outBat);
+    people.bowler = CK.makeAthlete(Object.assign({}, KITS[1], { pads: false, helmet: null, gloves: null, role: 'bowl' }));
+    people.umpire = CK.makeAthlete({ body: 'm', shirt: 0xf0f0ea, pants: 0x1c1c22, skin: 0xc68642, hair: 0x2a2a2a, role: 'ump', team: 'ump' });
+    for (let i = 0; i < 10; i++) people.fielders.push(CK.makeAthlete(Object.assign({}, KITS[1], { body: 'm', pads: i === 0, gloves: i === 0 ? 0xf2f2f2 : null, helmet: null, role: i === 0 ? 'keeper' : 'field', skin: [0xd9a273, 0x8d5524, 0xc68642, 0xf1c8a0][i % 4] })));
     [people.batter, people.nonStriker, people.bowler, people.umpire, ...people.fielders].forEach(a => scene.add(a.root));
     // the stadium's cheerleaders: two on each of four platforms just past the rope
     people.cheer = [];
@@ -261,7 +271,8 @@
   });
   function paintTeams() {
     if (!people.ready || !G.match) return;
-    world.flags.paint(teamOf(0).shirt, teamOf(1).shirt);   // the fans: P1's side on the +x half, P2's on the -x half
+    world.flags.paint(teamOf(0).shirt, teamOf(1).shirt, teamOf(0).id, teamOf(1).id);   // the fans' flags: P1's side on the +x half, P2's on the -x half
+    world.screen({ flags: [teamOf(0).id, teamOf(1).id] });   // and the two flags on the big screens
     const inn = MA.current(G.match), bk = kitOf(inn.bat), fk = kitOf(inn.bowl);
     [people.batter, people.nonStriker, people.outgoing].forEach(a => a.paint(bk));
     people.bowler.paint(fk);
@@ -272,14 +283,22 @@
   function castPlayers() {
     if (!people.ready || !G.match) return;
     const i = MA.current(G.match), bt = teamOf(i.bat), bw = teamOf(i.bowl), Lb = CK.Teams.lineup(bt), Lw = CK.Teams.lineup(bw);
-    people.batter.look(bt.looks[Lb.batterIdx(i.wkts)]);
-    people.nonStriker.look(bt.looks[Lb.batterIdx(i.wkts + 1)]);
-    if (people.outgoing) people.outgoing.look(bt.looks[Lb.batterIdx(i.wkts - 1)]);
+    // each man in his side's kit, his own name and number on his back, his own face (CK.Kits)
+    const dress = (A, tm, k, role) => {
+      const name = tm.players[k], look = tm.looks[k];
+      if (A.dress) A.dress({ team: tm, name, number: CK.Teams.numbers(tm)[k], look, style: CK.Teams.style(name, look), keeper: role === 'keeper', role });
+      else A.look(look);
+    };
+    dress(people.batter, bt, Lb.batterIdx(i.wkts), 'bat');
+    if (gloves.userData.mat && CK.Gear) { const gt = CK.Gear.texture(bt.id); if (gloves.userData.mat.map !== gt) { gloves.userData.mat.map = gt; gloves.userData.mat.needsUpdate = true; } }
+    dress(people.nonStriker, bt, Lb.batterIdx(i.wkts + 1), 'bat');
+    if (people.outgoing) dress(people.outgoing, bt, Lb.batterIdx(i.wkts - 1), 'bat');
     const bi = Lw.bowlerIdx(Math.floor(i.balls / 6)), fl = Lw.fielders(bi);
-    people.bowler.look(bw.looks[bi]);
+    dress(people.bowler, bw, bi, 'bowl');
     G.bowlSig = CK.Teams.sig(bw.players[bi]);
-    people.fielders.forEach((a, k) => a.look(bw.looks[fl[k]]));
+    people.fielders.forEach((a, k) => dress(a, bw, fl[k], k === 0 ? 'keeper' : 'field'));
     G.fieldNames = fl.map(k => bw.players[k]);
+    if (people.umpire.dress) people.umpire.dress({ team: { id: 'ump' }, name: 'Umpire', number: null, look: { skin: 2, beard: 1, hair: 'g' }, style: { beard: 'trim', hair: 'short' } });
   }
   /**
    * A wicket celebration in the bowler's own style (teams.js sig): wings (arms spread like a glider),
@@ -441,7 +460,7 @@
   function teamCanvas(tm, w, h, draw) {
     const c = document.createElement('canvas'); c.width = w; c.height = h;
     draw(c.getContext('2d'), hex6(tm.shirt), hex6(tm.accent));
-    const t = new T.CanvasTexture(c); t.colorSpace = T.SRGBColorSpace; return t;
+    const t = new T.CanvasTexture(c); t.colorSpace = T.SRGBColorSpace; t.encoding = T.sRGBEncoding; return t;   // (r149 reads encoding)
   }
   function fanFlag() {
     const geo = new T.PlaneGeometry(1.5, 0.95, 14, 1);
@@ -456,8 +475,8 @@
     const tm = teamOf(i), key = tm.id;
     if (!fanTex[key]) {
       fanTex[key] = {
-        body: teamCanvas(tm, 160, 100, (x, a, b) => { x.clearRect(0, 0, 160, 100); x.fillStyle = a; x.beginPath(); x.ellipse(80, 50, 78, 46, 0, 0, Math.PI * 2); x.fill(); x.fillStyle = b; x.fillRect(4, 40, 152, 20); x.fillStyle = a === '#ffffff' || a === '#f2f2f2' ? '#c8102e' : '#ffffff'; x.font = 'bold 40px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(tm.short, 80, 52); }),
-        flag: teamCanvas(tm, 192, 120, (x, a, b) => { x.fillStyle = a; x.fillRect(0, 0, 192, 120); x.fillStyle = b; x.fillRect(0, 44, 192, 32); x.fillStyle = a; x.font = 'bold 30px sans-serif'; x.textAlign = 'center'; x.fillText(tm.short, 96, 71); }),
+        body: CK.Kits && CK.Kits.FLAGS.includes(tm.id) ? teamCanvas(tm, 160, 100, x => { x.clearRect(0, 0, 160, 100); x.save(); x.beginPath(); x.ellipse(80, 50, 78, 46, 0, 0, Math.PI * 2); x.clip(); CK.Kits.drawFlag(x, tm.id, 0, 0, 160, 100); x.restore(); }) : teamCanvas(tm, 160, 100, (x, a, b) => { x.clearRect(0, 0, 160, 100); x.fillStyle = a; x.beginPath(); x.ellipse(80, 50, 78, 46, 0, 0, Math.PI * 2); x.fill(); x.fillStyle = b; x.fillRect(4, 40, 152, 20); x.fillStyle = a === '#ffffff' || a === '#f2f2f2' ? '#c8102e' : '#ffffff'; x.font = 'bold 40px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(tm.short, 80, 52); }),
+        flag: CK.Kits && CK.Kits.FLAGS.includes(tm.id) ? teamCanvas(tm, 192, 120, x => CK.Kits.drawFlag(x, tm.id, 0, 0, 192, 120)) : teamCanvas(tm, 192, 120, (x, a, b) => { x.fillStyle = a; x.fillRect(0, 0, 192, 120); x.fillStyle = b; x.fillRect(0, 44, 192, 32); x.fillStyle = a; x.font = 'bold 30px sans-serif'; x.textAlign = 'center'; x.fillText(tm.short, 96, 71); }),
       };
     }
     for (const f of people.fans) {
@@ -560,7 +579,7 @@
       const note = CK.Story.batterNote(G.story, { inn: G.match.i, wk: inn().wkts });
       if (note) paajiLater(note, 700);
     }
-    if (G.helmetOff && people.batter && people.batter.helmet) { people.batter.helmet.visible = true; G.helmetOff = false; }
+    G.helmetOff = false;   // (applyFrame puts it back on)
     G.milestone = null; G.skipReplay = false;
     if (!first) updateScorebug();
   }
@@ -1071,7 +1090,7 @@
     setTimeout(() => teamChant(inn().bat, 1.1), 1600);
     if (kind === 'hundred') {
       SFX.band('six');
-      if (people.batter.helmet) { people.batter.helmet.visible = false; G.helmetOff = true; }   // helmet off, face to the sky
+      G.helmetOff = true;   // helmet off, face to the sky (applyFrame)
       const ex = CK.Hype.extras(gfxLevel());
       for (let i = 0; i < Math.round(10 * ex.fireworks); i++) setTimeout(() => { const a = Math.random() * 6.28; world.fx.burst({ x: Math.sin(a) * 80, y: 34 + Math.random() * 12, z: PH.FIELD.CZ + Math.cos(a) * 80 }, 0.6 + Math.random() * 0.5); }, i * 220);
     }
@@ -1108,8 +1127,10 @@
    */
   function walkOut(kind) {
     const name = CK.Teams.lineup(teamOf(inn().bat)).batter(inn().wkts);
+    // a brisk walk (1.7-2 m/s, the walk cycle's own pace) from just inside the circle's edge of the shot
     const side = batSide(), dur = kind === 'wicket' ? 3.2 : 4.2;
-    G.walk = { t: 0, dur, kind, from: kind === 'wicket' ? { x: -7 * side, z: 11 } : { x: -9 * side, z: 14 } };
+    G.walk = { t: 0, dur, kind, from: kind === 'wicket' ? { x: -3.2 * side, z: 4.4 } : { x: -4.2 * side, z: 6.2 } };
+    if (people.ready) { people.batter.helmetTo('hand', side > 0 ? 'left' : 'right'); if (kind === 'wicket' && people.outgoing) people.outgoing.helmetTo('hand', side > 0 ? 'left' : 'right'); }
     const show = () => { if (G.walk) banner(kind === 'wicket' ? 'NEW BATTER' : 'OPENING THE BATTING', name.toUpperCase() + ' · ' + teamOf(inn().bat).short, 'neutral', 2.2); };
     if (kind === 'wicket') show(); else setTimeout(show, 2300);
     const L = CK.Teams.lineup(teamOf(inn().bat)), n = L.batterIdx(inn().wkts) + 1, bt = teamOf(inn().bat);
@@ -1118,10 +1139,37 @@
     paaji(kind === 'start' ? 'start' : kind === 'chase' ? 'chaseStart' : 'newBatter');
     prompts();
   }
+  // eased so he walks in at a steady pace and slows into his crease (no sprint at the start)
+  const walkEase = k => k * (1.35 - 0.35 * k);
   function walkPos() {
-    const W = G.walk, side = batSide(), k = clamp(W.t / W.dur, 0, 1), e = k * (2 - k);
+    const W = G.walk, side = batSide(), k = clamp(W.t / W.dur, 0, 1), e = walkEase(k);
     const to = { x: -0.42 * side, z: -1.0 };
-    return { x: lerp(W.from.x, to.x, e), z: lerp(W.from.z, to.z, e), k, dir: Math.atan2(to.x - W.from.x, to.z - W.from.z) };
+    const d = Math.hypot(to.x - W.from.x, to.z - W.from.z), speed = d / W.dur * (1.35 - 0.7 * k);
+    return { x: lerp(W.from.x, to.x, e), z: lerp(W.from.z, to.z, e), k, dir: Math.atan2(to.x - W.from.x, to.z - W.from.z), speed };
+  }
+  const smooth01 = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+  /**
+   * The striker walking out (CK.Anim.walkOutBeat): bat in his bottom hand swinging with the walk,
+   * helmet in the other hand until he puts it on halfway, a strap of his glove pulled tight, a look at
+   * the sky, a twirl of the bat; his eyes on the middle. The bat's place comes from his hand (holdBat).
+   */
+  function walkOutState() {
+    const w = walkPos(), side = batSide(), b = CK.Anim.walkOutBeat(w.k);
+    const bh = side > 0 ? 'right' : 'left', fh = side > 0 ? 'left' : 'right', sf = fh === 'right' ? 1 : -1;
+    const f = CK.Anim.forwardOf(w.dir), r = CK.Anim.rightOf(w.dir);
+    const st = { x: w.x, z: w.z, facing: w.dir, twist: 0, crouch: 0, run: 0, walk: b.walk, walkRate: clamp(w.speed / 1.5, 0.75, 1.5),
+      look: b.lookPitch > 0.05 ? null : { x: 0, y: 1.2, z: -12 }, lookPitch: b.lookPitch, helmet: b.helmet, arms: null };
+    if (b.reach === 'head') {
+      // the free hand lifts the helmet up over his head, then comes back down
+      const e = b.reachK, at = (u, y, fw) => ({ x: w.x + r.x * u + f.x * fw, y, z: w.z + r.z * u + f.z * fw });
+      st.arms = { [fh]: { hand: at(sf * lerp(0.28, 0.1, e), lerp(0.95, 1.92, e), lerp(0.05, 0.12, e)) } };
+    } else if (b.reach === 'glove') {
+      // both hands in front of him: the free hand at the bat hand's wrist strap
+      const e = b.reachK, c = { x: w.x + f.x * 0.3 * e, y: 1.0 + 0.05 * e, z: w.z + f.z * 0.3 * e };
+      const bhP = { x: c.x - r.x * sf * 0.04, y: c.y, z: c.z - r.z * sf * 0.04 };
+      st.arms = { [bh]: { hand: bhP }, [fh]: { hand: { x: bhP.x + r.x * sf * 0.09 * (2 - e), y: bhP.y + 0.04, z: bhP.z + r.z * sf * 0.09 * (2 - e) } } };
+    }
+    return { st, bat: { carry: bh, style: b.reach === 'glove' ? 'carry' : 'carry', twirl: b.twirl, p: { x: w.x, y: 0.8, z: w.z }, q: { x: 0, y: 0, z: 0, w: 1 } } };
   }
   function walkFrame(dt) {
     const W = G.walk;
@@ -1129,18 +1177,23 @@
     const skip = skipKey;
     skipKey = false;
     if (skip && W.t > 0.4) { W.t = W.dur; W.skipped = true; }
-    // after a wicket the man who is out walks off, head down, crossing the new batter on his way in
+    // after a wicket the man who is out walks off, helmet off in his hand, head down, crossing the new batter on his way in
     const O = people.outgoing;
     if (W.kind === 'wicket' && O && W.t < W.dur) {
-      const w = walkPos(), side = batSide(), k = clamp(W.t / W.dur, 0, 1);
+      const w = walkPos(), side = batSide(), k = clamp(W.t / W.dur, 0, 1), b = CK.Anim.walkOffBeat(k);
       const fx = Math.sin(w.dir), fz = Math.cos(w.dir);
       const from = { x: -0.42 * side + fz * 2.4, z: -1.0 - fx * 2.4 }, to = { x: W.from.x + fz * 2.4, z: W.from.z - fx * 2.4 };
-      const x = lerp(from.x, to.x, k * 0.85), z = lerp(from.z, to.z, k * 0.85);
+      const x = lerp(from.x, to.x, k * 0.85), z = lerp(from.z, to.z, k * 0.85), sp = Math.hypot(to.x - from.x, to.z - from.z) * 0.85 / W.dur;
       O.root.visible = true;
-      CK.poseAthlete(O, { x, z, facing: Math.atan2(to.x - from.x, to.z - from.z), twist: 0, crouch: 0.12, run: 0.34, arms: null }, dt);
-    } else if (O) O.root.visible = false;
+      if (O.helmetAt !== 'hand') O.helmetTo('hand', side > 0 ? 'left' : 'right');
+      CK.poseAthlete(O, { x, z, facing: Math.atan2(to.x - from.x, to.z - from.z), twist: 0, crouch: 0.06, run: 0, walk: 1, walkRate: clamp(sp / 1.6, 0.7, 1.3), lookPitch: b.lookPitch, lookYaw: b.lookYaw * side, arms: null }, dt);
+      if (people.outBat) CK.holdBat(O, side > 0 ? 'right' : 'left', people.outBat, 'drag');
+    } else if (O) { O.root.visible = false; if (people.outBat) people.outBat.visible = false; }
     // done when he is in and Paaji has finished his line (never more than 3.5 s more)
-    if (W.t >= W.dur && (W.skipped || !paajiPlayer.speaking || W.t > W.dur + 3.5)) { G.walk = null; G.phaseT = 0; if (O) O.root.visible = false; $('pcard').classList.remove('on'); prompts(); }
+    if (W.t >= W.dur && (W.skipped || !paajiPlayer.speaking || W.t > W.dur + 3.5)) {
+      G.walk = null; G.phaseT = 0; if (O) { O.root.visible = false; O.helmetTo('head'); } if (people.outBat) people.outBat.visible = false;
+      $('pcard').classList.remove('on'); prompts();
+    }
   }
 
   function endMatch() {
@@ -1265,12 +1318,7 @@
     const hands = { x: C.x + d.x / dl * 0.48, y: C.y + d.y / dl * 0.48, z: C.z + d.z / dl * 0.48 };
     const low = { x: hands.x + b.x * 0.1, y: hands.y + b.y * 0.1, z: hands.z + b.z * 0.1 };
     const runOff = G.runs && G.phase === 'hit' ? runProgress() : null;
-    if (G.walk && G.walk.t < G.walk.dur) {
-      // walking out to the crease, bat under the arm
-      const w = walkPos();
-      const st = { x: w.x, z: w.z, facing: w.dir, twist: 0, crouch: 0, run: 0.42, arms: null };
-      return { st, bat: { p: { x: w.x - 0.3 * Math.cos(w.dir), y: 0.72, z: w.z + 0.3 * Math.sin(w.dir) }, q: BA.batQuat(0.5, 0, 'vertical') } };
-    }
+    if (G.walk && G.walk.t < G.walk.dur) return walkOutState(dt);
     const st = { x, z, facing: side * Math.PI / 2, twist: 0.45 * side + clamp(Math.atan2(b.x, -b.z) * 0.25, -0.5, 0.5) * (Math.abs(b.y) < 0.8 ? 1 : 0.2), crouch: 0.35, run: 0,
       arms: side > 0 ? { left: { hand: hands }, right: { hand: low } } : { right: { hand: hands }, left: { hand: low } } };
     if (runOff) {
@@ -1285,8 +1333,11 @@
     if (ck > 0.01) {
       const hu = { x: x + 0.1 * side, y: 2.25, z: z + 0.05 }, e = ck * ck * (3 - 2 * ck), L3 = (a, b2) => ({ x: lerp(a.x, b2.x, e), y: lerp(a.y, b2.y, e), z: lerp(a.z, b2.z, e) });
       st.facing = lerp(st.facing, 0.35 * side, e); st.twist *= 1 - e; st.crouch = lerp(st.crouch, 0.05, e);
-      const top = L3(hands, hu), bot = L3(low, { x: hu.x, y: hu.y - 0.09, z: hu.z });
+      // a hundred: the helmet off and up in the other hand, his face to the sky
+      const ton = G.milestone && G.milestone.kind === 'hundred' && G.milestone.t < 3.2;
+      const top = L3(hands, hu), bot = L3(low, ton ? { x: hu.x - 0.62 * side, y: 2.1, z: hu.z + 0.12 } : { x: hu.x, y: hu.y - 0.09, z: hu.z });
       st.arms = side > 0 ? { left: { hand: top }, right: { hand: bot } } : { right: { hand: top }, left: { hand: bot } };
+      if (ton) { st.helmet = 'hand'; st.helmetHand = side > 0 ? 'right' : 'left'; st.lookPitch = G.milestone.t < 1.6 ? 0.42 : 0.1; }
       const qa = _bq.set(q.x, q.y, q.z, q.w), qb = BA.batQuat(Math.PI * 0.95, 0, 'vertical');
       qa.slerp(_bq2.set(qb.x, qb.y, qb.z, qb.w), e);
       return { st, bat: { p: top, q: { x: qa.x, y: qa.y, z: qa.z, w: qa.w } } };
@@ -1367,6 +1418,11 @@
   function cpuBatFrame() {
     const s = G.cpuSwing, lift = G.phase === 'flight' ? clamp(G.t / 0.35, 0, 1) : G.phase === 'hit' ? 1 : 0;
     const back = BA.batQuat(-lift * 2.3, 0, 'vertical');   // stance, then the backlift as the bowler arrives
+    if (G.phase === 'ready' || (G.phase === 'runup' && G.phaseT < runT() - 0.7)) {
+      // waiting: three taps of the bat in the crease every few seconds
+      const c = clock() % 2.8, tap = c < 0.9 ? Math.abs(Math.sin(c / 0.3 * Math.PI)) * 0.2 : 0;
+      cpuBat.q = BA.batQuat(-tap, 0, 'vertical'); return;
+    }
     if (!s || (G.phase !== 'flight' && G.phase !== 'hit')) { cpuBat.q = back; return; }
     const tt = (G.phase === 'hit' ? (G.tHit || 0) + G.t : G.t) - s.tC;
     if (tt < -0.36) { cpuBat.q = back; return; }
@@ -1490,6 +1546,25 @@
     });
   }
 
+  /** Where eyes go this frame: the ball while it is live, the bowler as he runs in (null: their own glances). */
+  function eyesOn() {
+    if ((G.phase === 'flight' || G.phase === 'hit') && G.ball && (G.ballOn || G.phase === 'hit')) return { x: G.ball.p.x, y: G.ball.p.y, z: G.ball.p.z };
+    if (G.phase === 'runup' && G.bowler) return { x: G.bowler.x, y: 1.5, z: G.bowler.z };
+    return null;
+  }
+  /**
+   * The non-striker: the bat in his bottom hand, its toe resting on the turf, carried when he runs;
+   * his eyes on the bowler, then the ball, glancing about between balls.
+   */
+  function nsLife(ns, side) {
+    const hand = side > 0 ? 'right' : 'left', s = hand === 'right' ? 1 : -1, running = ns.run > 0.3;
+    ns.bat = { hand, style: running ? 'carry' : 'rest' };
+    if (!running) {
+      const f = CK.Anim.forwardOf(ns.facing), r = CK.Anim.rightOf(ns.facing);
+      ns.arms = { [hand]: { hand: { x: ns.x + f.x * 0.2 + r.x * s * 0.24, y: 0.84, z: ns.z + f.z * 0.2 + r.z * s * 0.24 } } };
+    }
+    ns.look = eyesOn();
+  }
   /** Everything the renderer needs this frame. */
   function liveFrame(dt) {
     if (batSeat().kind === 'cpu') cpuBatFrame();
@@ -1500,6 +1575,7 @@
     if (rp) { ns.z = lerp(ns.z, -2 - (PH.PITCH.L - 1.2) - rp.z, rp.blend); ns.x = lerp(ns.x, -0.9 * side, rp.blend); ns.facing = rp.dir > 0 ? Math.PI : rp.dir < 0 ? 0 : ns.facing; }
     G.nsS = G.nsS || {};
     ns.facing = damp(G.nsS, 'face', ns.facing, 12, dt, true); ns.run = damp(G.nsS, 'run', rp && rp.dir ? 1 : 0, 8, dt);
+    nsLife(ns, side);
     // the throw leaves his hand: from where his hand is, to where the man at the stumps will be
     const th = G.throwBall;
     if (th && G.t >= th.t0 && !th.from) {
@@ -1527,22 +1603,31 @@
       _ax.set(wl > 1 ? w.x : 1, wl > 1 ? w.y : 0, wl > 1 ? w.z : 0).normalize();
       ballQ.premultiply(_dq.setFromAxisAngle(_ax, vis * dt));
     }
+    const eyes = eyesOn();
+    if (!b.st.look && !G.walk) b.st.look = eyes || (G.phase === 'ready' ? { x: G.bowler.x, y: 1.5, z: G.bowler.z } : null);
+    fielders.forEach((f, i) => { if (!f.look) f.look = eyes || (i === 0 && G.phase === 'ready' ? { x: G.bowler.x, y: 1.4, z: G.bowler.z } : null); });
+    if (!bowler.look) bowler.look = G.phase === 'ready' || G.phase === 'runup' ? { x: -0.42 * side, y: 1.4, z: -1.0 } : eyes;
     return { batter: b.st, bat: b.bat, bowler, ns, fielders, ball: ballP, ballQ: ballP ? [ballQ.x, ballQ.y, ballQ.z, ballQ.w] : null,
-      umpire: { x: aside * 1.35, z: -PH.PITCH.L - 2.4, facing: 0, run: 0, crouch: 0.15, out: G.umpireOut || 0 } };
+      umpire: { x: aside * 1.35, z: -PH.PITCH.L - 2.4, facing: 0, run: 0, crouch: 0.15, out: G.umpireOut || 0, look: eyes } };
   }
   function applyFrame(F, dt) {
     if (!people.ready) return;
+    const bside = G.match ? batSide() : 1, hw = F.batter.helmet || (G.helmetOff ? 'off' : 'head'), hh = F.batter.helmetHand || (bside > 0 ? 'left' : 'right');
+    if (people.batter.helmetAt !== hw || (hw === 'hand' && people.batter.helmetHand !== hh)) people.batter.helmetTo(hw, hh);
     CK.poseAthlete(people.batter, F.batter, dt);
     batMesh.visible = true;
-    batMesh.position.set(F.bat.p.x, F.bat.p.y, F.bat.p.z);
-    batMesh.quaternion.set(F.bat.q.x, F.bat.q.y, F.bat.q.z, F.bat.q.w);
+    if (F.bat.carry) CK.holdBat(people.batter, F.bat.carry, batMesh, F.bat.style, { twirl: F.bat.twirl });
+    else {
+      batMesh.position.set(F.bat.p.x, F.bat.p.y, F.bat.p.z);
+      batMesh.quaternion.set(F.bat.q.x, F.bat.q.y, F.bat.q.z, F.bat.q.w);
+    }
     const bw = F.bowler, A = people.bowler;
     // a gesture (send-off, appeal) takes his arms once the celebration has had its moment
     const bg = gestureOn('bowler'), gh = bg && (!bw.cel || G.celebrate.t > 1.0) ? CK.Anim.gestureHands(bg.gesture, bw) : null;
     const sc = celebrationPose(bw);
     const bArms = gh ? { left: { hand: gh.left }, right: { hand: gh.right } } : bw.cel ? sc.arms : bw.fieldArms || null;
     if (gh) bw.cel = bw.cel || 1;   // keep the phone's arm out of it
-    CK.poseAthlete(A, { x: bw.x, z: bw.z, facing: bw.facing + (bw.cel && !gh ? sc.spin : 0), run: bw.run, crouch: bw.crouch, lean: bw.lean + (bw.cel && !gh ? sc.lean : 0), y: (bw.cel && !gh ? sc.y * bw.cel : 0) + (bw.y || 0), roll: bw.roll || 0, arms: bArms }, dt);
+    CK.poseAthlete(A, { x: bw.x, z: bw.z, facing: bw.facing + (bw.cel && !gh ? sc.spin : 0), run: bw.run, crouch: bw.crouch, lean: bw.lean + (bw.cel && !gh ? sc.lean : 0), y: (bw.cel && !gh ? sc.y * bw.cel : 0) + (bw.y || 0), roll: bw.roll || 0, arms: bArms, look: bw.cel ? null : bw.look, lookPitch: bw.cel && !gh ? sc.lookPitch || 0 : 0 }, dt);
     const sh = CK.boneWorld(A, bw.arm === 'left' ? 'UpperArmL' : 'UpperArmR', new T.Vector3());
     const r = bw.armDir;
     const hand = { x: sh.x + r.x * 0.66, y: sh.y + r.y * 0.66, z: sh.z + r.z * 0.66 };
@@ -1552,6 +1637,7 @@
       CK.aimBone(armB.lower, armB.palm, hand);
     }
     CK.poseAthlete(people.nonStriker, F.ns, dt);
+    if (people.nsBat && F.ns.bat) CK.holdBat(people.nonStriker, F.ns.bat.hand, people.nsBat, F.ns.bat.style);
     const u = F.umpire;
     const uk = u.out ? Math.min(1, u.out / 0.3) : 0, ue = uk * uk * (3 - 2 * uk);
     const uArms = u.out ? { right: { hand: { x: u.x - 0.25 + 0.05 * (1 - ue), y: 1.0 + 1.25 * ue, z: u.z + 0.15 } } } : null;

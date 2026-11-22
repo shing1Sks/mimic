@@ -78,5 +78,19 @@ const rightOf = f => ({ x: -Math.cos(f), y: 0, z: Math.sin(f) });
   const st = { x: 0, z: 0, facing: 0 }, R = rightOf(0), h = A.gestureHands('stare', st);
   check('stare: hands on hips, each on its own side, at the waist', h && h.left.y > 0.85 && h.left.y < 1.15 && dot(h.left, R) < -0.15 && dot(h.right, R) > 0.15, h);
 }
+{
+  // the walk out: helmet in hand, put on halfway, a look at the sky, a twirl, slowing into the crease
+  const b = k => A.walkOutBeat(k);
+  check('walk out: helmet in his hand to start, lifted up just before halfway, on his head after', b(0).helmet === 'hand' && b(0.45).helmet === 'up' && b(0.45).reach === 'head' && b(0.55).helmet === 'head' && b(0.95).helmet === 'head');
+  check('walk out: his free hand at the glove strap a little later, nothing in his hands at the start', b(0.7).reach === 'glove' && b(0.05).reach === null);
+  check('walk out: a look up at the sky early on, not at the end', b(0.3).lookPitch > 0.3 && b(0.9).lookPitch === 0);
+  check('walk out: the bat twirled once round by the end', Math.abs(b(1).twirl - Math.PI * 2) < 1e-9 && b(0.5).twirl === 0);
+  check('walk out: walking all the way, slowing to a stop in his crease', b(0.5).walk === 1 && b(1).walk === 0 && b(0.95).walk > 0 && b(0.95).walk < 1);
+  let mono = true; for (let k = 0; k < 1; k += 0.01) if (b(k + 0.01).walk > b(k).walk + 1e-9) mono = false;
+  check('walk out: he never speeds up again once slowing', mono);
+  const o = k => A.walkOffBeat(k);
+  check('walk off: helmet off in his hand, head down', o(0).helmet === 'hand' && o(0.05).lookPitch < -0.3 && o(0.8).lookPitch < -0.3);
+  check('walk off: one look back at the pitch, head up for it', o(0.3).lookYaw > 0.9 && o(0.3).lookPitch > -0.1 && o(0.05).lookYaw === 0 && o(0.8).lookYaw === 0);
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

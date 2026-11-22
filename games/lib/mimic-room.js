@@ -54,6 +54,18 @@
     while (ac.length > bc.length) a.removeChild(a.lastChild);
   }
 
+  /** The host's HTML is shown, never run: no scripts, frames, inline handlers or javascript: links. */
+  function clean(root) {
+    root.querySelectorAll('script, iframe, object, embed, link, meta, base, form').forEach(n => n.remove());
+    for (const el of [root, ...root.querySelectorAll('*')]) {
+      for (const at of Array.from(el.attributes)) {
+        const n = at.name.toLowerCase(), v = at.value.replace(/[\s\u0000-\u001f]+/g, '').toLowerCase();
+        if (n.startsWith('on') || n === 'srcdoc' || n === 'formaction' || (/(^|:)(href|src|action|xlink:href)$/.test(n) && /^(javascript|data:text|vbscript):?/.test(v))) el.removeAttribute(at.name);
+      }
+    }
+    return root;
+  }
+
   // =========================================================================== host
   const H = { on: false, opts: null, viewers: new Map(), sc: null, sx: null, stream: null, lastDraw: 0, dirty: new Set(), lastDom: 0, obs: [] };
 
@@ -327,6 +339,7 @@
       const t = doc.createElement('template'); t.innerHTML = html.trim();
       const nu = t.content.firstElementChild;
       if (!nu) return;
+      clean(nu);
       const cur = mirror.querySelector('#' + CSS.escape(id));
       if (cur) morph(cur, nu); else mirror.appendChild(nu);
     }

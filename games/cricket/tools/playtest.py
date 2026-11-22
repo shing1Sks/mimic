@@ -20,7 +20,7 @@ def page(b, w, h, settings=None):
     pg.on('pageerror', lambda e: errs.append('pageerror: ' + str(e)[:300]))
     pg.on('console', lambda m: errs.append(m.type + ': ' + m.text[:300]) if m.type == 'error' else None)
     pg.add_init_script(INIT)
-    s = json.dumps(dict({'howto': 1}, **(settings or {})))   # the how-to card off (it waits for a button)
+    s = json.dumps(settings or {})
     pg.add_init_script("try { localStorage.setItem('willowlight.settings', JSON.stringify(%s)); } catch (e) {}" % s)
     pg.goto(URL)
     pg.wait_for_function("window.__cricket && __cricket.people.ready", timeout=60000)

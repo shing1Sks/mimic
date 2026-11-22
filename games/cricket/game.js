@@ -36,8 +36,6 @@
     hand1: { label: 'P2 PLAYS', vals: ['RIGHT-HANDED', 'LEFT-HANDED'], def: 0 },
     cpu: { label: 'COMPUTER', vals: ['CLUB', 'PRO'], def: 0 },
     replays: { label: 'REPLAYS', vals: ['ON', 'OFF'], def: 0 },
-    // the how-to (CK.Demo) before each innings a phone bats or bowls in
-    howto: { label: 'HOW-TO BEFORE PLAY', vals: ['ON', 'OFF'], def: 0 },
     // first person: bat from behind the helmet grille, bowl from the bowler's eyes (big moments stay broadcast)
     camera: { label: 'CAMERA', vals: ['BROADCAST', 'FIRST PERSON'], def: 0 },
     comm: { label: 'COMMENTARY', vals: ['ON', 'OFF'], def: 0 },
@@ -341,7 +339,6 @@
     newBall(true);
     banner(kind === 'versus' ? `${G.match.names[inn().bat]} BATS` : kind === 'nets-bowl' ? 'YOU BOWL' : 'YOU BAT', `${overs} OVER${overs > 1 ? 'S' : ''} · ${wk} WICKET${wk > 1 ? 'S' : ''}`, 'neutral', 2.2);
     walkOut('start');
-    howTo();
     updateScorebug();
     AU.resume();
   }
@@ -1091,17 +1088,7 @@
     showScreen('break');
     G.cpuStyle = 'pace';
   }
-  function continueAfterBreak() { showScreen(null); paintTeams(); newBall(true); banner(`${G.match.names[inn().bat]} BATS`, MA.need(G.match).text, 'neutral', 2); walkOut('chase'); howTo(); }
-  /** The how-to for each phone about to bat or bowl this innings (skippable; play waits for it). */
-  function howTo() {
-    if (opt('howto') !== 'ON' || !CK.Demo) return;
-    const roles = [];
-    const add = (s, role) => { if (s && s.kind === 'phone') roles.push({ role, who: G.kind === 'versus' ? s.name : '', keys: { a: keyA(s.mc), centre: keyC(s.mc) } }); };
-    add(bowlSeat(), 'bowl'); add(batSeat(), 'bat');
-    if (!roles.length) return;
-    G.demo = true; seats.forEach(s => s.input && s.input.drain());
-    CK.Demo.show(roles, () => { G.demo = false; seats.forEach(s => s.input && s.input.drain()); });
-  }
+  function continueAfterBreak() { showScreen(null); paintTeams(); newBall(true); banner(`${G.match.names[inn().bat]} BATS`, MA.need(G.match).text, 'neutral', 2); walkOut('chase'); }
   /**
    * The striker walks out to the middle: at the start of each innings and after a wicket. The first
    * ball waits for him and for Paaji's line (so the welcome is never cut off); HOLD skips it.
@@ -2119,7 +2106,6 @@
     refreshFocus();
   }
   function toTitle() {
-    if (G.demo && CK.Demo) CK.Demo.close();
     G.inGame = false; G.match = null; G.phase = 'idle'; G.paused = false; G.replay = null; G.ending = null; G.walk = null; G.cutaway = null; G.pendingWalk = false; G.drs = null; drsGroup.visible = false; $('drs').classList.remove('on');
     $('replay-bug').classList.remove('on');
     ballMesh.visible = false; batMesh.visible = false; aimRing.visible = false; aimPin.visible = false; trail.clear();
@@ -2222,7 +2208,6 @@
   addEventListener('keydown', e => {
     AU.resume();
     if (G.screen === 'lobby') return;
-    if (G.demo && CK.Demo && (e.key === ' ' || e.key === 'Enter' || e.key === 'Escape')) { CK.Demo.close(); e.preventDefault(); return; }
     if (e.key === 'Escape') { if (G.inGame && G.screen === 'game') setPaused(true); else if (G.paused) setPaused(false); else menuBack(); return; }
     if (e.key === 'm' || e.key === 'M') { settings.sound = settings.sound ? 0 : 1; saveSettings(); refreshOpts(); return; }
     const m = activeMenu(); if (!m) return;
@@ -2322,7 +2307,6 @@
         const c = s.mc;
         if (s.kind !== 'phone' || !c) continue;
         if (c !== mc) c.update();
-        if (G.demo) { if (['a', 'b', 'one', 'two', 'center'].some(k => c.pressed(k))) CK.Demo.close(); continue; }
         if (c.pressed('b')) { setPaused(true); return; }
         if (c.pressed('center')) toast(s.name + ': forward set');
       }
@@ -2386,6 +2370,9 @@
     if (G.phase === 'between' && G.phaseT > G.betweenT) { newBall(); if (G.pendingWalk) { G.pendingWalk = false; walkOut('wicket'); } }
     // the aim spot
     const showAim = G.phase === 'ready' && !G.walk && bowlSeat().kind !== 'cpu' && opt('aim') === 'ON';
+    // the variations card: up while a phone gets ready to bowl, faded through the run-up
+    const tipsOn = bowlSeat().kind !== 'cpu' && !G.walk && (G.phase === 'ready' || G.phase === 'runup');
+    $('tips').classList.toggle('on', tipsOn); $('tips').classList.toggle('dim', tipsOn && G.phase === 'runup');
     aimRing.visible = showAim || (G.phase === 'runup' && bowlSeat().kind !== 'cpu' && opt('aim') === 'ON');
     if (!aimRing.visible) aimPin.visible = false;
     if (aimRing.visible) {
@@ -2446,7 +2433,7 @@
       const oc = G.outcome;
       if (G.phase === 'hit' && oc && oc.type === 'caught' && G.t > oc.t - 0.4 && G.t < oc.t + 0.25) ts = 0.3;
       const sdt = rdt * ts;
-      if (G.inGame && !G.paused && !G.demo && G.screen === 'game' && G.phase !== 'over') gameFrame(sdt, now);
+      if (G.inGame && !G.paused && G.screen === 'game' && G.phase !== 'over') gameFrame(sdt, now);
       if (G.inGame && G.match && people.ready) { F = liveFrame(G.paused ? 0 : sdt); applyFrame(F, G.paused ? 0 : sdt); snapshot(F, G.paused ? 0 : sdt); }
       dustFrame(sdt);
       landRing.material.opacity = G.phase === 'hit' && G.landAt && G.ball && G.ballOn && !G.ball.bounces ? 0.55 + 0.35 * Math.sin(now / 120) : Math.max(0, landRing.material.opacity - rdt * 2);

@@ -182,12 +182,12 @@
       g.textAlign = 'center'; g.textBaseline = 'middle';
       if (hot) {
         g.fillStyle = flick ? '#ffffff' : S.col; g.font = 'italic 800 120px Bahnschrift, "Segoe UI", sans-serif';
-        g.fillText(S.big, 256, 112);
-        g.fillStyle = '#e6e0fb'; g.font = '600 30px Bahnschrift, "Segoe UI", sans-serif'; g.fillText(S.sub, 256, 210);
+        g.fillText(S.big, 256, 112, 480);
+        g.fillStyle = '#e6e0fb'; g.font = '600 30px Bahnschrift, "Segoe UI", sans-serif'; g.fillText(S.sub, 256, 210, 480);
       } else {
         g.fillStyle = '#ffc24d'; g.font = 'italic 800 34px Bahnschrift, "Segoe UI", sans-serif'; g.fillText('CHAK DE FATTE', 256, 46);
-        g.fillStyle = '#ffffff'; g.font = '800 92px Bahnschrift, "Segoe UI", sans-serif'; g.fillText(S.score, 256, 140);
-        g.fillStyle = '#b2abcf'; g.font = '600 28px Bahnschrift, "Segoe UI", sans-serif'; g.fillText(S.sub, 256, 218);
+        g.fillStyle = '#ffffff'; g.font = '800 92px Bahnschrift, "Segoe UI", sans-serif'; g.fillText(S.score, 256, 140, 476);
+        g.fillStyle = '#b2abcf'; g.font = '600 28px Bahnschrift, "Segoe UI", sans-serif'; g.fillText(S.sub, 256, 218, 480);
       }
       tex.needsUpdate = true;
     }

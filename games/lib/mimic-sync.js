@@ -329,7 +329,7 @@
       const want = o.fixed != null ? o.fixed : base + jit + margin + (o.smooth ? interval : 0);
       last = { base, jit };
       // up at once (a slower network), down gently (no sudden jump back in time on screen)
-      delay = delay === null || want > delay ? want : delay + (want - delay) * 0.02;
+      delay = delay === null || want > delay ? want : delay + (want - delay) * 0.05;   // (~0.3 s back down at 60 fps)
     }
     function pick(nowHost) {
       if (!snaps.length) return null;

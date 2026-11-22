@@ -60,8 +60,12 @@ def main():
             host.wait_for_function('window.__cricket && __cricket.people.ready', timeout=60000)
             host.click('[data-act=versus]')
             host.wait_for_function("document.getElementById('online-url').value.length > 0", timeout=15000)
-            invite = host.evaluate("document.getElementById('online-url').value")
-            check('/room/?' in invite and 'room=' in invite and 'game=cricket' in invite, f'lobby shows the friend link: {invite}')
+            # (cricket's friend link opens the game itself, state-synced: room-state.e2e.py; this checks
+            # the video room every game can use, games/room/)
+            link = host.evaluate("document.getElementById('online-url').value")
+            room_id = host.evaluate("MimicLink.room")
+            invite = link.split('/cricket/')[0] + '/room/?room=' + room_id + '&game=cricket'
+            check('join=' in link, f'lobby shows the friend link: {link}')
 
             gctx = b.new_context(viewport={'width': 1440, 'height': 810})
             guest = gctx.new_page()

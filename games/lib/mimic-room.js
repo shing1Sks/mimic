@@ -338,7 +338,7 @@
       if (!S.phoneUrl || !global.MimicQR) return;
       if (box.dataset.url === S.phoneUrl) return;
       box.dataset.url = S.phoneUrl;
-      box.innerHTML = `<div class="qr">${MimicQR.svg(S.phoneUrl, { ecc: 'M', border: 2 })}</div><div><b>Scan with your phone</b><span>Your phone becomes your bat and ball. Then press HOLD on it to take your seat.</span></div>`;
+      box.innerHTML = `<div class="qr">${MimicQR.svg(S.phoneUrl, { ecc: 'M', border: 2 })}</div><div><b>Scan with your phone's camera</b><span>It opens in the browser (no app needed) and becomes your bat and ball. Then press HOLD on it to take your seat.</span></div>`;
     }
     function ping() {
       if (!S.dc || S.dc.readyState !== 'open') return;

@@ -15,7 +15,8 @@
   const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const deviceName = isIOS ? 'iPhone' : /Android/.test(navigator.userAgent) ? 'Android' : 'Phone';
   // the Android app plays over Bluetooth, smoother than this page over the network: say so (not on iPhone, it has no app)
-  if (/Android/.test(navigator.userAgent)) { const n = document.getElementById('appnote'); if (n) n.hidden = false; }
+  // the app's Bluetooth link only reaches the computer it is paired with: a friend in an online room (&guest=) plays here
+  if (/Android/.test(navigator.userAgent) && !new URLSearchParams(location.search).get('guest')) { const n = document.getElementById('appnote'); if (n) n.hidden = false; }
   const store = (() => { try { return sessionStorage; } catch (e) { return null; } })();
   const sget = k => { try { return store && store.getItem(k); } catch (e) { return null; } };
   const sset = (k, v) => { try { if (store) store.setItem(k, v); } catch (e) { /* private mode */ } };

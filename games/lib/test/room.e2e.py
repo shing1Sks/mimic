@@ -106,8 +106,15 @@ def main():
             host.wait_for_function("document.querySelectorAll('#lobby .slot.joined').length === 2", timeout=10000)
             check(True, 'both phones took a seat')
             if OUT: host.screenshot(path=os.path.join(OUT, 'room_host_lobby.png'))
-            phones[0].evaluate("__mimicPhone.press('a', true)"); host.wait_for_timeout(1400); phones[0].evaluate("__mimicPhone.press('a', false)")
-            host.wait_for_function("__cricket.G.inGame", timeout=10000)
+            phones[0].evaluate("__mimicPhone.press('a', true)")
+            # held until the match starts (a busy headless host counts the hold in capped frame steps)
+            host.wait_for_function("__cricket.G.inGame", timeout=30000)
+            phones[0].evaluate("__mimicPhone.press('a', false)")
+            try:
+                host.wait_for_function("__cricket.G.inGame", timeout=20000)
+            except Exception:
+                print('  host state:', host.evaluate("({ screen: __cricket.G.screen, status: document.getElementById('lobby-status').textContent, joined: document.querySelectorAll('#lobby .slot.joined').length, errs: 0 })"), errs[:3])
+                raise
             host.wait_for_timeout(1500)
             cw = host.evaluate("[document.querySelector('#stage canvas').clientWidth, innerWidth]")
             check(cw[0] > cw[1] + 500, f'canvas grows the friend\'s view beside the screen: {cw}')

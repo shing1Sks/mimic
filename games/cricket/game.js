@@ -2547,7 +2547,9 @@
     // the online room: the card, and each prompt, only on the screen of the player it is for
     const whose = seat => (room.wide ? (seat === seats[room.seat] ? 'guest' : 'host') : '');
     const tagRoom = (id, v) => { const el = $(id); if ((el.dataset.room || '') !== v) { if (v) el.dataset.room = v; else delete el.dataset.room; } };
-    tagRoom('tips', whose(bowlSeat())); tagRoom('prompt-bowl', whose(bowlSeat())); tagRoom('prompt-bat', whose(batSeat()));
+    tagRoom('tips', whose(bowlSeat()));
+    // split screen: the card sits in the bowler's half
+    $('tips').classList.toggle('left', !room.wide && (G.views || []).length > 1 && inn().bowl === 0); tagRoom('prompt-bowl', whose(bowlSeat())); tagRoom('prompt-bat', whose(batSeat()));
     aimRing.visible = showAim || (G.phase === 'runup' && bowlSeat().kind !== 'cpu' && opt('aim') === 'ON');
     if (!aimRing.visible) aimPin.visible = false;
     if (aimRing.visible) {

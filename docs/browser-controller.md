@@ -172,12 +172,39 @@ Tests: `python games/lib/test/qr-lab.e2e.py` (the Wi-Fi https flow and its recor
 `mimic.js`, the mailbox over HTTP). `python games/lib/test/mimic-link.e2e.py` (Chromium: a game page
 and emulated phones connected over WebRTC).
 
+## Online room (play with someone somewhere else)
+
+`games/lib/mimic-room.js` plus the page `games/room/` (cricket uses it; any game can).
+
+- The host's game calls `MimicRoom.host({ game, mirror: [ids], audio: () => ({ ctx, node }) })` and,
+  after drawing each frame, `MimicRoom.frame(canvas, x, y, w, h)` with the part of the canvas the
+  friend should see. `MimicRoom.inviteUrl()` is the friend's link: the phone link with `/room/`
+  instead of `/phone/` (same server, same room, same mailbox) plus `game=`.
+- The friend's page joins the room as a viewer (id `v-...`; mimic-link hands those messages to
+  mimic-room) and offers to receive one video and one audio track and a `room` data channel. The host
+  answers with a canvas stream (at the friend's window shape, at most 1280x720, 30 fps, game sound
+  from a MediaStreamDestination on the game's mix). The data channel carries the mirrored DOM
+  (`{t:'dom', id, html}`, applied by morphing so CSS transitions still run), the phone link,
+  `dims`, clock pings, and the friend's `size` and measured `delay`.
+- The friend's phone link carries `&guest=<viewer id>`; the phone sends it in its `hello`, and
+  `MimicLink.phones()[].guest` names the viewer. That is how the game knows a seat is far away.
+- Picture delay: every streamed frame has a strip of 24 blocks under the picture (sync, 20 bits of
+  the host's `performance.now()` in ms, parity). The friend's page reads it back with
+  `requestVideoFrameCallback` as each frame is shown, maps it through a ping-measured clock offset,
+  and reports the median delay; `MimicRoom.delayFor(guestId)` returns it. Cricket adds it to the
+  swing lag of that batter.
+- Elements tagged `data-room="host"` or `data-room="guest"` show on one side only (the guest page has
+  `body.room-guest`).
+- Video starts at 2.5 Mbps (`x-google-start-bitrate` in the offer), up to 4.5 Mbps. Over TURN that is
+  roughly 200-350 MB per match.
+
+Test: `python games/lib/test/room.e2e.py` (host page, friend's page and two phone pages, headless).
+
 ## Limits
 
-- **No TURN server.** Only public STUN (`stun:stun.l.google.com:19302`). A phone and a PC on the
-  same Wi-Fi connect directly. Some networks block that (guest Wi-Fi with client isolation, some
-  corporate networks, phone on mobile data behind a strict carrier NAT). Those will not connect
-  until a TURN server is added to the ICE list.
+- **TURN only on the site.** The site serves Cloudflare TURN credentials at `/ice`; the dev server
+  has STUN only (or the site's TURN with `serve.py --public`). Without TURN, networks that block a
+  direct link (client-isolated guest Wi-Fi, strict carrier NAT) cannot connect.
 - **Vibration:** Android only. iOS Safari has no vibration API.
 - **Sensor rate:** browsers give about 60 Hz (Chrome caps sensors at 60 Hz). The app sends more
   often over Bluetooth, so very fast swings show less detail.

@@ -1063,7 +1063,7 @@
     }
     if (ev.over && Math.random() < 0.5) setTimeout(() => teamChant(inn().bat, 0.8), 700);
     if (ev.over) { const sm = G.story ? CK.Story.overStart(G.story, { inn: G.match.i, bowler: bowlerName() }) : null; paaji(sm && sm !== 'newBowler' ? sm : Math.random() < 0.5 ? 'newBowler' : 'betweenOvers'); if (!mile) banner('END OF OVER', overSummary(), 'neutral', 1.8); world.crowd.wave = { a: Math.random() * 6.28, t: 6 }; AU.Crowd.chant(2); G.phase = 'between'; G.phaseT = 0; G.betweenT = mile ? 3.0 : 1.9; if (bowlSeat().kind === 'cpu') G.cpuStyle = G.cpuStyle === 'spin' ? 'pace' : 'spin'; return; }
-    G.phase = 'between'; G.phaseT = 0; G.betweenT = 0;   // the next ball at once, or when Paaji has finished
+    newBall();
   }
   /** A fifty or a hundred: the bat raised to every stand, the crowd up, Paaji, fireworks for a hundred. */
   function milestone(kind, ib, bw) {
@@ -2388,7 +2388,7 @@
     else if (G.phase === 'ready' || G.phase === 'runup') bowlerFrame(dt, now);
     if (G.cheerSpecial > 0) G.cheerSpecial -= dt;
     if (G.phase === 'void' && G.phaseT > 1.6) newBall();
-    if (G.phase === 'between' && G.phaseT > G.betweenT && !paajiHolds(G.phaseT - G.betweenT)) { newBall(); if (G.pendingWalk) { G.pendingWalk = false; walkOut('wicket'); } }
+    if (G.phase === 'between' && G.phaseT > G.betweenT) { newBall(); if (G.pendingWalk) { G.pendingWalk = false; walkOut('wicket'); } }
     // the aim spot
     const showAim = G.phase === 'ready' && !G.walk && bowlSeat().kind !== 'cpu' && opt('aim') === 'ON';
     aimRing.visible = showAim || (G.phase === 'runup' && bowlSeat().kind !== 'cpu' && opt('aim') === 'ON');

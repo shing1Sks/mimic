@@ -653,6 +653,8 @@
 
   function boot() {
     patchMimic();
+    // a friend's copy of a game in an online room (?join=<room>, mimic-room.js): it hosts no phones of its own
+    if (typeof location !== 'undefined' && /[?&]join=/.test(location.search)) return;
     ready.then(() => {
       mountRoot();
       // a page reload keeps its room: phones that were connected come back by themselves

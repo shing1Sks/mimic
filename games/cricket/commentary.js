@@ -246,6 +246,7 @@
       sched.endAt(line.id, now() + (delay + buf.duration) * 1000);
       src.onended = () => { gain.disconnect(); if (cur === c) { cur = null; sched.done(line.id); afterLine(); } };
       duck(true, a);
+      if (o.onVoice) o.onVoice(line, delay);   // (the online room: the friend's page says it too)
       const show = () => { if (cur === c && o.onLine) o.onLine(line, buf.duration + 0.3); };
       if (delay > 0.005) later(show, delay * 1000); else show();
     }
@@ -283,6 +284,17 @@
       if (line) { play(line); prime(); }
       return line;
     }
+    /** Say this line now (a friend's page, told by the host which line): no scheduling, just the voice. */
+    function playId(id, delay) {
+      const line = o.lines.find(l => l.id === id);
+      if (!line) return;
+      unlater(gapT);
+      if (waiting) { unlater(waiting.timer); waiting = null; }
+      const lead = Math.max(fadeOut(), delay || 0), a = audioOn();
+      if (!a || !man) { if (o.onLine) o.onLine(line, 3); return; }
+      const t0 = now();
+      decode(id).then(buf => { const a2 = audioOn(); if (buf && a2) voice(line, buf, a2, Math.max(0, lead - (now() - t0) / 1000)); });
+    }
     function stop() {
       unlater(gapT);
       if (waiting) { unlater(waiting.timer); sched.cancel(waiting.line.id); waiting = null; }
@@ -291,7 +303,7 @@
       duck(false, o.audio());
     }
     return {
-      load, moment, stop,
+      load, moment, stop, playId,
       get loaded() { return Object.keys(bytes).length; },
       get decoded() { return Object.keys(bufs).length; },
       get speaking() { return !!cur; },

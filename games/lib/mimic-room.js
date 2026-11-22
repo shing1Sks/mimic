@@ -67,18 +67,28 @@
   }
 
   // =========================================================================== host
-  const H = { on: false, opts: null, viewers: new Map(), sc: null, sx: null, stream: null, lastDraw: 0, dirty: new Set(), lastDom: 0, obs: [] };
+  const H = { on: false, opts: null, viewers: new Map(), sc: null, sx: null, stream: null, lastDraw: 0, dirty: new Set(), lastDom: 0, obs: [], sticky: new Map(), units: [] };
 
   function host(opts) {
     if (H.on) return api;
     H.on = true; H.opts = Object.assign({ mirror: ['hud'], game: '' }, opts || {});
     if (global.MimicLink) MimicLink.on('change', phonesChanged);
-    for (const id of H.opts.mirror) {
+    // what is mirrored: whole elements (by id), and for a container (mirrorChildren) each child with
+    // an id on its own plus the container's own attributes: a busy HUD sends only the part that changed
+    const watch = (id, deep) => {
+      const el = doc.getElementById(id);
+      if (!el) return;
+      const key = deep ? id : '@' + id;
+      const mo = new MutationObserver(() => H.dirty.add(key));
+      mo.observe(el, deep ? { attributes: true, childList: true, subtree: true, characterData: true } : { attributes: true });
+      H.obs.push(mo); H.units.push(key);
+    };
+    for (const id of H.opts.mirror) watch(id, true);
+    for (const id of H.opts.mirrorChildren || []) {
       const el = doc.getElementById(id);
       if (!el) continue;
-      const mo = new MutationObserver(() => H.dirty.add(id));
-      mo.observe(el, { attributes: true, childList: true, subtree: true, characterData: true });
-      H.obs.push(mo);
+      watch(id, false);
+      for (const c of el.children) if (c.id) watch(c.id, true);
     }
     return api;
   }
@@ -131,13 +141,18 @@
     sendDom(t);
   }
 
-  function sendDom(t, force, only) {
-    if (!force && t - H.lastDom < 66) return;
-    const ids = force ? H.opts.mirror : Array.from(H.dirty);
+  function sendDom(t, force, only, now0) {
+    if (!force && !now0 && t - H.lastDom < 66) return;
+    const ids = force ? H.units : Array.from(H.dirty);
     if (!ids.length) return;
     H.lastDom = t; if (!force) H.dirty.clear();
     const msgs = [];
-    for (const id of ids) { const el = doc.getElementById(id); if (el) msgs.push({ t: 'dom', id, html: el.outerHTML }); }
+    for (const key of ids) {
+      if (key[0] === '@') {
+        const el = doc.getElementById(key.slice(1));
+        if (el) { const attrs = {}; for (const a of el.attributes) attrs[a.name] = a.value; msgs.push({ t: 'attrs', id: el.id, attrs, at: t }); }
+      } else { const el = doc.getElementById(key); if (el) msgs.push({ t: 'dom', id: key, html: el.outerHTML, at: t }); }
+    }
     const list = only ? [only] : Array.from(H.viewers.values());
     for (const v of list) if (v.open) for (const m of msgs) send(v, m);
   }
@@ -165,7 +180,7 @@
   /** Signaling from a viewer (mimic-link hands us every message from an id starting "v-"). */
   async function onSignal(m, sig) {
     const d = m.data || {};
-    if (m.type === 'offer' && d.kind === 'view') return accept(m.from, d, sig);
+    if (m.type === 'offer' && (d.kind === 'view' || d.kind === 'state')) return accept(m.from, d, sig);
     const v = H.viewers.get(m.from);
     if (!v || d.sid !== v.sid) return;
     if (m.type === 'ice' && d.c) { if (v.pc.remoteDescription) v.pc.addIceCandidate(d.c).catch(() => {}); else v.iceQ.push(d.c); }
@@ -179,7 +194,7 @@
     if (old) drop(old, true);
     const ice = P().iceServers ? await P().iceServers(sig.base) : P().STUN;
     const v = { id, sid: d.sid, name: String(d.name || 'Friend').slice(0, 24), pc: new RTCPeerConnection({ iceServers: ice }), iceQ: [], dc: null, open: false,
-      delayMs: null, aspect: 16 / 9, phone: null };
+      delayMs: null, aspect: 16 / 9, phone: null, kind: d.kind === 'state' ? 'state' : 'view', st: null };
     H.viewers.set(id, v);
     const pc = v.pc;
     pc.onicecandidate = e => { if (e.candidate && H.viewers.get(id) === v) sig.send(id, 'ice', { sid: v.sid, c: e.candidate.toJSON() }).catch(() => {}); };
@@ -187,8 +202,7 @@
     pc.ondatachannel = e => bind(v, e.channel);
     try {
       await pc.setRemoteDescription({ type: 'offer', sdp: d.sdp });
-      const st = ensureStream();
-      for (const tr of st.getTracks()) pc.addTrack(tr, st);
+      if (v.kind === 'view') { const st = ensureStream(); for (const tr of st.getTracks()) pc.addTrack(tr, st); }
       const ans = await pc.createAnswer();
       try { await pc.setLocalDescription({ type: 'answer', sdp: fastStart(ans.sdp) }); } catch (e) { await pc.setLocalDescription(ans); }
       for (const c of v.iceQ.splice(0)) pc.addIceCandidate(c).catch(() => {});
@@ -208,11 +222,26 @@
   }
 
   function bind(v, dc) {
+    dc.binaryType = 'arraybuffer';
+    if (dc.label === 'st') {
+      // state out, clock pings in (binary: 0xC0 + f64 the guest's time -> 0xC1 + f64 + f64 our time)
+      v.st = dc;
+      dc.onmessage = e => {
+        if (typeof e.data === 'string' || e.data.byteLength !== 9) return;
+        const i = new DataView(e.data);
+        if (i.getUint8(0) !== 0xC0) return;
+        const o = new DataView(new ArrayBuffer(17)); o.setUint8(0, 0xC1); o.setFloat64(1, i.getFloat64(1, true), true); o.setFloat64(9, now(), true);
+        try { dc.send(o.buffer); } catch (err) { /* closing */ }
+      };
+      return;
+    }
     v.dc = dc;
     dc.onopen = () => {
       v.open = true;
-      send(v, { t: 'hello', game: H.opts.game, phone: phoneUrl(v) });
-      if (H.sc) send(v, { t: 'dims', w: H.sc.width, h: H.sc.height });
+      send(v, { t: 'hello', game: H.opts.game, phone: phoneUrl(v), kind: v.kind });
+      if (H.sc && v.kind === 'view') send(v, { t: 'dims', w: H.sc.width, h: H.sc.height });
+      // a friend joining part way: the lasting things first (who wears what, the board), then the screens
+      if (v.kind === 'state') { for (const m of H.sticky.values()) send(v, m); if (H.opts.onViewer) try { H.opts.onViewer(v); } catch (err) { console.warn(err); } }
       sendDom(now(), true, v);
       phonesChanged();
       emit('change');
@@ -251,6 +280,25 @@
     }
   }
 
+  /** State to every friend's page (unordered, unreliable: a congested link drops a frame, never queues it). */
+  function sendState(buf) {
+    for (const v of H.viewers.values()) {
+      const c = v.st;
+      if (!v.open || !c || c.readyState !== 'open') continue;
+      if (c.bufferedAmount > 32768) { v.dropped = (v.dropped || 0) + 1; continue; }
+      try { c.send(buf); v.sent = (v.sent || 0) + 1; v.bytes = (v.bytes || 0) + buf.byteLength; } catch (e) { /* closing */ }
+    }
+  }
+  /** An event to every friend's page, in order. sticky: a key; the latest one per key also goes to anyone joining later. */
+  function sendEvent(m, sticky) {
+    if (m.at === undefined) m.at = now();
+    if (sticky) H.sticky.set(sticky, m);
+    for (const v of H.viewers.values()) if (v.open && v.kind === 'state') send(v, m);
+  }
+  /** Send the HUD parts that changed this frame (call once a frame, after the game updated its DOM). */
+  function flush() { if (H.viewers.size) sendDom(now(), false, null, true); }
+  function stateActive() { for (const v of H.viewers.values()) if (v.open && v.kind === 'state') return true; return false; }
+
   function active() { for (const v of H.viewers.values()) if (v.open) return true; return false; }
   function first() { for (const v of H.viewers.values()) if (v.open) return v; return null; }
 
@@ -259,6 +307,14 @@
     if (!global.MimicLink) return '';
     try {
       const u = new URL(MimicLink.url());
+      // a game that draws the friend's view itself (state sync): its own page, ?join=<room>
+      if (H.opts && H.opts.join) {
+        const g = new URL(u.toString());
+        g.pathname = g.pathname.replace(/phone\/?$/, H.opts.game + '/');
+        ['mode', 'rec', 'room'].forEach(k => g.searchParams.delete(k));
+        g.searchParams.set('join', MimicLink.room);
+        return g.toString();
+      }
       u.pathname = u.pathname.replace(/phone\/?$/, 'room/');
       ['mode', 'rec'].forEach(k => u.searchParams.delete(k));
       if (H.opts && H.opts.game) u.searchParams.set('game', H.opts.game);
@@ -408,9 +464,123 @@
     return { state: S, start };
   }
 
+  // =========================================================================== guest: state
+  /**
+   * A friend's copy of the game page draws the match itself from the host's state.
+   * o: { onState(buf, arrivalHostMs), onEvent(m), onDom(m) (dom/attrs messages, with m.at host ms),
+   *      onStatus(text), onPhone({ url, joined, name }), name }.
+   * Returns { hostNow(), rtt, open, send(m), offsetKnown, state }.
+   */
+  function joinState(o) {
+    o = o || {};
+    const qs = new URLSearchParams(location.search);
+    const room = qs.get('join');
+    const SIG = qs.get('sig') || (location.origin + '/signal');
+    const status = t => { if (o.onStatus) o.onStatus(t); };
+    if (!room || !P().SAFE_ID.test(room)) { status('This link has no room in it. Ask your friend for the link again.'); return null; }
+    const me = 'v-' + P().randomId(8);
+    const sig = new (P().Signal)(SIG, room, me, onMsg, { wait: 8000 });
+    const S = { pc: null, ev: null, st: null, sid: null, off: null, bestRtt: Infinity, rtts: [], open: false, phoneUrl: '', joined: false };
+    let iceQ = [];
+    async function connect() {
+      if (S.pc) try { S.pc.close(); } catch (e) { /* gone */ }
+      const sid = S.sid = P().randomId(6);
+      iceQ = []; S.open = false;
+      status('Connecting to the game…');
+      const ice = P().iceServers ? await P().iceServers(SIG) : P().STUN;
+      if (S.sid !== sid) return;
+      const pc = S.pc = new RTCPeerConnection({ iceServers: ice });
+      // st: the newest state wins, a lost one is never resent (a resend would only be late)
+      const st = S.st = pc.createDataChannel('st', { ordered: false, maxRetransmits: 0 });
+      const ev = S.ev = pc.createDataChannel('ev', { ordered: true });
+      st.binaryType = ev.binaryType = 'arraybuffer';
+      st.onmessage = e => {
+        if (S.sid !== sid || typeof e.data === 'string') return;
+        const t = now();
+        if (e.data.byteLength === 17) {
+          const i = new DataView(e.data);
+          if (i.getUint8(0) === 0xC1) {
+            const g = i.getFloat64(1, true), h = i.getFloat64(9, true), rtt = t - g;
+            S.rtts.push(rtt); if (S.rtts.length > 30) S.rtts.shift();
+            // the best (least queued) round trips set the clock; a drifting clock is followed slowly
+            if (rtt <= S.bestRtt * 1.3 + 1) { const off = h + rtt / 2 - t; S.off = S.off === null || rtt < S.bestRtt ? off : S.off * 0.9 + off * 0.1; }
+            S.bestRtt = Math.min(S.bestRtt * 1.002 + 0.001, rtt);
+            return;
+          }
+        }
+        if (S.off !== null && o.onState) o.onState(e.data, t + S.off);
+      };
+      ev.onopen = () => { if (S.sid !== sid) return; S.open = true; status(''); ping(sid); };
+      ev.onclose = () => { if (S.sid === sid) lost(); };
+      ev.onmessage = e => {
+        if (S.sid !== sid || typeof e.data !== 'string') return;
+        let m; try { m = JSON.parse(e.data); } catch (err) { return; }
+        if (m.t === 'dom' || m.t === 'attrs') { if (o.onDom) o.onDom(m); return; }
+        if (m.t === 'hello' || m.t === 'phone') {
+          if (m.phone || m.url) S.phoneUrl = m.phone || m.url;
+          if (m.t === 'phone') S.joined = !!m.joined;
+          if (o.onPhone) o.onPhone({ url: S.phoneUrl, joined: S.joined, name: m.name || '' });
+          return;
+        }
+        if (o.onEvent) o.onEvent(m);
+      };
+      pc.onicecandidate = e => { if (e.candidate && S.sid === sid) sig.send('host', 'ice', { sid, c: e.candidate.toJSON() }).catch(() => {}); };
+      pc.onconnectionstatechange = () => { if (S.sid === sid && pc.connectionState === 'failed') lost(); };
+      await pc.setLocalDescription(await pc.createOffer());
+      await sig.send('host', 'offer', { sid, sdp: pc.localDescription.sdp, kind: 'state', name: o.name || 'Friend' });
+      setTimeout(() => { if (S.sid === sid && !S.open) lost(); }, 20000);
+    }
+    function ping(sid) {
+      if (S.sid !== sid || !S.st) return;
+      if (S.st.readyState === 'open') {
+        const b = new DataView(new ArrayBuffer(9)); b.setUint8(0, 0xC0); b.setFloat64(1, now(), true);
+        try { S.st.send(b.buffer); } catch (e) { /* closing */ }
+      }
+      setTimeout(() => ping(sid), S.rtts.length < 12 ? 120 : 500);
+    }
+    function lost() {
+      S.open = false;
+      status('Lost the game. Reconnecting…');
+      setTimeout(connect, 1500);
+    }
+    function onMsg(m) {
+      const d = m.data || {};
+      if (m.from !== 'host' || d.sid !== S.sid) return;
+      if (m.type === 'answer') S.pc.setRemoteDescription({ type: 'answer', sdp: d.sdp }).then(() => { for (const c of iceQ.splice(0)) S.pc.addIceCandidate(c).catch(() => {}); }).catch(() => lost());
+      else if (m.type === 'ice' && d.c) { if (S.pc.remoteDescription) S.pc.addIceCandidate(d.c).catch(() => {}); else iceQ.push(d.c); }
+    }
+    sig.start();
+    connect();
+    return {
+      state: S,
+      hostNow: () => (S.off === null ? null : now() + S.off),
+      get rtt() { return S.bestRtt; },
+      get open() { return S.open; },
+      send(m) { try { if (S.ev && S.ev.readyState === 'open') S.ev.send(JSON.stringify(m)); } catch (e) { /* closing */ } },
+    };
+  }
+
+  /** Mirror one host HUD message into this page (elements with the same ids): shown, never run. */
+  function applyDomMsg(m, rootEl) {
+    rootEl = rootEl || doc;
+    const cur = rootEl.querySelector ? rootEl.querySelector('#' + CSS.escape(m.id)) : null;
+    if (m.t === 'attrs') {
+      if (!cur) return;
+      for (const a of Array.from(cur.attributes)) if (!(a.name in m.attrs)) cur.removeAttribute(a.name);
+      for (const k in m.attrs) { if (/^on/i.test(k)) continue; if (cur.getAttribute(k) !== m.attrs[k]) cur.setAttribute(k, m.attrs[k]); }
+      return;
+    }
+    const t = doc.createElement('template'); t.innerHTML = String(m.html).trim();
+    const nu = t.content.firstElementChild;
+    if (!nu || nu.id !== m.id) return;
+    clean(nu);
+    if (cur) morph(cur, nu);
+  }
+
   const api = {
-    host, frame, guest, morph, inviteUrl,
-    viewers: () => Array.from(H.viewers.values()).map(v => ({ id: v.id, name: v.name, open: v.open, delayMs: v.delayMs, aspect: v.aspect, phone: v.phone })),
+    host, frame, guest, morph, inviteUrl, joinState, applyDomMsg, sendState, sendEvent, flush,
+    get stateActive() { return stateActive(); },
+    viewers: () => Array.from(H.viewers.values()).map(v => ({ id: v.id, name: v.name, open: v.open, delayMs: v.delayMs, aspect: v.aspect, phone: v.phone, kind: v.kind, sent: v.sent || 0, bytes: v.bytes || 0, dropped: v.dropped || 0 })),
     get active() { return active(); },
     get aspect() { const v = first(); return v ? v.aspect : 16 / 9; },
     delayFor(gid) { const v = H.viewers.get(gid); return v && v.open && v.delayMs != null ? v.delayMs : 0; },

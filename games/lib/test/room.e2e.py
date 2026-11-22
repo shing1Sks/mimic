@@ -100,9 +100,12 @@ def main():
             check(host.evaluate("MimicLink.phones().filter(p => p.guest).length") == 1, 'host tells the friend\'s phone apart')
             guest.wait_for_function("document.getElementById('r-phone').classList.contains('joined')", timeout=10000)
             check(True, 'friend\'s page shows the phone connected')
-            for ph in phones:
-                ph.evaluate("__mimicPhone.press('a', true)"); ph.wait_for_timeout(150); ph.evaluate("__mimicPhone.press('a', false)")
-                host.wait_for_timeout(500)
+            # each phone presses HOLD until it has a seat (a busy headless host can miss a short press)
+            for n, ph in enumerate(phones):
+                for _ in range(8):
+                    if host.evaluate("document.querySelectorAll('#lobby .slot.joined').length") > n: break
+                    ph.evaluate("__mimicPhone.press('a', true)"); ph.wait_for_timeout(300); ph.evaluate("__mimicPhone.press('a', false)")
+                    host.wait_for_timeout(700)
             host.wait_for_function("document.querySelectorAll('#lobby .slot.joined').length === 2", timeout=10000)
             check(True, 'both phones took a seat')
             if OUT: host.screenshot(path=os.path.join(OUT, 'room_host_lobby.png'))

@@ -12,6 +12,9 @@
   const AU = CK.Audio, SFX = AU.SFX;
   const T = THREE;
   const $ = id => document.getElementById(id);
+  // the online room, the friend's side (?join=<room>): this page draws the host's match (net.js), never runs one
+  const GUEST = !!new URLSearchParams(location.search).get('join') && !!window.MimicSync && !!CK.Net;
+  let net = null;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const lerp = (a, b, t) => a + (b - a) * t;
   const rand = (a, b) => a + Math.random() * (b - a);
@@ -112,10 +115,11 @@
   // the screen (out of sight here) at their window's shape, from their end of the pitch, and that view
   // streams to them with the game's sound; the HUD and menus are mirrored as DOM. Their swings are
   // judged against what they saw: their picture runs MimicRoom.delayFor() ms behind the game.
-  const room = { seat: -1, guest: null, wide: false, wg: 0, cw: -1, ch: -1, t: 0 };
-  if (window.MimicRoom) {
-    MimicRoom.host({ game: 'cricket', mirror: ['hud', 'title', 'solo', 'lobby', 'pause', 'break', 'end', 'flash'],
-      audio: () => { AU.init(); return AU.state.ctx ? { ctx: AU.state.ctx, node: AU.state.master } : null; } });
+  const room = { seat: -1, guest: null, kind: null, wide: false, wg: 0, cw: -1, ch: -1, t: 0 };
+  if (window.MimicRoom && !GUEST) {
+    MimicRoom.host({ game: 'cricket', join: !!(window.MimicSync && CK.Net), mirror: ['title', 'solo', 'lobby', 'pause', 'break', 'end', 'flash'], mirrorChildren: ['hud'],
+      audio: () => { AU.init(); return AU.state.ctx ? { ctx: AU.state.ctx, node: AU.state.master } : null; },
+      onViewer: () => sendSettings() });
     MimicRoom.on('change', () => { room.t = 0; if (G.screen === 'lobby') renderOnline(); });
   }
   /** Which seat plays from a friend's room page (-1: none), checked a few times a second. */
@@ -123,20 +127,21 @@
     room.t -= dt;
     if (room.t > 0) return;
     room.t = 0.4;
-    room.seat = -1; room.guest = null;
+    room.seat = -1; room.guest = null; room.kind = null;
     if (!window.MimicRoom || !MimicRoom.active || !window.MimicLink) return;
     const ps = MimicLink.phones();
     seats.forEach((s, i) => {
       if (s.kind !== 'phone' || !s.mc || s.mc.padIndex == null) return;
       const ph = ps.find(p => p.index === s.mc.padIndex && p.guest);
-      if (ph && MimicRoom.viewers().some(v => v.id === ph.guest && v.open)) { room.seat = i; room.guest = ph.guest; }
+      const v = ph && MimicRoom.viewers().find(x => x.id === ph.guest && x.open);
+      if (v) { room.seat = i; room.guest = ph.guest; room.kind = v.kind; }
     });
   }
   /** ms the seat's player sees the game late (their room page's picture delay), 0 for a player here. */
   const remoteLag = s => (room.seat >= 0 && s === seats[room.seat] && window.MimicRoom ? MimicRoom.delayFor(room.guest) : 0);
   /** The canvas: the screen, plus the friend's view beside it while a match has a remote seat. */
   function sizeCanvas() {
-    room.wide = room.seat >= 0 && G.inGame && !!G.match;
+    room.wide = room.seat >= 0 && room.kind === 'view' && G.inGame && !!G.match;   // a video friend: their view drawn here too
     room.wg = room.wide ? Math.round(innerHeight * MimicRoom.aspect) : 0;
     const w = innerWidth + room.wg, h = innerHeight;
     if (w === room.cw && h === room.ch) return;
@@ -300,6 +305,7 @@
       }
     }
     people.ready = true;
+    startNet();
     cheerN = -1; cheerFrame(0);   // the cheerleaders on their platforms from the start (the title shows the ground)
     try { CK.crowdImpostors(scene, world.crowd, CK.bakeCrowdAtlas(renderer)); } catch (e) { console.warn('crowd atlas', e); }
     paintTeams();
@@ -407,6 +413,7 @@
     audio: () => (AU.state.ctx ? { ctx: AU.state.ctx, out: AU.state.master, duck: () => [AU.state.crowdBus] } : null),
     enabled: () => opt('comm') === 'ON', volume: () => opt('commVol'),
     onLine: (l, secs) => say(l.text, secs),   // shown when his voice starts, for as long as it runs
+    onVoice: (l, delay) => { if (net && net.line) net.line(l.id, delay); },
   });
   paajiPlayer.load();   // from the title screen on, each moment's next line fetched and decoded before it is needed
   /** opts.queue (ms): never cut in; wait that long for the line in progress to finish instead. */
@@ -426,7 +433,8 @@
   let chantMan = null, chantOut = null, chantBusy = 0;
   async function teamChant(seat, k) {
     const ctx = AU.state.ctx;
-    if (!ctx || !G.match || performance.now() < chantBusy) return;
+    if (!ctx || (!G.match && !GUEST) || performance.now() < chantBusy) return;
+    if (net && net.chant) net.chant(seat, k);
     const tm = teamOf(seat);
     try {
       if (!chantMan) chantMan = await (await fetch('assets/chants/manifest.json')).json();
@@ -575,8 +583,9 @@
     const A = g.who === 'batter' ? people.batter : g.who === 'fielder' ? people.fielders[g.by] : people.bowler;
     if (!A) { el.classList.remove('on'); return; }
     // split-screen: whichever half sees him (each half has its own camera)
-    const split = (G.views || []).length > 1 && !room.wide, halves = split ? [0, 1] : [0];
-    const own = room.wide && (G.views || []).length > 1 ? camSt[1 - room.seat].cam : camera;   // the room: this screen's view only
+    const far = room.seat >= 0 && G.inGame && !!G.match;
+    const split = (G.views || []).length > 1 && !far, halves = split ? [0, 1] : [0];
+    const own = far && (G.views || []).length > 1 ? camSt[1 - room.seat].cam : camera;   // the room: this screen's view only
     let at = null;
     for (const i of halves) {
       A.root.getWorldPosition(_bubP); _bubP.y += 2.3; _bubP.project(split ? camSt[i].cam : own);
@@ -1681,7 +1690,8 @@
     else if (G.phase === 'ready' || G.phase === 'runup') { ballMesh.visible = true; ballMesh.position.copy(hand); }
     else ballMesh.visible = false;
     const fast = G.ball && PH.len(G.ball.v) > 14;
-    trail.push(ballMesh.position, ballMesh.visible && fast && (G.phase === 'flight' || G.phase === 'hit') && !G.replayStill, camera.position);
+    G.trailOn = ballMesh.visible && fast && (G.phase === 'flight' || G.phase === 'hit') && !G.replayStill;
+    trail.push(ballMesh.position, G.trailOn, camera.position);
     ballShadow.visible = ballMesh.visible && ballMesh.position.y < 25;
     if (ballShadow.visible) {
       const hgt = ballMesh.position.y;
@@ -1800,25 +1810,48 @@
    * one, then the verdict. Space, a click or HOLD jumps to the verdict.
    */
   const drsGroup = new T.Group(); drsGroup.visible = false; scene.add(drsGroup);
-  function startDRS(v, at, track, done) {
-    $('visor').classList.remove('on'); gloves.visible = false;
+  /**
+   * The DRS picture from plain data (the friend's page builds the same from the host's event):
+   * d = { from, pitch, at, post: [[x,y,z]...], leg (pitched outside leg), third (the hitting verdict) }.
+   */
+  let drsVis = null;
+  function drsBuild(d) {
     while (drsGroup.children.length) { const c = drsGroup.children.pop(); if (c.geometry) c.geometry.dispose(); }
     const P = (x, y, z) => new T.Vector3(x, y, z);
-    const from = G.del ? G.del.from : { x: 0.3, y: 2.1, z: -18.4 }, pitch = G.path.pitch || { x: at.x, z: at.z - 2 };
+    const from = d.from, pitch = d.pitch, at = d.at;
     const pre = new T.CatmullRomCurve3([P(from.x, from.y, from.z), P((from.x + pitch.x) / 2, (from.y + 0.04) / 2 + 0.25, (from.z + pitch.z) / 2), P(pitch.x, 0.04, pitch.z), P(at.x, at.y, at.z)]);
-    const post = track.filter(q => q.z > at.z + 0.02).map(q => P(q.x, q.y, q.z));
+    const post = d.post.map(q => P(q[0], q[1], q[2]));
     const mk = (curve, col, op) => {
       const m = new T.Mesh(new T.TubeGeometry(curve, 80, 0.038, 8), new T.MeshBasicMaterial({ color: col, transparent: true, opacity: op, toneMapped: false, depthTest: false }));
       m.renderOrder = 5; m.geometry.setDrawRange(0, 0); drsGroup.add(m); return m;
     };
     const tubes = [mk(pre, 0xff3b30, 0.95)];
     if (post.length >= 2) tubes.push(mk(new T.CatmullRomCurve3([P(at.x, at.y, at.z), ...post]), 0x4fb8ff, 0.8));
-    const disc = (p, col) => { const d = new T.Mesh(new T.CircleGeometry(0.11, 24), new T.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.85, toneMapped: false, depthTest: false })); d.rotation.x = -Math.PI / 2; d.position.set(p.x, 0.02, p.z); d.renderOrder = 6; drsGroup.add(d); };
-    disc(pitch, v.rows[0].v === 'OUTSIDE LEG' ? 0xff3b30 : 0x22c55e);
+    const disc = (p, col) => { const m = new T.Mesh(new T.CircleGeometry(0.11, 24), new T.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.85, toneMapped: false, depthTest: false })); m.rotation.x = -Math.PI / 2; m.position.set(p.x, 0.02, p.z); m.renderOrder = 6; drsGroup.add(m); };
+    disc(pitch, d.leg ? 0xff3b30 : 0x22c55e);
     // the wicket zone: the stumps' frame, lit by the verdict
     const zone = new T.Mesh(new T.PlaneGeometry(0.2286, 0.711), new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18, toneMapped: false, depthTest: false, side: T.DoubleSide }));
     zone.position.set(0, 0.3555, 0); zone.renderOrder = 4; drsGroup.add(zone);
     drsGroup.visible = true;
+    drsVis = { tubes, zone, third: d.third };
+    return drsVis;
+  }
+  /** The DRS picture t s in: the flight drawing in over 1.6 s, the zone lit by the verdict at 3.3 s. */
+  function drsVisual(t) {
+    const V = drsVis; if (!V) return;
+    const k = clamp(t / 1.6, 0, 1);
+    V.tubes.forEach((m, i) => { const n = m.geometry.index.count, f = V.tubes.length > 1 ? clamp(k * 2 - i, 0, 1) : k; m.geometry.setDrawRange(0, Math.floor(n * f / 6) * 6); });
+    const lit = t >= 3.3, val = V.third;
+    V.zone.material.color.setHex(!lit ? 0xffffff : val === 'MISSING' ? 0xff3b30 : val === 'HITTING' ? 0x22c55e : 0xeab308);
+    V.zone.material.opacity = lit ? 0.45 : 0.18;
+  }
+  function startDRS(v, at, track, done) {
+    $('visor').classList.remove('on'); gloves.visible = false;
+    const from = G.del ? G.del.from : { x: 0.3, y: 2.1, z: -18.4 }, pitch = G.path.pitch || { x: at.x, z: at.z - 2 };
+    const d = { from: { x: from.x, y: from.y, z: from.z }, pitch: { x: pitch.x, z: pitch.z }, at: { x: at.x, y: at.y, z: at.z },
+      post: track.filter(q => q.z > at.z + 0.02).map(q => [q.x, q.y, q.z]), leg: v.rows[0].v === 'OUTSIDE LEG', third: v.rows[2].v };
+    const { tubes, zone } = drsBuild(d);
+    if (net && net.drs) net.drs(d);
     G.drs = { t: 0, v, tubes, zone, done, said: 0 };
     ['drs-r0', 'drs-r1', 'drs-r2'].forEach((id, i) => { const r = $(id); r.className = 'drs-row'; r.querySelector('b').textContent = v.rows[i].v; });
     $('drs-v').className = 'drs-verdict'; $('drs-v').innerHTML = (v.out ? 'OUT' : 'NOT OUT') + (v.umpiresCall ? "<small>UMPIRE'S CALL</small>" : '');
@@ -1834,14 +1867,12 @@
     skipKey = false;
     D.t += dt;
     // the flight draws in over 1.6 s: the real part, then the projection
-    const k = clamp(D.t / 1.6, 0, 1);
-    D.tubes.forEach((m, i) => { const n = m.geometry.index.count, f = D.tubes.length > 1 ? clamp(k * 2 - i, 0, 1) : k; m.geometry.setDrawRange(0, Math.floor(n * f / 6) * 6); });
+    drsVisual(D.t);
     [1.9, 2.6, 3.3].forEach((t, i) => {
       const r = $('drs-r' + i);
       if (D.t >= t && !r.classList.contains('on')) {
         const val = D.v.rows[i].v, good = val === 'IN LINE' || val === 'HITTING' || val === 'OUTSIDE OFF';
         r.classList.add('on', val === "UMPIRE'S CALL" ? 'ump' : good ? 'good' : 'bad'); SFX.tick && SFX.tick();
-        if (i === 2) D.zone.material.color.setHex(val === 'MISSING' ? 0xff3b30 : val === 'HITTING' ? 0x22c55e : 0xeab308), D.zone.material.opacity = 0.45;
       }
     });
     if (D.t >= 4.1 && !D.said) {
@@ -1855,7 +1886,7 @@
     cam.mode = 'drs'; G.camMode = 'drs'; G.views = ['drs']; $('hud').classList.remove('split');
     applyCamTo(cam, dt, innerWidth / innerHeight);
     if (D.t >= 5.6) {
-      G.drs = null; drsGroup.visible = false; $('drs').classList.remove('on'); $('replay-bug').classList.remove('on'); $('hud').classList.remove('replaying');
+      G.drs = null; drsGroup.visible = false; drsVis = null; if (net && net.drsEnd) net.drsEnd(); $('drs').classList.remove('on'); $('replay-bug').classList.remove('on'); $('hud').classList.remove('replaying');
       if (people.batter) people.batter.setOpacity(1);
       D.done();
     }
@@ -1974,11 +2005,12 @@
   function updateCamera(dt, F) {
     const plan = planViews();
     G.views = plan;
-    const split = plan.length > 1 && !room.wide;   // online room: each player's own full view, no halves
+    const remote = room.seat >= 0 && G.inGame && !!G.match;
+    const split = plan.length > 1 && !remote;   // online room: each player's own full view, no halves
     plan.forEach((shot, i) => {
       const st = camSt[i];
       shotCam(shot, st, dt, F, split);
-      applyCamTo(st, dt, split ? innerWidth / 2 / innerHeight : room.wide && plan.length > 1 && i === room.seat ? room.wg / innerHeight : innerWidth / innerHeight);
+      applyCamTo(st, dt, split ? innerWidth / 2 / innerHeight : room.wide && plan.length > 1 && i === room.seat ? room.wg / innerHeight : remote && plan.length > 1 && i === room.seat ? 16 / 9 : innerWidth / innerHeight);
     });
     G.camMode = plan.length > 1 ? 'split' : plan[0];
     $('hud').classList.toggle('split', split);
@@ -2083,6 +2115,11 @@
       renderer.setScissorTest(false);
       renderer.setViewport(0, 0, w + wg, h);
       if (window.MimicRoom) MimicRoom.frame(renderer.domElement, w, 0, wg, h);
+      return;
+    }
+    if (room.seat >= 0 && room.kind === 'state' && G.inGame && G.match && !G.dbgCam) {
+      // the friend draws their own view: here only this screen's
+      renderer.render(scene, plan.length > 1 ? camSt[1 - room.seat].cam : camera);
       return;
     }
     if (plan.length > 1 && !G.dbgCam) {
@@ -2346,6 +2383,7 @@
   function bindMenus() {
     document.querySelectorAll('.mi').forEach(el => {
       el.addEventListener('click', e => {
+        if (GUEST) return;
         if (el.dataset.opt) { const arr = e.target.closest('.arr'); if (arr) { changeOpt(el.dataset.opt, arr === el.querySelectorAll('.arr')[0] ? -1 : 1); return; } }
         activate(el);
       });
@@ -2359,6 +2397,7 @@
     if (m === 'opts') { SFX.ui('back'); setPanel('main'); } else if (m === 'solo') { SFX.ui('back'); toTitle(); } else if (m === 'pause') setPaused(false);
   }
   addEventListener('keydown', e => {
+    if (GUEST) return;
     AU.resume();
     if (G.screen === 'lobby') return;
     if (e.key === 'Escape') { if (G.inGame && G.screen === 'game') setPaused(true); else if (G.paused) setPaused(false); else menuBack(); return; }
@@ -2451,13 +2490,14 @@
     startMatch('versus');
   }
   addEventListener('keydown', e => {
+    if (GUEST) return;
     if (G.screen !== 'lobby') return;
     if (e.key === ' ') { if (!e.repeat) lobby.keyJoin = true; lobby.keyHold = true; e.preventDefault(); }
     if (e.key === 'Backspace') lobby.keyLeave = true;
     if (e.key === 'Tab') { lobby.keySwap = true; e.preventDefault(); }
     if (e.key === 'Escape') toTitle();
   });
-  addEventListener('keyup', e => { if (e.key === ' ') lobby.keyHold = false; });
+  addEventListener('keyup', e => { if (!GUEST && e.key === ' ') lobby.keyHold = false; });
   $('lobby-start').addEventListener('click', () => startVersus());
   $('lobby-swap').addEventListener('click', () => { lobby.st.firstBat = 1 - lobby.st.firstBat; SFX.ui('move'); });
   $('lobby-back').addEventListener('click', () => { SFX.ui('back'); toTitle(); });
@@ -2515,8 +2555,8 @@
   // The main loop
   let lastNow = performance.now(), skipKey = false;
   const skippable = () => G.replay || G.cutaway || G.walk || G.drs;
-  addEventListener('keydown', e => { if (skippable() && (e.key === ' ' || e.key === 'Enter')) { skipKey = true; e.preventDefault(); } });
-  addEventListener('pointerdown', () => { if (skippable()) skipKey = true; });
+  addEventListener('keydown', e => { if (!GUEST && skippable() && (e.key === ' ' || e.key === 'Enter')) { skipKey = true; e.preventDefault(); } });
+  addEventListener('pointerdown', () => { if (!GUEST && skippable()) skipKey = true; });
   const fpsWin = [];
   function gameFrame(dt, now) {
     for (const s of seats) if (s.input) s.input.frame(now);
@@ -2545,11 +2585,11 @@
     const tipsOn = bowlSeat().kind !== 'cpu' && !G.walk && (G.phase === 'ready' || G.phase === 'runup');
     $('tips').classList.toggle('on', tipsOn); $('tips').classList.toggle('dim', tipsOn && G.phase === 'runup');
     // the online room: the card, and each prompt, only on the screen of the player it is for
-    const whose = seat => (room.wide ? (seat === seats[room.seat] ? 'guest' : 'host') : '');
+    const whose = seat => (room.seat >= 0 && G.inGame && G.match ? (seat === seats[room.seat] ? 'guest' : 'host') : '');
     const tagRoom = (id, v) => { const el = $(id); if ((el.dataset.room || '') !== v) { if (v) el.dataset.room = v; else delete el.dataset.room; } };
     tagRoom('tips', whose(bowlSeat()));
     // split screen: the card sits in the bowler's half
-    $('tips').classList.toggle('left', !room.wide && (G.views || []).length > 1 && inn().bowl === 0); tagRoom('prompt-bowl', whose(bowlSeat())); tagRoom('prompt-bat', whose(batSeat()));
+    $('tips').classList.toggle('left', room.seat < 0 && (G.views || []).length > 1 && inn().bowl === 0); tagRoom('prompt-bowl', whose(bowlSeat())); tagRoom('prompt-bat', whose(batSeat()));
     aimRing.visible = showAim || (G.phase === 'runup' && bowlSeat().kind !== 'cpu' && opt('aim') === 'ON');
     if (!aimRing.visible) aimPin.visible = false;
     if (aimRing.visible) {
@@ -2590,6 +2630,7 @@
     lastNow = now;
     fpsWin.push(rdt); if (fpsWin.length > 120) fpsWin.shift();
     if (rdt > 0) dynResolution(rdt);
+    if (GUEST) { guestFrame(rdt); return; }
     mc.update(now);
     updateCtrlStatus();
     if (!wandCursor && window.MimicCursor) wandCursor = MimicCursor.create(mc, { visible: () => !!activeMenu() });
@@ -2617,7 +2658,7 @@
       landRing.material.opacity = G.phase === 'hit' && G.landAt && G.ball && G.ballOn && !G.ball.bounces ? 0.55 + 0.35 * Math.sin(now / 120) : Math.max(0, landRing.material.opacity - rdt * 2);
       if (G.landAt) landRing.position.set(G.landAt.x, 0.03, G.landAt.z);
       // the crowd's hum: up as the bowler runs in, loudest with the ball in the air
-      if (G.inGame) AU.Crowd.setTension(G.phase === 'runup' ? 0.45 + Math.min(0.4, G.phaseT * 0.3) : G.phase === 'flight' ? 0.9 : G.phase === 'hit' ? 0.7 : 0.15);
+      if (G.inGame) AU.Crowd.setTension(G.netTension = G.phase === 'runup' ? 0.45 + Math.min(0.4, G.phaseT * 0.3) : G.phase === 'flight' ? 0.9 : G.phase === 'hit' ? 0.7 : 0.15);
       else if (people.ready) idleScene(rdt);
       updateCamera(rdt, F || {});
       if (G.inGame) bubbleFrame();
@@ -2628,8 +2669,89 @@
     world.crowd.update(rdt);
     world.tick(rdt);
     if (G.dbgCam) { const d = G.dbgCam; camera.position.set(d.p[0], d.p[1], d.p[2]); camera.lookAt(d.l[0], d.l[1], d.l[2]); camera.fov = d.fov || 35; camera.updateProjectionMatrix(); }
+    if (net && net.hostFrame) net.hostFrame(now);   // before drawing: the friend gets this frame a few ms sooner
     renderViews();
   }
+
+  // ---------------------------------------------------------------------------------
+  // The online room by state (net.js): what the host sends, what the friend's page does with it
+  const camProxy = new T.Object3D(); camProxy.fov = 42;
+  const netParams = [
+    { get: () => world.crowd.excite || 0, set: v => { world.crowd.excite = v; } },
+    { get: () => G.netTension || 0, set: v => { if (Math.abs(v - (G.netTension || 0)) > 0.01) { G.netTension = v; AU.Crowd.setTension(v); } } },
+    { get: () => G.dance || 0, set: v => { G.dance = v; } },
+    { get: () => G.cheerSpecial || 0, set: v => { G.cheerSpecial = v; } },
+    { get: () => (G.cutaway && G.cutaway.shot === 'fans' ? 1 : 0), set: v => { G.netFans = v > 0.5; } },
+    { get: () => (G.drs ? G.drs.t : -1), set: v => { G.netDrsT = v; } },
+    { get: () => (G.trailOn ? 1 : 0), set: v => { G.trailOn = v > 0.5; } },
+  ];
+  const netObj = (o, x) => Object.assign({ obj: () => o }, x || {});
+  const matOpacity = m => ({ get: () => m.opacity, set: v => { m.opacity = v; } });
+  const matColor = m => ({ get: () => m.color.getHex(), set: v => { m.color.setHex(v); } });
+  function netObjects() {
+    const L = [
+      netObj(ballMesh), netObj(batMesh), netObj(gloves), netObj(people.nsBat), netObj(people.outBat),
+      netObj(halo), netObj(ballShadow, { scale: true, opacity: matOpacity(ballShadow.material) }),
+      netObj(landRing, { opacity: matOpacity(landRing.material) }),
+      netObj(aimRing, { scale: true, opacity: matOpacity(aimRing.material), color: matColor(aimRing.material) }),
+      netObj(aimWave, { scale: true, opacity: matOpacity(aimWave.material), color: matColor(aimWave.material) }),
+      { opacity: matOpacity(aimHalo.material) },
+      netObj(aimPin, { opacity: matOpacity(aimPin.material), color: matColor(aimPin.material) }),
+      netObj(pitchMark, { opacity: matOpacity(pitchMark.material) }),
+      netObj(drsGroup),
+    ];
+    dust.forEach(d => L.push(netObj(d.sp, { scale: true, opacity: matOpacity(d.sp.material) })));
+    for (const end of [world.stumps.bat, world.stumps.bowl]) [...end.stumps, ...end.bails].forEach(o => L.push(netObj(o)));
+    return L;
+  }
+  const netActors = () => [people.batter, people.nonStriker, people.outgoing, people.bowler, people.umpire, ...people.fielders];
+  /** The friend's camera: their seat's own view in a two-player match, otherwise what this screen shows. */
+  function fillNetCam(p) {
+    const plan = G.views || [];
+    const src = room.seat >= 0 && plan.length > 1 && G.inGame && G.match ? camSt[room.seat].cam : camera;
+    p.position.copy(src.position); p.quaternion.copy(src.quaternion); p.fov = src.fov;
+  }
+  function sendSettings() {
+    if (!net || !net.settings) return;
+    const s = {}; ['team0', 'team1', 'hand0', 'hand1', 'camera'].forEach(k => { if (k in settings) s[k] = settings[k]; });
+    net.settings(s);
+  }
+  function netContext() {
+    return {
+      T, scene, camProxy, world, trail, audio: AU, params: netParams,
+      actors: netActors, objects: netObjects, fillCam: fillNetCam, ready: () => people.ready,
+      playLine: (id, d) => paajiPlayer.playId(id, d), stopLines: () => paajiPlayer.stop(),
+      chant: (seat, k) => teamChant(seat, k),
+      drs: d => { if (d) drsBuild(d); else { drsGroup.visible = false; drsVis = null; } },
+      settings: s => { Object.keys(s).forEach(k => { if (k in settings) settings[k] = s[k]; }); },
+      onStart: () => { AU.resume(); },
+    };
+  }
+  function startNet() {
+    if (!window.MimicSync || !CK.Net || !people.ready || net) return;
+    if (GUEST) net = CK.Net.guest(netContext());
+    else if (window.MimicRoom) { net = CK.Net.host(netContext()); sendSettings(); }
+  }
+  /** The friend's page, each frame: the host's state as it was a moment ago, and what it animates itself. */
+  function guestFrame(rdt) {
+    if (!net) { if (people.ready) startNet(); renderer.render(scene, camera); return; }
+    const drew = net.guestFrame(rdt);
+    if (drew) {
+      camera.position.copy(camProxy.position); camera.quaternion.copy(camProxy.quaternion);
+      const asp = innerWidth / innerHeight;
+      if (Math.abs(camera.fov - camProxy.fov) > 0.01 || Math.abs(camera.aspect - asp) > 1e-3) { camera.fov = camProxy.fov; camera.aspect = asp; camera.updateProjectionMatrix(); }
+      if (halo.visible) { const d = camera.position.distanceTo(halo.position); halo.scale.setScalar(Math.max(0.25, d * 0.012)); }
+      trail.push(ballMesh.position, !!G.trailOn, camera.position);
+      if (G.netDrsT >= 0) drsVisual(G.netDrsT);
+      G.cutaway = G.netFans ? { shot: 'fans' } : null;
+    }
+    world.crowd.update(rdt);
+    world.tick(rdt);
+    cheerFrame(rdt);
+    renderer.shadowMap.needsUpdate = true;
+    renderer.render(scene, camera);
+  }
+
   /** Title screen: the players warm up in the middle. */
   function idleScene(dt) {
     batMesh.visible = true;
@@ -2656,6 +2778,7 @@
   window.__cricket = {
     G, seats, settings, world, people, renderer, scene, camera, lobby, startMatch, startSolo, openLobby, toTitle, setPaused, setSeat, slotCtrl, changeOpt,
     get fps() { const s = fpsWin.reduce((a, b) => a + b, 0); return fpsWin.length / (s || 1); }, get renderScale() { return dyn.pr; }, get shadows() { return dyn.shadows; },
+    get net() { return net; }, camSt, room, netActors: () => netActors(), netObjects: () => netObjects(), camProxy,
     inn: () => G.match && inn(), hype, say, planViews, knockStumps, attitude, paaji, paajiPlayer, walkOut, startCutaway, startDRS, milestone, interlude, teamChant, castPlayers, endMatch, updateScorebug, newBall,
   };
 })();

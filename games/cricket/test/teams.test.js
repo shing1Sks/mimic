@@ -45,5 +45,20 @@ check('byId finds a team; an unknown id falls back to the first', T.byId('ind').
   check('every pair of teams is told apart by shirt and HUD colour (RGB distance >= 45)', close.length === 0, close);
 }
 check('signatures: a short burst for Bumrah, a long run for Starc, a few steps for Kuldeep, wings for Shaheen, a plain cheer for others', T.sig('Jasprit Bumrah').run === 'short' && T.sig('Mitchell Starc').run === 'long' && T.sig('Kuldeep Yadav').run === 'spin' && T.sig('Shaheen Shah Afridi').cel === 'wings' && T.sig('Virat Kohli').run === 'mid' && T.sig('Virat Kohli').cel === 'cheer');
+{
+  // shirt numbers: the known ones, the rest steady and never twice in a side
+  const ok = T.TEAMS.every(t => { const n = T.numbers(t); return n.length === 11 && new Set(n).size === 11 && n.every(x => Number.isInteger(x) && x >= 1 && x <= 99); });
+  check('shirt numbers: 1-99, eleven different in every side', ok);
+  const num = (id, name) => T.numbers(T.byId(id))[T.byId(id).players.indexOf(name)];
+  check('the famous numbers: Kohli 18, Rohit 45, Bumrah 93, Babar 56, Dhoni 7 for Chennai', num('ind', 'Virat Kohli') === 18 && num('ind', 'Rohit Sharma') === 45 && num('ind', 'Jasprit Bumrah') === 93 && num('pak', 'Babar Azam') === 56 && num('che', 'MS Dhoni') === 7);
+  check('a made-up number stays the same every time', num('pak', 'Saim Ayub') === T.numbers(T.byId('pak'))[1]);
+}
+{
+  // signature looks, read in order (beard, hair, brow): a long beard is not long hair
+  const r = T.style('Mohammad Rizwan'), d = T.style('MS Dhoni'), k = T.style('Virat Kohli');
+  check('styles: Rizwan a long beard and short hair, Dhoni long hair, Kohli a trimmed beard, quiff and thick brows', r.beard === 'long' && r.hair === 'short' && d.hair === 'long' && k.beard === 'trim' && k.hair === 'quiff' && k.brow === 'thick');
+  check('an unlisted player follows his look (2: a full beard)', T.style('Nobody', { beard: 2 }).beard === 'full' && T.style('Nobody', { beard: 0 }).beard === 'clean');
+  check('every listed style names a real player of some side', Object.keys(T.STYLES).every(n => T.TEAMS.some(t => t.players.includes(n))), Object.keys(T.STYLES).filter(n => !T.TEAMS.some(t => t.players.includes(n))));
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
